@@ -443,39 +443,148 @@ function generateSchedule(staffList, year, month, requests, settings) {
     partStaff.forEach(staff => {
         const targetWorkDays = getActualTarget(staff);
         const maxPerWeek = staff.maxDaysPerWeek || 3;
+        const maxConsec = getStaffMaxConsecutive(staff, s);
 
         if (!staff.startTime) staff.startTime = '09:00';
         if (!staff.endTime) staff.endTime = '17:00';
 
-        // パス①: 順番に貪欲に埋める（Work,Work,OFFパターンを自然に作る）
-        // ランダムな開始日で多様性を確保
-        const startDay = Math.floor(Math.random() * daysInMonth) + 1;
-        let currentWork = countWorkDays(allAssignments[staff.id], daysInMonth);
+        // maxConsecutive<=2のスタッフは最適パターン配置（2勤1休の最適オフセットを選択）
+        if (maxConsec <= 2) {
+            let bestAssignment = null;
+            let bestWorkDays = -1;
 
-        for (let offset = 0; offset < daysInMonth && currentWork < targetWorkDays; offset++) {
-            const day = ((startDay - 1 + offset) % daysInMonth) + 1;
-            if (requestedDays[staff.id].has(day)) continue;
-            if (allAssignments[staff.id][day] !== SHIFT_TYPES.OFF) continue;
-            if (getWeekWorkDays(allAssignments[staff.id], day, year, month) >= maxPerWeek) continue;
-            if (!canWorkOnDay(staff, allAssignments[staff.id], day, s, consecutivePlus1Used)) continue;
+            // 3つのオフセットを全て試して最も勤務日が多いパターンを選ぶ
+            for (let offset = 0; offset < 3; offset++) {
+                // テスト用のコピーを作成
+                const testAssignment = { ...allAssignments[staff.id] };
+                let testWork = countWorkDays(testAssignment, daysInMonth);
 
-            allAssignments[staff.id][day] = SHIFT_TYPES.PART;
-            currentWork++;
+                // 2勤1休パターンで配置
+                for (let d = 1; d <= daysInMonth && testWork < targetWorkDays; d++) {
+                    // オフセットに基づいて休日パターンを決定
+                    if ((d - 1 + offset) % 3 === 2) continue; // 3日ごとに1日休み
+                    if (testAssignment[d] !== SHIFT_TYPES.OFF) continue;
+                    if (requestedDays[staff.id].has(d)) continue;
+                    // 週の制限チェック
+                    // countWorkDaysForTestはテスト用なので、直接計算
+                    const date = new Date(year, month - 1, d);
+                    const dayOfWeek = date.getDay();
+                    const monday = d - ((dayOfWeek + 6) % 7);
+                    let weekWork = 0;
+                    for (let wd = monday; wd < monday + 7; wd++) {
+                        if (wd < 1 || wd > daysInMonth) continue;
+                        const ws = testAssignment[wd];
+                        if (ws && ws !== SHIFT_TYPES.OFF && ws !== SHIFT_TYPES.NIGHT_OFF) weekWork++;
+                    }
+                    if (weekWork >= maxPerWeek) continue;
+                    // 連勤チェック（テスト用は簡易版）
+                    let pastC = 0;
+                    for (let pd = d - 1; pd >= 1; pd--) {
+                        const ps = testAssignment[pd];
+                        if (ps && ps !== SHIFT_TYPES.OFF && ps !== SHIFT_TYPES.NIGHT_OFF) pastC++;
+                        else break;
+                    }
+                    if (pastC >= maxConsec) continue;
+
+                    testAssignment[d] = SHIFT_TYPES.PART;
+                    testWork++;
+                }
+
+                if (testWork > bestWorkDays) {
+                    bestWorkDays = testWork;
+                    bestAssignment = { ...testAssignment };
+                }
+            }
+
+            // 最適パターンを適用
+            if (bestAssignment) {
+                for (let d = 1; d <= daysInMonth; d++) {
+                    allAssignments[staff.id][d] = bestAssignment[d];
+                }
+            }
+        } else {
+            // maxConsecutive>2のスタッフは従来のランダム開始日＋貪欲配置
+            const startDay = Math.floor(Math.random() * daysInMonth) + 1;
+            let currentWork = countWorkDays(allAssignments[staff.id], daysInMonth);
+
+            for (let offset = 0; offset < daysInMonth && currentWork < targetWorkDays; offset++) {
+                const day = ((startDay - 1 + offset) % daysInMonth) + 1;
+                if (requestedDays[staff.id].has(day)) continue;
+                if (allAssignments[staff.id][day] !== SHIFT_TYPES.OFF) continue;
+                if (getWeekWorkDays(allAssignments[staff.id], day, year, month) >= maxPerWeek) continue;
+                if (!canWorkOnDay(staff, allAssignments[staff.id], day, s, consecutivePlus1Used)) continue;
+
+                allAssignments[staff.id][day] = SHIFT_TYPES.PART;
+                currentWork++;
+            }
+
+            // パス②: まだ足りなければ逆方向からも埋める
+            if (currentWork < targetWorkDays) {
+                for (let d = daysInMonth; d >= 1 && currentWork < targetWorkDays; d--) {
+                    if (requestedDays[staff.id].has(d)) continue;
+                    if (allAssignments[staff.id][d] !== SHIFT_TYPES.OFF) continue;
+                    if (getWeekWorkDays(allAssignments[staff.id], d, year, month) >= maxPerWeek) continue;
+                    if (!canWorkOnDay(staff, allAssignments[staff.id], d, s, consecutivePlus1Used)) continue;
+
+                    allAssignments[staff.id][d] = SHIFT_TYPES.PART;
+                    currentWork++;
+                }
+            }
         }
+    });
 
-        // パス2②: まだ足りなければ逆方向からも埋める
-        if (currentWork < targetWorkDays) {
-            for (let d = daysInMonth; d >= 1 && currentWork < targetWorkDays; d--) {
-                if (requestedDays[staff.id].has(d)) continue;
+    // ===== フェーズ3.5: パート休み均等化（山口対策） =====
+    // パート全員の休日数を揃える。1日でも多い人がいたら出勤を追加して均等にする
+    if (partStaff.length > 1) {
+        // 各パートの現在の休日数を計算
+        const getPartOffDays = (st) => countOffDays(allAssignments[st.id], daysInMonth);
+
+        // 最大20回ループで均等化（デッドロック防止）
+        for (let iter = 0; iter < 20; iter++) {
+            const offCounts = partStaff.map(st => ({
+                staff: st,
+                off: getPartOffDays(st),
+                target: st.monthlyDaysOff || 9
+            }));
+
+            // 目標値を超えて休みが多い人を探す
+            const overOff = offCounts.filter(c => c.off > c.target);
+            if (overOff.length === 0) break; // 全員目標以下なら終了
+
+            // 最も休みが多い人にシフトを追加
+            overOff.sort((a, b) => b.off - a.off);
+            const worst = overOff[0];
+            const staff = worst.staff;
+            const maxPerWeek = staff.maxDaysPerWeek || 3;
+
+            let added = false;
+            // 正順でまず試す
+            for (let d = 1; d <= daysInMonth; d++) {
                 if (allAssignments[staff.id][d] !== SHIFT_TYPES.OFF) continue;
+                if (requestedDays[staff.id].has(d)) continue;
                 if (getWeekWorkDays(allAssignments[staff.id], d, year, month) >= maxPerWeek) continue;
                 if (!canWorkOnDay(staff, allAssignments[staff.id], d, s, consecutivePlus1Used)) continue;
 
                 allAssignments[staff.id][d] = SHIFT_TYPES.PART;
-                currentWork++;
+                added = true;
+                break;
             }
+            // 正順でダメなら逆順で試す（連勤制約が異なる方向で成立する場合がある）
+            if (!added) {
+                for (let d = daysInMonth; d >= 1; d--) {
+                    if (allAssignments[staff.id][d] !== SHIFT_TYPES.OFF) continue;
+                    if (requestedDays[staff.id].has(d)) continue;
+                    if (getWeekWorkDays(allAssignments[staff.id], d, year, month) >= maxPerWeek) continue;
+                    if (!canWorkOnDay(staff, allAssignments[staff.id], d, s, consecutivePlus1Used)) continue;
+
+                    allAssignments[staff.id][d] = SHIFT_TYPES.PART;
+                    added = true;
+                    break;
+                }
+            }
+            if (!added) break; // これ以上追加できない
         }
-    });
+    }
 
     // ===== フェーズ4: フルタイム日勤の最適配置（全面新設） =====
     const fullStaff = staffList.filter(st => st.type !== 'part');
@@ -533,7 +642,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
 
         // ステップ2: A残（通し）を戦略的に使う
         // 朝と夕の両方が足りない場合、かつA残4回未満の人がいるなら1人で両方カバー
-        const TARGET_OT = 4; // A残の目標回数（これ未満なら積極利用、以上なら最後の手段）
+        const TARGET_OT = 5; // A残の目標回数（これ未満なら積極利用、以上なら最後の手段）
         const otWant = Math.min(mNeed, eNeed);
         if (otWant > 0) {
             // A残回数が少ない人（4回未満）のみ候補にする
@@ -736,12 +845,16 @@ function generateSchedule(staffList, year, month, requests, settings) {
                     if (up.length > 0) { allAssignments[sortForOT(up)[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 }
 
-                // 救済2: OFFのフルタイムを追加出勤
+                // 救済2: OFFのフルタイムを追加出勤（公休保証付き）
                 if (!rescued) {
                     const available = sortSoft(fullStaff.filter(st => {
                         if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
                         if (requestedDays[st.id] && requestedDays[st.id].has(day)) return false;
                         if (!canWorkOnDay(st, allAssignments[st.id], day, s, consecutivePlus1Used)) return false;
+                        // ★公休保証: これ以上出勤を追加すると公休が目標を下回る場合は除外
+                        const currentOff = countOffDays(allAssignments[st.id], daysInMonth);
+                        const targetOff = st.monthlyDaysOff || 9;
+                        if (currentOff <= targetOff) return false;
                         return true;
                     }));
                     if (available.length > 0) {
@@ -754,12 +867,16 @@ function generateSchedule(staffList, year, month, requests, settings) {
                     }
                 }
 
-                // 救済3: OFFのパートも追加出勤（最終手段）
+                // 救済3: OFFのパートも追加出勤（最終手段、公休保証付き）
                 if (!rescued) {
                     const available = partStaff.filter(st => {
                         if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
                         if (requestedDays[st.id] && requestedDays[st.id].has(day)) return false;
                         if (!canWorkOnDay(st, allAssignments[st.id], day, s, consecutivePlus1Used)) return false;
+                        // ★公休保証: これ以上出勤を追加すると公休が目標を下回る場合は除外
+                        const currentOff = countOffDays(allAssignments[st.id], daysInMonth);
+                        const targetOff = st.monthlyDaysOff || 9;
+                        if (currentOff <= targetOff) return false;
                         // このパートがこのチェックポイントをカバーできるか確認
                         return isStaffPresentAt(st, SHIFT_TYPES.PART, cp.minutes);
                     });

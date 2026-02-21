@@ -56,6 +56,11 @@ function migrateStaffData() {
             staff.nightShiftType = 'none';
             changed = true;
         }
+        // allowConsecutivePlus1 が未設定の場合のデフォルト（既存データ対応）
+        if (staff.allowConsecutivePlus1 === undefined) {
+            staff.allowConsecutivePlus1 = false;
+            changed = true;
+        }
     });
     if (changed) saveStaff();
 }
@@ -177,6 +182,11 @@ function renderStaffList() {
             tags.push(`<span class="staff-tag tag-time">${staff.startTime}〜${staff.endTime}</span>`);
         }
 
+        // 連勤+1許容の表示
+        if (staff.allowConsecutivePlus1) {
+            tags.push('<span class="staff-tag tag-plus1">連勤+1OK</span>');
+        }
+
         return `
       <div class="staff-card" data-id="${staff.id}">
         <div class="staff-avatar" style="background:${color}">${initial}</div>
@@ -262,6 +272,7 @@ function initStaffModal() {
         document.getElementById('staff-max-consecutive').value = 0;
         document.getElementById('staff-start-time').value = '09:00';
         document.getElementById('staff-end-time').value = '17:00';
+        document.getElementById('staff-consecutive-plus1').checked = false;
         updateFormVisibility('full');
         modal.classList.add('show');
     });
@@ -299,7 +310,8 @@ function initStaffModal() {
             maxDaysPerWeek: parseInt(document.getElementById('staff-max-days').value) || 3,
             maxConsecutive: parseInt(document.getElementById('staff-max-consecutive').value) || 0,
             startTime: document.getElementById('staff-start-time').value || '',
-            endTime: document.getElementById('staff-end-time').value || ''
+            endTime: document.getElementById('staff-end-time').value || '',
+            allowConsecutivePlus1: document.getElementById('staff-consecutive-plus1').checked
         };
 
         if (!staffData.name) return;
@@ -356,6 +368,7 @@ function editStaff(id) {
     document.getElementById('staff-max-consecutive').value = staff.maxConsecutive || 0;
     document.getElementById('staff-start-time').value = staff.startTime || '09:00';
     document.getElementById('staff-end-time').value = staff.endTime || '17:00';
+    document.getElementById('staff-consecutive-plus1').checked = staff.allowConsecutivePlus1 || false;
 
     // フォーム表示の切り替え
     const nightGroup = document.getElementById('night-shift-group');
