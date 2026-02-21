@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公休表 - 介護施設シフト管理</title>
+    <title>公休表 - 介護施設シフト管理 (Ver 1.1)</title>
     <meta name="description" content="介護施設向けの公休表・シフト自動生成アプリ">
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="print.css" media="print">
+    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="print.css?v=1.1" media="print">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
         rel="stylesheet">
 </head>
@@ -15,7 +15,8 @@
 <body>
     <!-- ヘッダー：アプリ名とナビゲーション -->
     <header class="app-header">
-        <h1 class="app-title">公休表</h1>
+        <h1 class="app-title">公休表 <span style="font-size:0.6em; color:var(--text-light); margin-left:10px;">Ver
+                1.1</span></h1>
         <nav class="app-nav">
             <button class="nav-btn active" data-view="staff">スタッフ管理</button>
             <button class="nav-btn" data-view="schedule">シフト表</button>
@@ -245,8 +246,8 @@
         </div>
     </div>
 
-    <script src="scheduler.js"></script>
-    <script src="app.js"></script>
+    <script src="scheduler.js?v=1.1"></script>
+    <script src="app.js?v=1.1"></script>
 </body>
 
 </html>
