@@ -685,7 +685,6 @@ function generateSchedule(staffList, year, month, requests, settings) {
     });
 
     // ===== フェーズ5.5: 全日4人保証（最終救済ステップ） =====
-    // フェーズ4+5の後、まだ4人未満のチェックポイントがあれば強制的に救済
     for (let day = 1; day <= daysInMonth; day++) {
         TIME_CHECKPOINTS.forEach(cp => {
             const sunday = isSunday(year, month, day);
@@ -693,31 +692,18 @@ function generateSchedule(staffList, year, month, requests, settings) {
             let count = countStaffAtTime(staffList, allAssignments, day, cp.minutes);
 
             while (count < required) {
-                // 救済1: 既存の早番/遅番をA残にアップグレード
                 let rescued = false;
+
+                // 救済1: A残アップグレード（夕方不足→早番をA残、朝不足→遅番をA残）
                 if (cp.minutes >= 1065) {
-                    // 夕方不足 → 早番をA残に
-                    const upgradable = fullStaff.filter(st =>
-                        allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime
-                    );
-                    if (upgradable.length > 0) {
-                        const sorted = sortForOT(upgradable);
-                        allAssignments[sorted[0].id][day] = SHIFT_TYPES.OVERTIME;
-                        rescued = true;
-                    }
+                    const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime);
+                    if (up.length > 0) { allAssignments[sortForOT(up)[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 } else if (cp.minutes <= 420) {
-                    // 朝不足 → 遅番をA残に
-                    const upgradable = fullStaff.filter(st =>
-                        allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime
-                    );
-                    if (upgradable.length > 0) {
-                        const sorted = sortForOT(upgradable);
-                        allAssignments[sorted[0].id][day] = SHIFT_TYPES.OVERTIME;
-                        rescued = true;
-                    }
+                    const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime);
+                    if (up.length > 0) { allAssignments[sortForOT(up)[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 }
 
-                // 救済2: OFFの人を追加出勤
+                // 救済2: OFFのフルタイムを追加出勤
                 if (!rescued) {
                     const available = sortSoft(fullStaff.filter(st => {
                         if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
@@ -726,20 +712,33 @@ function generateSchedule(staffList, year, month, requests, settings) {
                         return true;
                     }));
                     if (available.length > 0) {
-                        // 不足チェックポイントに合ったシフトを選ぶ
-                        let shift = SHIFT_TYPES.EARLY;
+                        let shift;
                         if (cp.minutes >= 1065) shift = SHIFT_TYPES.LATE;
-                        else if (cp.minutes === 600) {
-                            const mc = countStaffAtTime(staffList, allAssignments, day, 420);
-                            const ec = countStaffAtTime(staffList, allAssignments, day, 1065);
-                            shift = (mc <= ec) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
-                        }
+                        else if (cp.minutes <= 420) shift = SHIFT_TYPES.EARLY;
+                        else shift = Math.random() > 0.5 ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
                         allAssignments[available[0].id][day] = shift;
                         rescued = true;
                     }
                 }
 
-                if (!rescued) break; // これ以上救済不可
+                // 救済3: OFFのパートも追加出勤（最終手段）
+                if (!rescued) {
+                    const available = partStaff.filter(st => {
+                        if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
+                        if (requestedDays[st.id] && requestedDays[st.id].has(day)) return false;
+                        if (!canWorkOnDay(st, allAssignments[st.id], day, s)) return false;
+                        // このパートがこのチェックポイントをカバーできるか確認
+                        return isStaffPresentAt(st, SHIFT_TYPES.PART, cp.minutes);
+                    });
+                    if (available.length > 0) {
+                        if (!available[0].startTime) available[0].startTime = '09:00';
+                        if (!available[0].endTime) available[0].endTime = '17:00';
+                        allAssignments[available[0].id][day] = SHIFT_TYPES.PART;
+                        rescued = true;
+                    }
+                }
+
+                if (!rescued) break;
                 count = countStaffAtTime(staffList, allAssignments, day, cp.minutes);
             }
         });
