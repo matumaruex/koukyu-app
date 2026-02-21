@@ -470,7 +470,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
 
         // ステップ2: A残（通し）を戦略的に使う
         // 朝と夕の両方が足りない場合、かつA残4回未満の人がいるなら1人で両方カバー
-        const TARGET_OT = 4; // A残の目標回数（これ以下なら積極利用）
+        const TARGET_OT = 5; // A残の目標回数（これ未満なら積極利用、以上なら最後の手段）
         const otWant = Math.min(mNeed, eNeed);
         if (otWant > 0) {
             // A残回数が少ない人（4回未満）のみ候補にする
