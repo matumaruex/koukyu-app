@@ -611,47 +611,75 @@ function generateSchedule(staffList, year, month, requests, settings) {
     fullStaff.forEach(st => {
         let gap = getWorkGap(st);
         while (gap > 0) {
-            // 出勤可能な日の中で、全体の出勤人数が最も少ない日を探す
-            let tiedDays = [];
-            let bestCount = Infinity;
+            let chosenDay = -1;
+            let chosenShift = SHIFT_TYPES.EARLY;
+
+            // 優先1: チェックポイント(朝昼夕)で4人未満の日を最優先で探す
+            let bestDeficit = 0;
             for (let d = 1; d <= daysInMonth; d++) {
                 if (allAssignments[st.id][d] !== SHIFT_TYPES.OFF) continue;
                 if (requestedDays[st.id].has(d)) continue;
                 if (!canWorkOnDay(st, allAssignments[st.id], d, s)) continue;
 
-                let dayTotal = 0;
-                staffList.forEach(other => {
-                    const shift = allAssignments[other.id][d];
-                    if (shift && shift !== SHIFT_TYPES.OFF && shift !== SHIFT_TYPES.NIGHT_OFF) dayTotal++;
-                });
+                const mc = countStaffAtTime(staffList, allAssignments, d, 420);
+                const nc = countStaffAtTime(staffList, allAssignments, d, 600);
+                const ec = countStaffAtTime(staffList, allAssignments, d, 1065);
+                const deficit = Math.max(0, 4 - mc) + Math.max(0, 4 - nc) + Math.max(0, 4 - ec);
 
-                if (dayTotal < bestCount) {
-                    bestCount = dayTotal;
-                    tiedDays = [d];
-                } else if (dayTotal === bestCount) {
-                    tiedDays.push(d);
+                if (deficit > bestDeficit) {
+                    bestDeficit = deficit;
+                    chosenDay = d;
+                    // 最も不足しているチェックポイントをカバーするシフトを選ぶ
+                    if (ec <= mc && ec <= nc) {
+                        chosenShift = SHIFT_TYPES.LATE;
+                    } else if (mc <= nc) {
+                        chosenShift = SHIFT_TYPES.EARLY;
+                    } else {
+                        chosenShift = (mc <= ec) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+                    }
                 }
             }
 
-            if (tiedDays.length === 0) break;
-            const chosenDay = tiedDays[Math.floor(Math.random() * tiedDays.length)];
+            // 優先2: 不足日がなければ、全体の出勤人数が少ない日を選ぶ
+            if (chosenDay === -1) {
+                let tiedDays = [];
+                let bestCount = Infinity;
+                for (let d = 1; d <= daysInMonth; d++) {
+                    if (allAssignments[st.id][d] !== SHIFT_TYPES.OFF) continue;
+                    if (requestedDays[st.id].has(d)) continue;
+                    if (!canWorkOnDay(st, allAssignments[st.id], d, s)) continue;
 
-            // どの時間帯が最も手薄かを見てシフトを決める
-            const mc = countStaffAtTime(staffList, allAssignments, chosenDay, 420);
-            const nc = countStaffAtTime(staffList, allAssignments, chosenDay, 600);
-            const ec = countStaffAtTime(staffList, allAssignments, chosenDay, 1065);
+                    let dayTotal = 0;
+                    staffList.forEach(other => {
+                        const shift = allAssignments[other.id][d];
+                        if (shift && shift !== SHIFT_TYPES.OFF && shift !== SHIFT_TYPES.NIGHT_OFF) dayTotal++;
+                    });
 
-            let shift;
-            if (ec <= mc && ec <= nc) {
-                shift = SHIFT_TYPES.LATE;   // 夕方が最も手薄 → 遅番
-            } else if (mc <= nc) {
-                shift = SHIFT_TYPES.EARLY;  // 朝が最も手薄 → 早番
-            } else {
-                // 昼が手薄 → 朝と夕のうち少ない方のシフトを選ぶ
-                shift = (mc <= ec) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+                    if (dayTotal < bestCount) {
+                        bestCount = dayTotal;
+                        tiedDays = [d];
+                    } else if (dayTotal === bestCount) {
+                        tiedDays.push(d);
+                    }
+                }
+
+                if (tiedDays.length === 0) break;
+                chosenDay = tiedDays[Math.floor(Math.random() * tiedDays.length)];
+
+                const mc = countStaffAtTime(staffList, allAssignments, chosenDay, 420);
+                const nc = countStaffAtTime(staffList, allAssignments, chosenDay, 600);
+                const ec = countStaffAtTime(staffList, allAssignments, chosenDay, 1065);
+
+                if (ec <= mc && ec <= nc) {
+                    chosenShift = SHIFT_TYPES.LATE;
+                } else if (mc <= nc) {
+                    chosenShift = SHIFT_TYPES.EARLY;
+                } else {
+                    chosenShift = (mc <= ec) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+                }
             }
 
-            allAssignments[st.id][chosenDay] = shift;
+            allAssignments[st.id][chosenDay] = chosenShift;
             gap = getWorkGap(st);
         }
     });
