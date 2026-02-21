@@ -188,7 +188,8 @@ function getStaffMaxConsecutive(staff, settings) {
  * 指定日にこのスタッフが勤務可能かチェック
  */
 function canWorkOnDay(staff, assignments, day, settings) {
-    if (assignments[day]) return false;
+    const shift = assignments[day];
+    if (shift && shift !== SHIFT_TYPES.OFF) return false;
     const maxConsecutive = getStaffMaxConsecutive(staff, settings);
     const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
     if (pastConsecutive >= maxConsecutive) return false;
@@ -203,9 +204,16 @@ function canAssignNight(staff, assignments, day, daysInMonth, settings, year, mo
     if (nightType === 'none') return false;
     if (staff.type === 'part') return false;
     if (nightType === 'weekday' && isFriSatSun(year, month, day)) return false;
-    if (assignments[day]) return false;
-    if (day + 1 <= daysInMonth && assignments[day + 1]) return false;
-    if (day + 2 <= daysInMonth && assignments[day + 2]) return false;
+    const shift1 = assignments[day];
+    if (shift1 && shift1 !== SHIFT_TYPES.OFF) return false;
+    if (day + 1 <= daysInMonth) {
+        const shift2 = assignments[day + 1];
+        if (shift2 && shift2 !== SHIFT_TYPES.OFF) return false;
+    }
+    if (day + 2 <= daysInMonth) {
+        const shift3 = assignments[day + 2];
+        if (shift3 && shift3 !== SHIFT_TYPES.OFF) return false;
+    }
     const maxConsecutive = getStaffMaxConsecutive(staff, settings);
     const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
     if (pastConsecutive >= maxConsecutive) return false;
