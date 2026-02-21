@@ -468,7 +468,34 @@ function generateSchedule(staffList, year, month, requests, settings) {
         let nNeed = Math.max(0, 4 - noon);
         let eNeed = Math.max(0, 4 - eve);
 
-        // ステップ2: まず早番(A)で朝を埋める（A残は最後の手段にする）
+        // ステップ2: A残（通し）を戦略的に使う
+        // 朝と夕の両方が足りない場合、かつA残4回未満の人がいるなら1人で両方カバー
+        const TARGET_OT = 4; // A残の目標回数（これ以下なら積極利用）
+        const otWant = Math.min(mNeed, eNeed);
+        if (otWant > 0) {
+            // A残回数が少ない人（4回未満）のみ候補にする
+            const otCands = sortForOT(
+                getAvailableFull(day).filter(st => {
+                    if (!st.canOvertime) return false;
+                    const otCount = countShiftType(allAssignments[st.id], SHIFT_TYPES.OVERTIME, daysInMonth);
+                    return otCount < TARGET_OT; // 4回未満のみ
+                })
+            );
+            let assigned = 0;
+            for (let i = 0; i < otCands.length && assigned < otWant; i++) {
+                allAssignments[otCands[i].id][day] = SHIFT_TYPES.OVERTIME;
+                assigned++;
+            }
+            // 再カウント
+            morn = countStaffAtTime(staffList, allAssignments, day, 420);
+            noon = countStaffAtTime(staffList, allAssignments, day, 600);
+            eve = countStaffAtTime(staffList, allAssignments, day, 1065);
+            mNeed = Math.max(0, 4 - morn);
+            nNeed = Math.max(0, 4 - noon);
+            eNeed = Math.max(0, 4 - eve);
+        }
+
+        // ステップ3: 早番(A)で朝を埋める
         if (mNeed > 0) {
             const cands = sortSoft(getAvailableFull(day));
             let assigned = 0;
@@ -482,7 +509,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
             nNeed = Math.max(0, 4 - noon);
         }
 
-        // ステップ3: 遅番(B)で夕方を埋める
+        // ステップ4: 遅番(B)で夕方を埋める
         if (eNeed > 0) {
             const cands = sortSoft(getAvailableFull(day));
             let assigned = 0;
@@ -496,7 +523,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
             nNeed = Math.max(0, 4 - noon);
         }
 
-        // ステップ4: 昼がまだ足りない場合
+        // ステップ5: 昼がまだ足りない場合
         if (nNeed > 0) {
             const cands = sortSoft(getAvailableFull(day));
             for (let i = 0; i < cands.length && nNeed > 0; i++) {
@@ -509,8 +536,8 @@ function generateSchedule(staffList, year, month, requests, settings) {
             }
         }
 
-        // ステップ5: A残フォールバック — 早番+遅番だけでは足りない場合のみ使う
-        // 夕方がまだ足りない → 早番の人をA残にアップグレード
+        // ステップ6: A残フォールバック — 上記で足りない場合のみ（5回目以降も許容）
+        // 夕方不足 → 早番の人をA残にアップグレード
         eve = countStaffAtTime(staffList, allAssignments, day, 1065);
         if (eve < 4) {
             const upgradable = fullStaff.filter(st =>
@@ -523,7 +550,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
             }
         }
 
-        // 朝がまだ足りない → 遅番の人をA残にアップグレード
+        // 朝不足 → 遅番の人をA残にアップグレード
         morn = countStaffAtTime(staffList, allAssignments, day, 420);
         if (morn < 4) {
             const upgradable = fullStaff.filter(st =>
@@ -536,7 +563,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
             }
         }
 
-        // ステップ6: 最終人数の警告
+        // ステップ7: 最終人数の警告
         morn = countStaffAtTime(staffList, allAssignments, day, 420);
         noon = countStaffAtTime(staffList, allAssignments, day, 600);
         eve = countStaffAtTime(staffList, allAssignments, day, 1065);
