@@ -500,8 +500,8 @@ function renderSchedule() {
 
 /**
  * 日ごとの人数集計を表示
- * 朝の人数：早番 + 通し + 夜勤明け
- * 夕方の人数：遅番 + 通し + 夜勤入り
+ * 朝(7:00)、昼(10:00)、夕(17:45)、夜勤 の4行で表示
+ * パート個人の勤務時間も考慮して正確にカウント
  */
 function renderSummary(daysInMonth, schedule) {
     const summaryThead = document.querySelector('#summary-table thead tr');
@@ -513,49 +513,36 @@ function renderSummary(daysInMonth, schedule) {
     summaryThead.innerHTML = summaryHeaderHtml;
 
     const summaryTbody = document.getElementById('summary-tbody');
-    // 朝（早番+通し+夜勤明け）、夕方（遅番+通し+夜勤入り）、夜勤の3行
-    const labels = ['朝', '夕方', '夜勤'];
+
+    // 4行：朝(7:00)、昼(10:00)、夕(17:45)、夜勤
+    const rows = [
+        { label: '朝7時', minutes: 420, required: 4, sundayRequired: 4 },
+        { label: '昼10時', minutes: 600, required: 4, sundayRequired: 4 },
+        { label: '夕17時', minutes: 1065, required: 4, sundayRequired: 3 },
+        { label: '夜勤', minutes: null, required: 1, sundayRequired: 1 }
+    ];
 
     let summaryHtml = '';
 
-    labels.forEach((label, idx) => {
-        let row = `<tr><td class="staff-name-cell">${label}</td>`;
+    rows.forEach(rowDef => {
+        let row = `<tr><td class="staff-name-cell">${rowDef.label}</td>`;
 
         for (let day = 1; day <= daysInMonth; day++) {
             let count = 0;
-
-            staffList.forEach(staff => {
-                const shift = schedule.assignments[staff.id]?.[day];
-
-                if (idx === 0) {
-                    // 朝の人数：早番 + 通し + 夜勤明け（前日夜勤の人）
-                    if (shift === SHIFT_TYPES.EARLY || shift === SHIFT_TYPES.OVERTIME) {
-                        count++;
-                    }
-                    if (shift === SHIFT_TYPES.NIGHT_OFF) {
-                        count++; // 夜勤明けの人も朝はいる
-                    }
-                } else if (idx === 1) {
-                    // 夕方の人数：遅番 + 通し + 夜勤入り（当日夜勤の人）
-                    if (shift === SHIFT_TYPES.LATE || shift === SHIFT_TYPES.OVERTIME) {
-                        count++;
-                    }
-                    if (shift === SHIFT_TYPES.NIGHT) {
-                        count++; // 夜勤入りの人も夕方はいる
-                    }
-                } else {
-                    // 夜勤の人数
-                    if (shift === SHIFT_TYPES.NIGHT) count++;
-                }
-            });
-
-            // 必要人数との比較
             const sunday = isSunday(currentYear, currentMonth, day);
-            let required;
-            if (idx === 0) required = sunday ? 4 : 4; // 朝はいつも４人必要
-            else if (idx === 1) required = sunday ? 3 : 4; // 夕方は日曜3人、それ以外4人
-            else required = 1; // 夜勤は1人
 
+            if (rowDef.minutes !== null) {
+                // 時間帯チェック：countStaffAtTimeでパート個人の時間も考慮
+                count = countStaffAtTime(staffList, schedule.assignments, day, rowDef.minutes);
+            } else {
+                // 夜勤の人数
+                staffList.forEach(staff => {
+                    const shift = schedule.assignments[staff.id]?.[day];
+                    if (shift === SHIFT_TYPES.NIGHT) count++;
+                });
+            }
+
+            const required = sunday ? rowDef.sundayRequired : rowDef.required;
             const isOk = count >= required;
             const cssClass = isOk ? 'summary-ok' : 'summary-warn';
 
