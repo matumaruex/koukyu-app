@@ -5,12 +5,12 @@
  * シフトの種類を定義
  */
 const SHIFT_TYPES = {
-    EARLY: 'early',       // 早番
-    LATE: 'late',         // 遅番
+    EARLY: 'early',       // 早番（早出）
+    LATE: 'late',         // 遅番（遅出）
     NIGHT: 'night',       // 夜勤
     NIGHT_OFF: 'nightOff', // 明け（夜勤翌日）
     OFF: 'off',           // 休み
-    OVERTIME: 'overtime'  // 通し（早番→遅番の残業）
+    OVERTIME: 'overtime'  // 通し（早残：早出→遅出の残業）
 };
 
 /**
@@ -26,16 +26,28 @@ const SHIFT_LABELS = {
 };
 
 /**
+ * フルタイムのシフト時間（固定）
+ */
+const SHIFT_TIMES = {
+    [SHIFT_TYPES.EARLY]: '7:00〜16:00',
+    [SHIFT_TYPES.LATE]: '9:30〜18:30',
+    [SHIFT_TYPES.OVERTIME]: '7:00〜18:30',
+    [SHIFT_TYPES.NIGHT]: '夜勤',
+    [SHIFT_TYPES.NIGHT_OFF]: '明け',
+    [SHIFT_TYPES.OFF]: '休み'
+};
+
+/**
  * デフォルトの設定値
  */
 const DEFAULT_SETTINGS = {
-    earlyRequired: 3,        // 平日の早番必要人数
-    lateRequired: 3,         // 平日の遅番必要人数
+    earlyRequired: 3,        // 平日の早番必要人数（夜勤明け1人と合わせて朝4人）
+    lateRequired: 3,         // 平日の遅番必要人数（夜勤入り1人と合わせて夕方4人）
     nightRequired: 1,        // 夜勤必要人数
     sundayEarlyRequired: 2,  // 日曜の早番必要人数
     sundayLateRequired: 2,   // 日曜の遅番必要人数
     sundayNightRequired: 1,  // 日曜の夜勤必要人数
-    maxConsecutive: 3         // 最大連勤日数
+    maxConsecutive: 5        // デフォルトの最大連勤日数
 };
 
 /**
@@ -60,6 +72,14 @@ function isSunday(year, month, day) {
 }
 
 /**
+ * その日が金・土・日かどうか（夜勤制限の判定用）
+ */
+function isFriSatSun(year, month, day) {
+    const dow = getDayOfWeek(year, month, day);
+    return dow === 0 || dow === 5 || dow === 6; // 日=0, 金=5, 土=6
+}
+
+/**
  * スタッフの連勤日数を計算（指定日を含む過去の連続勤務日数）
  */
 function getConsecutiveWorkDays(assignments, day) {
@@ -76,11 +96,34 @@ function getConsecutiveWorkDays(assignments, day) {
 }
 
 /**
+ * スタッフごとの最大連勤日数を取得
+ * - 夜勤ありフルタイム → 2日まで
+ * - スタッフに個人設定がある場合 → その値を使用
+ * - それ以外 → デフォルト設定値
+ */
+function getStaffMaxConsecutive(staff, settings) {
+    // スタッフに個別の連勤制限がある場合はそれを優先
+    if (staff.maxConsecutive && staff.maxConsecutive > 0) {
+        return staff.maxConsecutive;
+    }
+
+    // 夜勤ありのフルタイムは日勤2連勤まで
+    if (staff.type !== 'part' && staff.nightShiftType && staff.nightShiftType !== 'none') {
+        return 2;
+    }
+
+    return settings.maxConsecutive || DEFAULT_SETTINGS.maxConsecutive;
+}
+
+/**
  * 指定日にこのスタッフが勤務可能かチェック
  */
-function canWorkOnDay(assignments, day, maxConsecutive) {
+function canWorkOnDay(staff, assignments, day, settings) {
     // すでに割り当て済みならNG
     if (assignments[day]) return false;
+
+    // スタッフごとの連勤上限
+    const maxConsecutive = getStaffMaxConsecutive(staff, settings);
 
     // 連勤チェック：この日を勤務にした場合、連勤が上限を超えないか
     const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
@@ -92,12 +135,18 @@ function canWorkOnDay(assignments, day, maxConsecutive) {
 /**
  * 指定日にこのスタッフを夜勤に割り当て可能かチェック
  */
-function canAssignNight(staff, assignments, day, daysInMonth, maxConsecutive) {
+function canAssignNight(staff, assignments, day, daysInMonth, settings, year, month) {
+    // 夜勤設定を取得（後方互換性：古い canNightShift を変換）
+    const nightType = staff.nightShiftType || (staff.canNightShift ? 'all' : 'none');
+
     // 夜勤不可のスタッフ
-    if (!staff.canNightShift) return false;
+    if (nightType === 'none') return false;
 
     // パートは夜勤不可
     if (staff.type === 'part') return false;
+
+    // 「平日のみOK」の人で、金土日の場合はNG
+    if (nightType === 'weekday' && isFriSatSun(year, month, day)) return false;
 
     // すでに割り当て済み
     if (assignments[day]) return false;
@@ -106,12 +155,12 @@ function canAssignNight(staff, assignments, day, daysInMonth, maxConsecutive) {
     if (day + 1 <= daysInMonth && assignments[day + 1]) return false;
     if (day + 2 <= daysInMonth && assignments[day + 2]) return false;
 
+    // スタッフごとの連勤上限
+    const maxConsecutive = getStaffMaxConsecutive(staff, settings);
+
     // 連勤チェック
     const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
     if (pastConsecutive >= maxConsecutive) return false;
-
-    // ソフト制約：3日連続日勤の後の夜勤は避けたい
-    if (pastConsecutive >= 3) return false;
 
     return true;
 }
@@ -216,7 +265,10 @@ function generateSchedule(staffList, year, month, requests, settings) {
     });
 
     // ===== フェーズ2: 夜勤を割り当て（最も制約が厳しい） =====
-    const nightEligible = staffList.filter(st => st.canNightShift && st.type !== 'part');
+    const nightEligible = staffList.filter(st => {
+        const nightType = st.nightShiftType || (st.canNightShift ? 'all' : 'none');
+        return nightType !== 'none' && st.type !== 'part';
+    });
 
     for (let day = 1; day <= daysInMonth; day++) {
         const required = isSunday(year, month, day) ? s.sundayNightRequired : s.nightRequired;
@@ -224,7 +276,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
         for (let n = 0; n < required; n++) {
             // 夜勤可能なスタッフをフィルタリング
             const candidates = nightEligible.filter(st =>
-                canAssignNight(st, allAssignments[st.id], day, daysInMonth, s.maxConsecutive)
+                canAssignNight(st, allAssignments[st.id], day, daysInMonth, s, year, month)
             );
 
             if (candidates.length === 0) {
@@ -273,8 +325,8 @@ function generateSchedule(staffList, year, month, requests, settings) {
         const available = staffList.filter(st => {
             if (allAssignments[st.id][day]) return false; // すでに割り当て済み
 
-            // 連勤チェック
-            if (!canWorkOnDay(allAssignments[st.id], day, s.maxConsecutive)) return false;
+            // スタッフごとの連勤チェック
+            if (!canWorkOnDay(st, allAssignments[st.id], day, s)) return false;
 
             // パートの週間上限チェック
             if (st.type === 'part') {
@@ -292,22 +344,32 @@ function generateSchedule(staffList, year, month, requests, settings) {
             return aWork - bWork;
         });
 
-        // 早番・遅番のバランスを考慮して割り当て
+        // 早番のみのパートを先に早番に、それ以外をバランスよく配置
+        const earlyOnlyStaff = sortedAvailable.filter(st => st.type === 'part' && st.earlyOnly);
+        const normalStaff = sortedAvailable.filter(st => !(st.type === 'part' && st.earlyOnly));
+
         let earlyAssigned = 0;
         let lateAssigned = 0;
-        const dayAvailable = [...sortedAvailable];
 
-        // まず早番を割り当て
+        // まず「早出のみ」のパートを早番に割り当て
+        for (let i = 0; i < earlyOnlyStaff.length && earlyAssigned < earlyNeeded; i++) {
+            const st = earlyOnlyStaff[i];
+            allAssignments[st.id][day] = SHIFT_TYPES.EARLY;
+            earlyAssigned++;
+        }
+
+        // 残りの早番枠を通常スタッフで埋める
+        const dayAvailable = [...normalStaff];
+
         for (let i = 0; i < dayAvailable.length && earlyAssigned < earlyNeeded; i++) {
             const st = dayAvailable[i];
-            // パートは早番か遅番のみ（通しはNG）
             allAssignments[st.id][day] = SHIFT_TYPES.EARLY;
             earlyAssigned++;
             dayAvailable.splice(i, 1);
             i--;
         }
 
-        // 次に遅番を割り当て
+        // 次に遅番を割り当て（早出のみのパートは除外済み）
         for (let i = 0; i < dayAvailable.length && lateAssigned < lateNeeded; i++) {
             const st = dayAvailable[i];
             allAssignments[st.id][day] = SHIFT_TYPES.LATE;
@@ -388,14 +450,17 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
         const assignments = allAssignments[staff.id];
         if (!assignments) return;
 
+        // スタッフごとの連勤上限
+        const maxConsec = getStaffMaxConsecutive(staff, s);
+
         // 連勤チェック
         let consecutive = 0;
         for (let day = 1; day <= daysInMonth; day++) {
             const shift = assignments[day];
             if (shift && shift !== SHIFT_TYPES.OFF && shift !== SHIFT_TYPES.NIGHT_OFF) {
                 consecutive++;
-                if (consecutive > s.maxConsecutive) {
-                    warnings.push(`${staff.name}さん：${day}日目で${consecutive}連勤になっています`);
+                if (consecutive > maxConsec) {
+                    warnings.push(`${staff.name}さん：${day}日目で${consecutive}連勤になっています（上限${maxConsec}日）`);
                 }
             } else {
                 consecutive = 0;
@@ -403,11 +468,17 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
         }
 
         // 夜勤のルールチェック
+        const nightType = staff.nightShiftType || (staff.canNightShift ? 'all' : 'none');
+
         for (let day = 1; day <= daysInMonth; day++) {
             if (assignments[day] === SHIFT_TYPES.NIGHT) {
                 // 夜勤不可のスタッフに夜勤が入っていないか
-                if (!staff.canNightShift || staff.type === 'part') {
+                if (nightType === 'none' || staff.type === 'part') {
                     warnings.push(`${staff.name}さん：${day}日に夜勤が入っていますが、夜勤不可です`);
+                }
+                // 平日のみOKの人が金土日に入っていないか
+                if (nightType === 'weekday' && isFriSatSun(year, month, day)) {
+                    warnings.push(`${staff.name}さん：${day}日（金土日）に夜勤が入っていますが、平日のみOKです`);
                 }
                 // 翌日が明けになっているか
                 if (day + 1 <= daysInMonth && assignments[day + 1] !== SHIFT_TYPES.NIGHT_OFF) {
@@ -421,6 +492,15 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
             if (assignments[day] === SHIFT_TYPES.OVERTIME) {
                 if (!staff.canOvertime || staff.type === 'part') {
                     warnings.push(`${staff.name}さん：${day}日に通し勤務が入っていますが、残業不可です`);
+                }
+            }
+        }
+
+        // 早出のみのパートが遅番に入っていないかチェック
+        if (staff.type === 'part' && staff.earlyOnly) {
+            for (let day = 1; day <= daysInMonth; day++) {
+                if (assignments[day] === SHIFT_TYPES.LATE || assignments[day] === SHIFT_TYPES.OVERTIME) {
+                    warnings.push(`${staff.name}さん：${day}日に遅番/通しが入っていますが、早出のみです`);
                 }
             }
         }
@@ -446,7 +526,7 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
         const nightNeeded = sunday ? s.sundayNightRequired : s.nightRequired;
 
         if (earlyCount < earlyNeeded) {
-            // 重複警告を避ける（生成時にすでに出してる可能性あり）
+            // 重複警告を避ける
         }
     }
 
@@ -465,14 +545,17 @@ function getShiftChangeWarnings(staff, allAssignments, staffList, day, newShift,
     // 変更を仮適用
     assignments[day] = newShift;
 
+    // スタッフごとの連勤上限
+    const maxConsec = getStaffMaxConsecutive(staff, s);
+
     // 連勤チェック
     let consecutive = 0;
     for (let d = 1; d <= daysInMonth; d++) {
         const shift = assignments[d];
         if (shift && shift !== SHIFT_TYPES.OFF && shift !== SHIFT_TYPES.NIGHT_OFF) {
             consecutive++;
-            if (consecutive > s.maxConsecutive) {
-                warnings.push(`${consecutive}連勤になります！（上限${s.maxConsecutive}日）`);
+            if (consecutive > maxConsec) {
+                warnings.push(`${consecutive}連勤になります！（上限${maxConsec}日）`);
                 break;
             }
         } else {
@@ -482,12 +565,21 @@ function getShiftChangeWarnings(staff, allAssignments, staffList, day, newShift,
 
     // 夜勤チェック
     if (newShift === SHIFT_TYPES.NIGHT) {
-        if (!staff.canNightShift) {
+        const nightType = staff.nightShiftType || (staff.canNightShift ? 'all' : 'none');
+        if (nightType === 'none') {
             warnings.push(`${staff.name}さんは夜勤ができません`);
+        }
+        if (nightType === 'weekday' && isFriSatSun(year, month, day)) {
+            warnings.push(`${staff.name}さんは金土日の夜勤ができません`);
         }
         if (staff.type === 'part') {
             warnings.push(`パートスタッフは夜勤に入れません`);
         }
+    }
+
+    // 遅番チェック（早出のみのパート）
+    if (newShift === SHIFT_TYPES.LATE && staff.type === 'part' && staff.earlyOnly) {
+        warnings.push(`${staff.name}さんは早出のみです`);
     }
 
     // 通しチェック
@@ -497,6 +589,9 @@ function getShiftChangeWarnings(staff, allAssignments, staffList, day, newShift,
         }
         if (staff.type === 'part') {
             warnings.push(`パートスタッフは通し勤務に入れません`);
+        }
+        if (staff.earlyOnly) {
+            warnings.push(`${staff.name}さんは早出のみです`);
         }
     }
 

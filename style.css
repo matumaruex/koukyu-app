@@ -798,6 +798,57 @@ thead .staff-name-cell {
     }
 }
 
+/* ===== 新しいスタッフタグ ===== */
+.staff-tag.tag-night-weekday {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.staff-tag.tag-early-only {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.staff-tag.tag-consecutive {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.staff-tag.tag-time {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+/* ===== 勤務時間入力 ===== */
+.time-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.time-input-row input[type="time"] {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: var(--transition);
+    background: var(--bg-white);
+}
+
+.time-input-row input[type="time"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.time-separator {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    font-weight: 500;
+}
+
 /* ===== レスポンシブ（スマホ対応） ===== */
 @media (max-width: 640px) {
     .app-header {

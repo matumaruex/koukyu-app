@@ -29,6 +29,7 @@ if (currentMonth > 12) {
 // ===== 初期化 =====
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
+    migrateStaffData(); // 古いデータ形式を新しい形式に変換
     initNavigation();
     initStaffModal();
     initRequestModal();
@@ -38,6 +39,26 @@ document.addEventListener('DOMContentLoaded', () => {
     renderStaffList();
     renderSchedule();
 });
+
+// ===== データ移行（後方互換性） =====
+// 古い canNightShift (boolean) を新しい nightShiftType に変換
+function migrateStaffData() {
+    let changed = false;
+    staffList.forEach(staff => {
+        // canNightShift → nightShiftType への変換
+        if (staff.canNightShift !== undefined && !staff.nightShiftType) {
+            staff.nightShiftType = staff.canNightShift ? 'all' : 'none';
+            delete staff.canNightShift;
+            changed = true;
+        }
+        // nightShiftType が未設定の場合のデフォルト
+        if (!staff.nightShiftType) {
+            staff.nightShiftType = 'none';
+            changed = true;
+        }
+    });
+    if (changed) saveStaff();
+}
 
 // ===== データ読み込み・保存 =====
 function loadData() {
@@ -117,15 +138,38 @@ function renderStaffList() {
         if (staff.type === 'part') {
             tags.push('<span class="staff-tag tag-part">パート</span>');
         }
-        if (staff.canNightShift) {
+
+        // 夜勤設定の表示
+        const nightType = staff.nightShiftType || 'none';
+        if (nightType === 'all') {
             tags.push('<span class="staff-tag tag-night">夜勤OK</span>');
+        } else if (nightType === 'weekday') {
+            tags.push('<span class="staff-tag tag-night-weekday">夜勤（平日）</span>');
         }
+
         if (staff.canOvertime) {
             tags.push('<span class="staff-tag tag-overtime">残業OK</span>');
         }
+
+        // 早出のみ（パート）
+        if (staff.type === 'part' && staff.earlyOnly) {
+            tags.push('<span class="staff-tag tag-early-only">早出のみ</span>');
+        }
+
         tags.push(`<span class="staff-tag">公休${staff.monthlyDaysOff}日</span>`);
+
         if (staff.type === 'part') {
             tags.push(`<span class="staff-tag">週${staff.maxDaysPerWeek}日</span>`);
+        }
+
+        // 連勤上限の表示（個別設定がある場合のみ）
+        if (staff.maxConsecutive && staff.maxConsecutive > 0) {
+            tags.push(`<span class="staff-tag tag-consecutive">連勤${staff.maxConsecutive}日</span>`);
+        }
+
+        // パートの勤務時間表示
+        if (staff.type === 'part' && staff.startTime && staff.endTime) {
+            tags.push(`<span class="staff-tag tag-time">${staff.startTime}〜${staff.endTime}</span>`);
         }
 
         return `
@@ -165,9 +209,34 @@ function initStaffModal() {
     const modal = document.getElementById('staff-modal');
     const form = document.getElementById('staff-form');
     const typeSelect = document.getElementById('staff-type');
-    const nightGroup = document.getElementById('night-shift-group');
-    const overtimeGroup = document.getElementById('overtime-group');
-    const maxDaysGroup = document.getElementById('max-days-group');
+
+    // フォーム表示の切り替え関数
+    function updateFormVisibility(type) {
+        const nightGroup = document.getElementById('night-shift-group');
+        const overtimeGroup = document.getElementById('overtime-group');
+        const maxDaysGroup = document.getElementById('max-days-group');
+        const earlyOnlyGroup = document.getElementById('early-only-group');
+        const workHoursGroup = document.getElementById('work-hours-group');
+
+        if (type === 'part') {
+            // パート：夜勤・残業は非表示、早出のみ・週の出勤日数・勤務時間を表示
+            nightGroup.style.display = 'none';
+            overtimeGroup.style.display = 'none';
+            maxDaysGroup.style.display = '';
+            earlyOnlyGroup.style.display = '';
+            workHoursGroup.style.display = '';
+            document.getElementById('staff-night-type').value = 'none';
+            document.getElementById('staff-overtime').checked = false;
+        } else {
+            // フルタイム：夜勤・残業を表示、パート専用は非表示
+            nightGroup.style.display = '';
+            overtimeGroup.style.display = '';
+            maxDaysGroup.style.display = 'none';
+            earlyOnlyGroup.style.display = 'none';
+            workHoursGroup.style.display = 'none';
+            document.getElementById('staff-early-only').checked = false;
+        }
+    }
 
     // 追加ボタン
     document.getElementById('add-staff-btn').addEventListener('click', () => {
@@ -175,29 +244,21 @@ function initStaffModal() {
         document.getElementById('staff-id').value = '';
         document.getElementById('staff-name').value = '';
         document.getElementById('staff-type').value = 'full';
-        document.getElementById('staff-night').checked = false;
+        document.getElementById('staff-night-type').value = 'none';
         document.getElementById('staff-overtime').checked = false;
+        document.getElementById('staff-early-only').checked = false;
         document.getElementById('staff-days-off').value = 9;
         document.getElementById('staff-max-days').value = 3;
-        nightGroup.style.display = '';
-        overtimeGroup.style.display = '';
-        maxDaysGroup.style.display = 'none';
+        document.getElementById('staff-max-consecutive').value = 0;
+        document.getElementById('staff-start-time').value = '09:00';
+        document.getElementById('staff-end-time').value = '17:00';
+        updateFormVisibility('full');
         modal.classList.add('show');
     });
 
     // 勤務形態の変更でフォームを切り替え
     typeSelect.addEventListener('change', () => {
-        if (typeSelect.value === 'part') {
-            nightGroup.style.display = 'none';
-            overtimeGroup.style.display = 'none';
-            maxDaysGroup.style.display = '';
-            document.getElementById('staff-night').checked = false;
-            document.getElementById('staff-overtime').checked = false;
-        } else {
-            nightGroup.style.display = '';
-            overtimeGroup.style.display = '';
-            maxDaysGroup.style.display = 'none';
-        }
+        updateFormVisibility(typeSelect.value);
     });
 
     // 閉じるボタン
@@ -214,22 +275,33 @@ function initStaffModal() {
         e.preventDefault();
 
         const id = document.getElementById('staff-id').value;
+        const type = document.getElementById('staff-type').value;
+
         const staffData = {
             id: id || generateId(),
             name: document.getElementById('staff-name').value.trim(),
-            type: document.getElementById('staff-type').value,
-            canNightShift: document.getElementById('staff-night').checked,
+            type: type,
+            nightShiftType: document.getElementById('staff-night-type').value,
             canOvertime: document.getElementById('staff-overtime').checked,
+            earlyOnly: document.getElementById('staff-early-only').checked,
             monthlyDaysOff: parseInt(document.getElementById('staff-days-off').value) || 9,
-            maxDaysPerWeek: parseInt(document.getElementById('staff-max-days').value) || 3
+            maxDaysPerWeek: parseInt(document.getElementById('staff-max-days').value) || 3,
+            maxConsecutive: parseInt(document.getElementById('staff-max-consecutive').value) || 0,
+            startTime: document.getElementById('staff-start-time').value || '',
+            endTime: document.getElementById('staff-end-time').value || ''
         };
 
         if (!staffData.name) return;
 
         // パートの場合は夜勤・残業を無効に
         if (staffData.type === 'part') {
-            staffData.canNightShift = false;
+            staffData.nightShiftType = 'none';
             staffData.canOvertime = false;
+        } else {
+            // フルタイムの場合は早出のみ・勤務時間を無効に
+            staffData.earlyOnly = false;
+            staffData.startTime = '';
+            staffData.endTime = '';
         }
 
         if (id) {
@@ -259,24 +331,34 @@ function editStaff(id) {
     document.getElementById('staff-id').value = staff.id;
     document.getElementById('staff-name').value = staff.name;
     document.getElementById('staff-type').value = staff.type;
-    document.getElementById('staff-night').checked = staff.canNightShift;
+    document.getElementById('staff-night-type').value = staff.nightShiftType || 'none';
     document.getElementById('staff-overtime').checked = staff.canOvertime;
+    document.getElementById('staff-early-only').checked = staff.earlyOnly || false;
     document.getElementById('staff-days-off').value = staff.monthlyDaysOff;
     document.getElementById('staff-max-days').value = staff.maxDaysPerWeek || 3;
+    document.getElementById('staff-max-consecutive').value = staff.maxConsecutive || 0;
+    document.getElementById('staff-start-time').value = staff.startTime || '09:00';
+    document.getElementById('staff-end-time').value = staff.endTime || '17:00';
 
     // フォーム表示の切り替え
     const nightGroup = document.getElementById('night-shift-group');
     const overtimeGroup = document.getElementById('overtime-group');
     const maxDaysGroup = document.getElementById('max-days-group');
+    const earlyOnlyGroup = document.getElementById('early-only-group');
+    const workHoursGroup = document.getElementById('work-hours-group');
 
     if (staff.type === 'part') {
         nightGroup.style.display = 'none';
         overtimeGroup.style.display = 'none';
         maxDaysGroup.style.display = '';
+        earlyOnlyGroup.style.display = '';
+        workHoursGroup.style.display = '';
     } else {
         nightGroup.style.display = '';
         overtimeGroup.style.display = '';
         maxDaysGroup.style.display = 'none';
+        earlyOnlyGroup.style.display = 'none';
+        workHoursGroup.style.display = 'none';
     }
 
     modal.classList.add('show');
@@ -398,6 +480,8 @@ function renderSchedule() {
 
 /**
  * 日ごとの人数集計を表示
+ * 朝の人数：早番 + 通し + 夜勤明け
+ * 夕方の人数：遅番 + 通し + 夜勤入り
  */
 function renderSummary(daysInMonth, schedule) {
     const summaryThead = document.querySelector('#summary-table thead tr');
@@ -409,31 +493,48 @@ function renderSummary(daysInMonth, schedule) {
     summaryThead.innerHTML = summaryHeaderHtml;
 
     const summaryTbody = document.getElementById('summary-tbody');
-    const labels = ['早番', '遅番', '夜勤'];
-    const shiftTypes = [SHIFT_TYPES.EARLY, SHIFT_TYPES.LATE, SHIFT_TYPES.NIGHT];
+    // 朝（早番+通し+夜勤明け）、夕方（遅番+通し+夜勤入り）、夜勤の3行
+    const labels = ['朝', '夕方', '夜勤'];
 
     let summaryHtml = '';
 
-    shiftTypes.forEach((shiftType, idx) => {
-        let row = `<tr><td class="staff-name-cell">${labels[idx]}</td>`;
+    labels.forEach((label, idx) => {
+        let row = `<tr><td class="staff-name-cell">${label}</td>`;
 
         for (let day = 1; day <= daysInMonth; day++) {
             let count = 0;
+
             staffList.forEach(staff => {
                 const shift = schedule.assignments[staff.id]?.[day];
-                if (shift === shiftType) count++;
-                // 通しは早番+遅番にカウント
-                if (shift === SHIFT_TYPES.OVERTIME &&
-                    (shiftType === SHIFT_TYPES.EARLY || shiftType === SHIFT_TYPES.LATE)) {
-                    count++;
+
+                if (idx === 0) {
+                    // 朝の人数：早番 + 通し + 夜勤明け（前日夜勤の人）
+                    if (shift === SHIFT_TYPES.EARLY || shift === SHIFT_TYPES.OVERTIME) {
+                        count++;
+                    }
+                    if (shift === SHIFT_TYPES.NIGHT_OFF) {
+                        count++; // 夜勤明けの人も朝はいる
+                    }
+                } else if (idx === 1) {
+                    // 夕方の人数：遅番 + 通し + 夜勤入り（当日夜勤の人）
+                    if (shift === SHIFT_TYPES.LATE || shift === SHIFT_TYPES.OVERTIME) {
+                        count++;
+                    }
+                    if (shift === SHIFT_TYPES.NIGHT) {
+                        count++; // 夜勤入りの人も夕方はいる
+                    }
+                } else {
+                    // 夜勤の人数
+                    if (shift === SHIFT_TYPES.NIGHT) count++;
                 }
             });
 
+            // 必要人数との比較
             const sunday = isSunday(currentYear, currentMonth, day);
             let required;
-            if (shiftType === SHIFT_TYPES.EARLY) required = sunday ? 2 : 3;
-            else if (shiftType === SHIFT_TYPES.LATE) required = sunday ? 2 : 3;
-            else required = 1;
+            if (idx === 0) required = 4; // 朝は4人必要
+            else if (idx === 1) required = 4; // 夕方は4人必要
+            else required = 1; // 夜勤は1人
 
             const isOk = count >= required;
             const cssClass = isOk ? 'summary-ok' : 'summary-warn';
@@ -767,6 +868,7 @@ function initDataActions() {
                     if (confirm('現在のデータを上書きします。よろしいですか？')) {
                         staffList = data.staff;
                         if (data.schedules) schedules = data.schedules;
+                        migrateStaffData(); // インポートしたデータも移行
                         saveStaff();
                         saveSchedules();
                         renderStaffList();
