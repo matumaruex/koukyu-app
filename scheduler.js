@@ -592,11 +592,15 @@ function generateSchedule(staffList, year, month, requests, settings) {
                     let canRemove = true;
                     TIME_CHECKPOINTS.forEach(cp => {
                         const sundayFlag = isSunday(year, month, day);
-                        const required = sundayFlag ? cp.sundayRequired : cp.required;
+                        // 朝夕はより厳格に、昼はやや緩めに
+                        const requiredScore = sundayFlag ? cp.sundayRequired : cp.required;
+                        // 昼（600）は9割程度でも許容するが、朝（420）夕（1065）は100%必須にするための調整
+                        const actualRequired = (cp.minutes === 600) ? Math.max(requiredScore - 1, 1) : requiredScore;
+
                         // この人がいなくなった場合の人数
                         const currentCount = countStaffAtTime(staffList, allAssignments, day, cp.minutes);
                         const wouldBePresent = isStaffPresentAt(staff, shift, cp.minutes);
-                        if (wouldBePresent && (currentCount - 1) < required) {
+                        if (wouldBePresent && (currentCount - 1) < actualRequired) {
                             canRemove = false;
                         }
                     });
@@ -634,26 +638,51 @@ function generateSchedule(staffList, year, month, requests, settings) {
                     // 希望休は変更しない
                     const staffRequests = requests[staff.id] || [];
                     if (staffRequests.includes(day)) continue;
-                    // 連勤チェック
+                    // 連勤チェック（厳密にチェック）
                     if (!canWorkOnDay(staff, allAssignments[staff.id], day, s)) continue;
                     // パートの週間上限チェック
                     if (staff.type === 'part') {
                         const weekWork = getWeekWorkDays(allAssignments[staff.id], day, year, month);
                         if (weekWork >= (staff.maxDaysPerWeek || 3)) continue;
                     }
-                    changeCandidates.push(day);
+
+                    // この日の朝(420)・昼(600)・夕(1065)の不足状況を確認
+                    const sundayFlag = isSunday(year, month, day);
+                    let earlyScore = 0; // 早番が不足している度合い
+                    let lateScore = 0;  // 遅番が不足している度合い
+                    TIME_CHECKPOINTS.forEach(cp => {
+                        const req = sundayFlag ? cp.sundayRequired : cp.required;
+                        const count = countStaffAtTime(staffList, allAssignments, day, cp.minutes);
+                        if (count < req) {
+                            if (cp.minutes === 420) earlyScore += (req - count) * 2; // 朝は重大
+                            if (cp.minutes === 600) { earlyScore += (req - count); lateScore += (req - count); }
+                            if (cp.minutes === 1065) lateScore += (req - count) * 2; // 夕方は重大
+                        }
+                    });
+
+                    // どこかで不足があれば優先度高
+                    changeCandidates.push({ day, earlyScore, lateScore, totalScore: earlyScore + lateScore });
                 }
+
+                // 優先度が高い日（不足が大きい日）から埋める
+                changeCandidates.sort((a, b) => b.totalScore - a.totalScore);
+
                 for (let i = 0; i < changeCandidates.length && currentOff > targetOff; i++) {
-                    const day = changeCandidates[i];
-                    // 早番と遅番のバランスを見て割り当て
-                    const earlyCount = countShiftType(allAssignments[staff.id], SHIFT_TYPES.EARLY, daysInMonth);
-                    const lateCount = countShiftType(allAssignments[staff.id], SHIFT_TYPES.LATE, daysInMonth);
-                    if (canAssignEarly(staff) && (earlyCount <= lateCount || !canAssignLate(staff))) {
-                        allAssignments[staff.id][day] = SHIFT_TYPES.EARLY;
+                    const c = changeCandidates[i];
+
+                    if (canAssignEarly(staff) && canAssignLate(staff)) {
+                        // 朝と夕方の不足度合いに合わせて割り当て
+                        if (c.earlyScore >= c.lateScore) {
+                            allAssignments[staff.id][c.day] = SHIFT_TYPES.EARLY;
+                        } else {
+                            allAssignments[staff.id][c.day] = SHIFT_TYPES.LATE;
+                        }
+                    } else if (canAssignEarly(staff)) {
+                        allAssignments[staff.id][c.day] = SHIFT_TYPES.EARLY;
                     } else if (canAssignLate(staff)) {
-                        allAssignments[staff.id][day] = SHIFT_TYPES.LATE;
+                        allAssignments[staff.id][c.day] = SHIFT_TYPES.LATE;
                     } else {
-                        allAssignments[staff.id][day] = SHIFT_TYPES.EARLY;
+                        continue; // 入れられない
                     }
                     currentOff--;
                 }
