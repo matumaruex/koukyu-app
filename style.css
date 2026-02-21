@@ -37,6 +37,8 @@
     --shift-off-bg: #d1fae5;
     --shift-overtime: #dc2626;
     --shift-overtime-bg: #fee2e2;
+    --shift-part: #0d9488;
+    --shift-part-bg: #ccfbf1;
 
     /* その他 */
     --radius: 12px;
@@ -499,6 +501,11 @@ thead .staff-name-cell {
 .shift-overtime {
     background: var(--shift-overtime-bg);
     color: var(--shift-overtime);
+}
+
+.shift-part {
+    background: var(--shift-part-bg);
+    color: var(--shift-part);
 }
 
 /* 集計テーブル */
