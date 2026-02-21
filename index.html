@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公休表 - 介護施設シフト管理</title>
+    <meta name="description" content="介護施設向けの公休表・シフト自動生成アプリ">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="print.css" media="print">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- ヘッダー：アプリ名とナビゲーション -->
+    <header class="app-header">
+        <h1 class="app-title">公休表</h1>
+        <nav class="app-nav">
+            <button class="nav-btn active" data-view="staff">スタッフ管理</button>
+            <button class="nav-btn" data-view="schedule">シフト表</button>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <!-- ===== スタッフ管理画面 ===== -->
+        <section id="staff-view" class="view active">
+            <div class="section-header">
+                <h2>スタッフ一覧</h2>
+                <button class="btn btn-primary" id="add-staff-btn">＋ 追加</button>
+            </div>
+
+            <!-- スタッフがいない時のメッセージ -->
+            <div id="staff-empty" class="empty-state">
+                <p class="empty-icon">👥</p>
+                <p>スタッフがまだ登録されていません</p>
+                <p class="empty-hint">「＋ 追加」ボタンから登録してください</p>
+            </div>
+
+            <!-- スタッフ一覧 -->
+            <div id="staff-list" class="staff-list"></div>
+
+            <!-- データ管理 -->
+            <div class="data-actions">
+                <button class="btn btn-outline" id="export-btn">データを書き出す</button>
+                <button class="btn btn-outline" id="import-btn">データを読み込む</button>
+                <input type="file" id="import-file" accept=".json" style="display:none">
+            </div>
+        </section>
+
+        <!-- ===== シフト表画面 ===== -->
+        <section id="schedule-view" class="view">
+            <!-- 月の選択 -->
+            <div class="month-selector">
+                <button class="btn btn-icon" id="prev-month">◀</button>
+                <span id="current-month" class="month-label">2026年3月</span>
+                <button class="btn btn-icon" id="next-month">▶</button>
+            </div>
+
+            <!-- 操作ボタン -->
+            <div class="schedule-actions">
+                <button class="btn btn-secondary" id="request-btn">希望休を入力</button>
+                <button class="btn btn-primary" id="auto-generate-btn">自動で作成</button>
+                <button class="btn btn-outline" id="clear-schedule-btn">リセット</button>
+                <button class="btn btn-accent" id="print-btn">印刷</button>
+            </div>
+
+            <!-- スタッフ未登録の警告 -->
+            <div id="schedule-no-staff" class="empty-state" style="display:none">
+                <p class="empty-icon">⚠️</p>
+                <p>まずスタッフを登録してください</p>
+                <p class="empty-hint">「スタッフ管理」タブからスタッフを追加してください</p>
+            </div>
+
+            <!-- シフト表本体 -->
+            <div id="schedule-container" class="schedule-container">
+                <div class="schedule-table-wrapper">
+                    <table id="schedule-table" class="schedule-table">
+                        <thead id="schedule-thead"></thead>
+                        <tbody id="schedule-tbody"></tbody>
+                    </table>
+                </div>
+
+                <!-- 各日の人数集計 -->
+                <div class="schedule-table-wrapper">
+                    <table id="summary-table" class="schedule-table summary-table">
+                        <thead>
+                            <tr>
+                                <th class="staff-name-cell">集計</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 凡例 -->
+            <div class="legend">
+                <span class="legend-item"><span class="shift-badge shift-early">早</span> 早番</span>
+                <span class="legend-item"><span class="shift-badge shift-late">遅</span> 遅番</span>
+                <span class="legend-item"><span class="shift-badge shift-night">夜</span> 夜勤</span>
+                <span class="legend-item"><span class="shift-badge shift-nightoff">明</span> 明け</span>
+                <span class="legend-item"><span class="shift-badge shift-off">休</span> 休み</span>
+                <span class="legend-item"><span class="shift-badge shift-overtime">通</span> 通し</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- ===== スタッフ追加・編集モーダル ===== -->
+    <div class="modal-overlay" id="staff-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="staff-modal-title">スタッフ追加</h3>
+                <button class="modal-close" id="staff-modal-close">&times;</button>
+            </div>
+            <form id="staff-form" class="modal-body">
+                <input type="hidden" id="staff-id">
+
+                <div class="form-group">
+                    <label for="staff-name">名前</label>
+                    <input type="text" id="staff-name" placeholder="例：田中太郎" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="staff-type">勤務形態</label>
+                    <select id="staff-type">
+                        <option value="full">フルタイム</option>
+                        <option value="part">パート</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="night-shift-group">
+                    <label>
+                        <input type="checkbox" id="staff-night"> 夜勤ができる
+                    </label>
+                </div>
+
+                <div class="form-group" id="overtime-group">
+                    <label>
+                        <input type="checkbox" id="staff-overtime"> 残業（通し勤務）ができる
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="staff-days-off">月の公休日数</label>
+                    <input type="number" id="staff-days-off" min="4" max="20" value="9">
+                </div>
+
+                <div class="form-group" id="max-days-group" style="display:none">
+                    <label for="staff-max-days">週の最大出勤日数</label>
+                    <input type="number" id="staff-max-days" min="1" max="6" value="3">
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="staff-cancel">キャンセル</button>
+                    <button type="submit" class="btn btn-primary">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== 希望休入力モーダル ===== -->
+    <div class="modal-overlay" id="request-modal">
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h3>希望休を入力</h3>
+                <button class="modal-close" id="request-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="request-staff">スタッフを選択</label>
+                    <select id="request-staff"></select>
+                </div>
+                <p class="form-hint">休みたい日をタップしてください（もう一度タップで解除）</p>
+                <div id="request-calendar" class="request-calendar"></div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline" id="request-done">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== シフト変更モーダル ===== -->
+    <div class="modal-overlay" id="shift-modal">
+        <div class="modal modal-small">
+            <div class="modal-header">
+                <h3 id="shift-modal-title">シフト変更</h3>
+                <button class="modal-close" id="shift-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="shift-modal-info" class="shift-modal-info"></p>
+                <div class="shift-options">
+                    <button class="btn shift-option shift-early" data-shift="early">早番</button>
+                    <button class="btn shift-option shift-late" data-shift="late">遅番</button>
+                    <button class="btn shift-option shift-night" data-shift="night">夜勤</button>
+                    <button class="btn shift-option shift-overtime" data-shift="overtime">通し</button>
+                    <button class="btn shift-option shift-off" data-shift="off">休み</button>
+                </div>
+                <div id="shift-warning" class="shift-warning" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 自動生成中のローディング ===== -->
+    <div class="modal-overlay" id="loading-modal" style="display:none">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>シフトを自動作成中...</p>
+        </div>
+    </div>
+
+    <script src="scheduler.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

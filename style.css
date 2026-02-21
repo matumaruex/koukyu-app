@@ -1,0 +1,852 @@
+/* ===== 基本設定 ===== */
+:root {
+    /* メインカラー */
+    --primary: #2563eb;
+    --primary-light: #3b82f6;
+    --primary-dark: #1d4ed8;
+    --primary-bg: #eff6ff;
+
+    /* アクセントカラー */
+    --accent: #0891b2;
+    --accent-light: #06b6d4;
+
+    /* テキスト */
+    --text: #1e293b;
+    --text-light: #64748b;
+    --text-muted: #94a3b8;
+
+    /* 背景 */
+    --bg: #f1f5f9;
+    --bg-white: #ffffff;
+    --bg-hover: #f8fafc;
+
+    /* ボーダー */
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
+
+    /* シフト別カラー */
+    --shift-early: #2563eb;
+    --shift-early-bg: #dbeafe;
+    --shift-late: #d97706;
+    --shift-late-bg: #fef3c7;
+    --shift-night: #7c3aed;
+    --shift-night-bg: #ede9fe;
+    --shift-nightoff: #a78bfa;
+    --shift-nightoff-bg: #f5f3ff;
+    --shift-off: #059669;
+    --shift-off-bg: #d1fae5;
+    --shift-overtime: #dc2626;
+    --shift-overtime-bg: #fee2e2;
+
+    /* その他 */
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+    --transition: all 0.2s ease;
+
+    /* 日曜カラー */
+    --sunday: #ef4444;
+    --saturday: #2563eb;
+}
+
+/* リセット */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ===== ヘッダー ===== */
+.app-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white;
+    padding: 16px 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-md);
+}
+
+.app-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.app-nav {
+    display: flex;
+    gap: 0;
+}
+
+.nav-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+}
+
+.nav-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-btn.active {
+    color: white;
+    border-bottom-color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ===== メインコンテンツ ===== */
+.app-main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px 16px;
+}
+
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+/* ===== セクションヘッダー ===== */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.section-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+/* ===== ボタン ===== */
+.btn {
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.btn:active {
+    transform: scale(0.97);
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+}
+
+.btn-secondary {
+    background: var(--primary-bg);
+    color: var(--primary);
+    border: 1px solid var(--primary-light);
+}
+
+.btn-secondary:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-accent {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 2px 4px rgba(8, 145, 178, 0.3);
+}
+
+.btn-accent:hover {
+    background: var(--accent-light);
+}
+
+.btn-outline {
+    background: var(--bg-white);
+    color: var(--text-light);
+    border: 1px solid var(--border);
+}
+
+.btn-outline:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.btn-icon {
+    background: var(--bg-white);
+    color: var(--text);
+    border: 1px solid var(--border);
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 1.1rem;
+}
+
+.btn-icon:hover {
+    background: var(--primary-bg);
+    color: var(--primary);
+    border-color: var(--primary-light);
+}
+
+.btn-danger {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+/* ===== 空の状態 ===== */
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-light);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.empty-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+/* ===== スタッフ一覧 ===== */
+.staff-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.staff-card {
+    background: var(--bg-white);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: var(--transition);
+}
+
+.staff-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.staff-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+.staff-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.staff-name {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 2px;
+}
+
+.staff-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.staff-tag {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--bg);
+    color: var(--text-light);
+}
+
+.staff-tag.tag-night {
+    background: var(--shift-night-bg);
+    color: var(--shift-night);
+}
+
+.staff-tag.tag-overtime {
+    background: var(--shift-overtime-bg);
+    color: var(--shift-overtime);
+}
+
+.staff-tag.tag-part {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.staff-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* ===== データ管理ボタン ===== */
+.data-actions {
+    margin-top: 24px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* ===== 月の選択 ===== */
+.month-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.month-label {
+    font-size: 1.2rem;
+    font-weight: 700;
+    min-width: 140px;
+    text-align: center;
+}
+
+/* ===== スケジュール操作ボタン ===== */
+.schedule-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+/* ===== シフト表テーブル ===== */
+.schedule-container {
+    background: var(--bg-white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.schedule-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    min-width: 700px;
+}
+
+.schedule-table th,
+.schedule-table td {
+    border: 1px solid var(--border);
+    text-align: center;
+    padding: 4px 2px;
+    min-width: 32px;
+    height: 36px;
+}
+
+.schedule-table thead th {
+    background: var(--bg);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-size: 0.75rem;
+}
+
+.staff-name-cell {
+    position: sticky;
+    left: 0;
+    z-index: 15;
+    background: var(--bg-white);
+    min-width: 80px !important;
+    max-width: 80px;
+    text-align: left !important;
+    padding-left: 8px !important;
+    font-weight: 600;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+thead .staff-name-cell {
+    background: var(--bg);
+    z-index: 20;
+}
+
+.schedule-table td.day-sunday {
+    background: #fef2f2;
+}
+
+.schedule-table th.day-sunday {
+    color: var(--sunday);
+}
+
+.schedule-table th.day-saturday {
+    color: var(--saturday);
+}
+
+/* シフトセル */
+.shift-cell {
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+}
+
+.shift-cell:hover {
+    opacity: 0.8;
+    box-shadow: inset 0 0 0 2px var(--primary-light);
+}
+
+/* シフトバッジ（セル内の表示） */
+.shift-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.shift-early {
+    background: var(--shift-early-bg);
+    color: var(--shift-early);
+}
+
+.shift-late {
+    background: var(--shift-late-bg);
+    color: var(--shift-late);
+}
+
+.shift-night {
+    background: var(--shift-night-bg);
+    color: var(--shift-night);
+}
+
+.shift-nightoff {
+    background: var(--shift-nightoff-bg);
+    color: var(--shift-nightoff);
+}
+
+.shift-off {
+    background: var(--shift-off-bg);
+    color: var(--shift-off);
+}
+
+.shift-overtime {
+    background: var(--shift-overtime-bg);
+    color: var(--shift-overtime);
+}
+
+/* 集計テーブル */
+.summary-table {
+    border-top: 2px solid var(--primary);
+}
+
+.summary-table td {
+    font-weight: 600;
+    font-size: 0.7rem;
+}
+
+.summary-ok {
+    color: var(--shift-off);
+}
+
+.summary-warn {
+    color: var(--shift-overtime);
+    background: var(--shift-overtime-bg);
+}
+
+/* ===== 凡例 ===== */
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+    margin-top: 12px;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+/* ===== モーダル ===== */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.show {
+    display: flex;
+}
+
+.modal {
+    background: var(--bg-white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+}
+
+.modal-large {
+    max-width: 600px;
+}
+
+.modal-small {
+    max-width: 360px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    line-height: 1;
+    transition: var(--transition);
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* ===== フォーム ===== */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: var(--transition);
+    background: var(--bg-white);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.form-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    vertical-align: middle;
+    accent-color: var(--primary);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+/* ===== 希望休カレンダー ===== */
+.request-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.request-calendar .cal-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    padding: 6px 0;
+    color: var(--text-light);
+}
+
+.request-calendar .cal-header.sunday {
+    color: var(--sunday);
+}
+
+.request-calendar .cal-header.saturday {
+    color: var(--saturday);
+}
+
+.request-calendar .cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: var(--transition);
+    border: 2px solid transparent;
+    background: var(--bg);
+}
+
+.request-calendar .cal-day:hover {
+    background: var(--primary-bg);
+}
+
+.request-calendar .cal-day.selected {
+    background: var(--shift-off-bg);
+    color: var(--shift-off);
+    border-color: var(--shift-off);
+    font-weight: 700;
+}
+
+.request-calendar .cal-day.empty {
+    visibility: hidden;
+}
+
+.request-calendar .cal-day.sunday {
+    color: var(--sunday);
+}
+
+/* ===== シフト変更モーダル ===== */
+.shift-modal-info {
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+    color: var(--text-light);
+}
+
+.shift-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.shift-option {
+    padding: 14px 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.shift-warning {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #fffbeb;
+    border: 1px solid #fbbf24;
+    border-radius: var(--radius-sm);
+    color: #92400e;
+    font-size: 0.85rem;
+}
+
+/* ===== ローディング ===== */
+.loading-content {
+    background: var(--bg-white);
+    border-radius: var(--radius);
+    padding: 40px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+
+/* ===== アニメーション ===== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ===== レスポンシブ（スマホ対応） ===== */
+@media (max-width: 640px) {
+    .app-header {
+        padding: 12px 12px 0;
+    }
+
+    .app-title {
+        font-size: 1.2rem;
+        margin-bottom: 8px;
+    }
+
+    .nav-btn {
+        font-size: 0.85rem;
+        padding: 10px 12px;
+    }
+
+    .app-main {
+        padding: 12px 8px;
+    }
+
+    .schedule-actions {
+        gap: 6px;
+    }
+
+    .schedule-actions .btn {
+        font-size: 0.8rem;
+        padding: 8px 12px;
+    }
+
+    .staff-card {
+        padding: 12px;
+    }
+
+    .staff-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .modal {
+        max-height: 95vh;
+        margin: 8px;
+    }
+
+    .shift-options {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .legend {
+        gap: 8px;
+        font-size: 0.75rem;
+    }
+}

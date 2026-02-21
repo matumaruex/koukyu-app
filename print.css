@@ -1,0 +1,128 @@
+/* ===== 印刷専用スタイル ===== */
+/* このファイルは印刷時のみ適用される */
+
+@page {
+    size: A4 landscape;
+    margin: 10mm;
+}
+
+/* 印刷時に非表示にする要素 */
+.app-header,
+.schedule-actions,
+.legend,
+.data-actions,
+.section-header,
+.month-selector .btn-icon,
+.modal-overlay,
+#staff-view {
+    display: none !important;
+}
+
+/* 全体のスタイル調整 */
+body {
+    background: white;
+    color: black;
+    font-size: 9pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.app-main {
+    padding: 0;
+    max-width: none;
+}
+
+/* 月の表示 */
+.month-selector {
+    margin-bottom: 8mm;
+}
+
+.month-label {
+    font-size: 16pt;
+    font-weight: 700;
+}
+
+/* シフト表を横幅いっぱいに */
+.schedule-container {
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.schedule-table-wrapper {
+    overflow: visible;
+}
+
+.schedule-table {
+    min-width: 0;
+    width: 100%;
+    font-size: 8pt;
+}
+
+.schedule-table th,
+.schedule-table td {
+    border: 1px solid #333;
+    padding: 2px 1px;
+    min-width: 0;
+    height: auto;
+}
+
+.staff-name-cell {
+    min-width: 60px !important;
+    max-width: 60px;
+    font-size: 8pt;
+}
+
+/* シフトバッジを印刷用に */
+.shift-badge {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    font-size: 8pt;
+    font-weight: 700;
+    background: none !important;
+}
+
+.shift-early {
+    color: #000;
+}
+
+.shift-late {
+    color: #000;
+}
+
+.shift-night {
+    color: #000;
+}
+
+.shift-nightoff {
+    color: #666;
+}
+
+.shift-off {
+    color: #000;
+}
+
+.shift-overtime {
+    color: #000;
+}
+
+/* 集計テーブル */
+.summary-table td {
+    font-size: 7pt;
+}
+
+/* 日曜の色は印刷時も維持 */
+.schedule-table td.day-sunday {
+    background: #f5f5f5 !important;
+}
+
+/* セルのホバー効果を無効化 */
+.shift-cell:hover {
+    opacity: 1;
+    box-shadow: none;
+}
+
+/* シフト表を表示（タブが非アクティブでも） */
+#schedule-view {
+    display: block !important;
+}
