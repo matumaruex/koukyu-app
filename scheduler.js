@@ -424,22 +424,34 @@ function generateSchedule(staffList, year, month, requests, settings) {
         const targetWorkDays = getActualTarget(staff);
         const maxPerWeek = staff.maxDaysPerWeek || 3;
 
-        let candidates = [];
-        for (let d = 1; d <= daysInMonth; d++) {
-            if (!requestedDays[staff.id].has(d) && allAssignments[staff.id][d] === SHIFT_TYPES.OFF) {
-                candidates.push(d);
-            }
-        }
-        candidates = shuffleArray(candidates);
+        if (!staff.startTime) staff.startTime = '09:00';
+        if (!staff.endTime) staff.endTime = '17:00';
 
+        // パス①: 順番に貪欲に埋める（Work,Work,OFFパターンを自然に作る）
+        // ランダムな開始日で多様性を確保
+        const startDay = Math.floor(Math.random() * daysInMonth) + 1;
         let currentWork = countWorkDays(allAssignments[staff.id], daysInMonth);
-        for (let i = 0; i < candidates.length && currentWork < targetWorkDays; i++) {
-            const day = candidates[i];
-            if (getWeekWorkDays(allAssignments[staff.id], day, year, month) < maxPerWeek &&
-                canWorkOnDay(staff, allAssignments[staff.id], day, s)) {
-                if (!staff.startTime) staff.startTime = '09:00';
-                if (!staff.endTime) staff.endTime = '17:00';
-                allAssignments[staff.id][day] = SHIFT_TYPES.PART;
+
+        for (let offset = 0; offset < daysInMonth && currentWork < targetWorkDays; offset++) {
+            const day = ((startDay - 1 + offset) % daysInMonth) + 1;
+            if (requestedDays[staff.id].has(day)) continue;
+            if (allAssignments[staff.id][day] !== SHIFT_TYPES.OFF) continue;
+            if (getWeekWorkDays(allAssignments[staff.id], day, year, month) >= maxPerWeek) continue;
+            if (!canWorkOnDay(staff, allAssignments[staff.id], day, s)) continue;
+
+            allAssignments[staff.id][day] = SHIFT_TYPES.PART;
+            currentWork++;
+        }
+
+        // パス2②: まだ足りなければ逆方向からも埋める
+        if (currentWork < targetWorkDays) {
+            for (let d = daysInMonth; d >= 1 && currentWork < targetWorkDays; d--) {
+                if (requestedDays[staff.id].has(d)) continue;
+                if (allAssignments[staff.id][d] !== SHIFT_TYPES.OFF) continue;
+                if (getWeekWorkDays(allAssignments[staff.id], d, year, month) >= maxPerWeek) continue;
+                if (!canWorkOnDay(staff, allAssignments[staff.id], d, s)) continue;
+
+                allAssignments[staff.id][d] = SHIFT_TYPES.PART;
                 currentWork++;
             }
         }
@@ -492,7 +504,7 @@ function generateSchedule(staffList, year, month, requests, settings) {
 
         // ステップ2: A残（通し）を戦略的に使う
         // 朝と夕の両方が足りない場合、かつA残4回未満の人がいるなら1人で両方カバー
-        const TARGET_OT = 5; // A残の目標回数（これ未満なら積極利用、以上なら最後の手段）
+        const TARGET_OT = 4; // A残の目標回数（これ未満なら積極利用、以上なら最後の手段）
         const otWant = Math.min(mNeed, eNeed);
         if (otWant > 0) {
             // A残回数が少ない人（4回未満）のみ候補にする
