@@ -156,7 +156,7 @@ function isFriSatSun(year, month, day) {
 }
 
 /**
- * スタッフの連勤日数を計算（指定日を含む過去の連続勤務日数）
+ * スタッフの連勤日数を計算（指定日を含む過去方向の連続勤務日数）
  */
 function getConsecutiveWorkDays(assignments, day) {
     let count = 0;
@@ -167,6 +167,21 @@ function getConsecutiveWorkDays(assignments, day) {
         } else {
             break;
         }
+    }
+    return count;
+}
+
+/**
+ * スタッフの連勤日数を計算（指定日を含む未来方向の連続勤務日数）
+ * 夜勤が先に配置されている場合などに、前方の連勤を正確に把握する
+ */
+function getForwardConsecutiveWorkDays(assignments, day) {
+    let count = 0;
+    for (let d = day; ; d++) {
+        const shift = assignments[d];
+        if (!shift) break; // 月の範囲外
+        if (shift === SHIFT_TYPES.OFF || shift === SHIFT_TYPES.NIGHT_OFF) break;
+        count++;
     }
     return count;
 }
@@ -186,6 +201,7 @@ function getStaffMaxConsecutive(staff, settings) {
 
 /**
  * 指定日にこのスタッフが勤務可能かチェック
+ * 過去方向 + 未来方向の両方の連勤をチェックする
  */
 function canWorkOnDay(staff, assignments, day, settings) {
     const shift = assignments[day];
@@ -193,6 +209,9 @@ function canWorkOnDay(staff, assignments, day, settings) {
     const maxConsecutive = getStaffMaxConsecutive(staff, settings);
     const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
     if (pastConsecutive >= maxConsecutive) return false;
+    // ★前方向チェック: この日に出勤を入れた場合、未来の既存シフトと合わせて連勤超過しないか
+    const forwardConsecutive = getForwardConsecutiveWorkDays(assignments, day + 1);
+    if (pastConsecutive + 1 + forwardConsecutive > maxConsecutive) return false;
     return true;
 }
 
@@ -217,6 +236,9 @@ function canAssignNight(staff, assignments, day, daysInMonth, settings, year, mo
     const maxConsecutive = getStaffMaxConsecutive(staff, settings);
     const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
     if (pastConsecutive >= maxConsecutive) return false;
+    // ★前方向チェック: 夜勤の翌日はnightOff(連勤から除外)なので、day+2以降を確認
+    const forwardConsecutive = getForwardConsecutiveWorkDays(assignments, day + 2);
+    if (pastConsecutive + 1 + forwardConsecutive > maxConsecutive) return false;
     return true;
 }
 
