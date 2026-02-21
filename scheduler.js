@@ -205,8 +205,9 @@ function getStaffMaxConsecutive(staff, settings) {
 /**
  * 指定日にこのスタッフが勤務可能かチェック
  * 過去方向 + 未来方向の両方の連勤をチェックする
- * consecutivePlus1Used: 月1回の+1許容を使用済みかどうかのトラッカー（オブジェクト参照）
+ * consecutivePlus1Used: スタッフIDごとの+1使用回数カウンター（オブジェクト参照）
  */
+const MAX_CONSECUTIVE_PLUS1 = 2; // 月に+1を許容する最大回数
 function canWorkOnDay(staff, assignments, day, settings, consecutivePlus1Used) {
     const shift = assignments[day];
     if (shift && shift !== SHIFT_TYPES.OFF) return false;
@@ -217,15 +218,36 @@ function canWorkOnDay(staff, assignments, day, settings, consecutivePlus1Used) {
 
     if (totalConsecutive <= maxConsecutive) return true; // 通常範囲内ならOK
 
-    // +1許容: staff.allowConsecutivePlus1がON かつ まだ月1回使っていない場合
+    // +1許容: staff.allowConsecutivePlus1がON かつ 月の使用回数が上限未満の場合
     if (totalConsecutive === maxConsecutive + 1 &&
         staff.allowConsecutivePlus1 &&
         consecutivePlus1Used &&
-        !consecutivePlus1Used[staff.id]) {
-        return true; // +1を許容（使用マークは実際にシフト確定時に行う）
+        (consecutivePlus1Used[staff.id] || 0) < MAX_CONSECUTIVE_PLUS1) {
+        return true; // +1を許容（使用マークはassignShift関数で行う）
     }
 
     return false;
+}
+
+/**
+ * シフトを確定し、連勤+1を使用した場合はカウンターを増やす
+ */
+function assignShift(staff, allAssignments, day, shiftType, settings, consecutivePlus1Used) {
+    const maxConsecutive = getStaffMaxConsecutive(staff, settings);
+    const assignments = allAssignments[staff.id];
+
+    // シフト割り当て前の連勤チェック
+    const pastConsecutive = getConsecutiveWorkDays(assignments, day - 1);
+    const forwardConsecutive = getForwardConsecutiveWorkDays(assignments, day + 1);
+
+    // シフトを割り当て
+    allAssignments[staff.id][day] = shiftType;
+
+    // 割り当て後、連勤が上限を超えていたら+1使用としてマーク
+    const totalConsecutive = pastConsecutive + 1 + forwardConsecutive;
+    if (totalConsecutive > maxConsecutive && consecutivePlus1Used) {
+        consecutivePlus1Used[staff.id] = (consecutivePlus1Used[staff.id] || 0) + 1;
+    }
 }
 
 /**
@@ -419,9 +441,9 @@ function generateSchedule(staffList, year, month, requests, settings) {
         }
     }
 
-    // ★ 連勤+1許容トラッカー: スタッフIDごとに月1回の+1使用済みかどうか
+    // ★ 連勤+1許容トラッカー: スタッフIDごとの+1使用回数（0から開始）
     const consecutivePlus1Used = {};
-    staffList.forEach(st => { consecutivePlus1Used[st.id] = false; });
+    staffList.forEach(st => { consecutivePlus1Used[st.id] = 0; });
 
     // ★ 日曜3人許容カウンター
     let sundayReducedCount = 0;
@@ -589,12 +611,16 @@ function generateSchedule(staffList, year, month, requests, settings) {
     // ===== フェーズ4: フルタイム日勤の最適配置（全面新設） =====
     const fullStaff = staffList.filter(st => st.type !== 'part');
 
-    // その日に出勤可能なフルタイムスタッフを取得
+    // その日に出勤可能なフルタイムスタッフを取得（公休保証付き）
     const getAvailableFull = (day) => {
         return fullStaff.filter(st => {
             if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
             if (!canWorkOnDay(st, allAssignments[st.id], day, s, consecutivePlus1Used)) return false;
             if (requestedDays[st.id].has(day)) return false;
+            // ★公休保証: これ以上出勤を追加すると公休が目標を下回る場合は除外
+            const currentOff = countOffDays(allAssignments[st.id], daysInMonth);
+            const targetOff = st.monthlyDaysOff || 9;
+            if (currentOff <= targetOff) return false;
             return true;
         });
     };
@@ -667,12 +693,17 @@ function generateSchedule(staffList, year, month, requests, settings) {
             eNeed = Math.max(0, 4 - eve);
         }
 
-        // ステップ3: 早番(A)で朝を埋める
+        // ステップ3: 早番(A)で朝を埋める（A/Bバランスを考慮してソート）
         if (mNeed > 0) {
-            const cands = sortSoft(getAvailableFull(day));
+            const cands = sortSoft(getAvailableFull(day)).sort((a, b) => {
+                // A回数が少ない人を優先
+                const aE = countShiftType(allAssignments[a.id], SHIFT_TYPES.EARLY, daysInMonth);
+                const bE = countShiftType(allAssignments[b.id], SHIFT_TYPES.EARLY, daysInMonth);
+                return aE - bE;
+            });
             let assigned = 0;
             for (let i = 0; i < cands.length && assigned < mNeed; i++) {
-                allAssignments[cands[i].id][day] = SHIFT_TYPES.EARLY;
+                assignShift(cands[i], allAssignments, day, SHIFT_TYPES.EARLY, s, consecutivePlus1Used);
                 assigned++;
             }
             morn = countStaffAtTime(staffList, allAssignments, day, 420);
@@ -681,12 +712,17 @@ function generateSchedule(staffList, year, month, requests, settings) {
             nNeed = Math.max(0, 4 - noon);
         }
 
-        // ステップ4: 遅番(B)で夕方を埋める
+        // ステップ4: 遅番(B)で夕方を埋める（A/Bバランスを考慮してソート）
         if (eNeed > 0) {
-            const cands = sortSoft(getAvailableFull(day));
+            const cands = sortSoft(getAvailableFull(day)).sort((a, b) => {
+                // B回数が少ない人を優先
+                const aL = countShiftType(allAssignments[a.id], SHIFT_TYPES.LATE, daysInMonth);
+                const bL = countShiftType(allAssignments[b.id], SHIFT_TYPES.LATE, daysInMonth);
+                return aL - bL;
+            });
             let assigned = 0;
             for (let i = 0; i < cands.length && assigned < eNeed; i++) {
-                allAssignments[cands[i].id][day] = SHIFT_TYPES.LATE;
+                assignShift(cands[i], allAssignments, day, SHIFT_TYPES.LATE, s, consecutivePlus1Used);
                 assigned++;
             }
             eve = countStaffAtTime(staffList, allAssignments, day, 1065);
@@ -695,12 +731,15 @@ function generateSchedule(staffList, year, month, requests, settings) {
             nNeed = Math.max(0, 4 - noon);
         }
 
-        // ステップ5: 昼がまだ足りない場合
+        // ステップ5: 昼がまだ足りない場合（A/Bバランスを考慮）
         if (nNeed > 0) {
             const cands = sortSoft(getAvailableFull(day));
             for (let i = 0; i < cands.length && nNeed > 0; i++) {
-                const shift = (morn <= eve) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
-                allAssignments[cands[i].id][day] = shift;
+                // この人のA/B回数を見て少ない方を選ぶ
+                const eCount = countShiftType(allAssignments[cands[i].id], SHIFT_TYPES.EARLY, daysInMonth);
+                const lCount = countShiftType(allAssignments[cands[i].id], SHIFT_TYPES.LATE, daysInMonth);
+                const shift = (eCount <= lCount) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+                assignShift(cands[i], allAssignments, day, shift, s, consecutivePlus1Used);
                 noon = countStaffAtTime(staffList, allAssignments, day, 600);
                 morn = countStaffAtTime(staffList, allAssignments, day, 420);
                 eve = countStaffAtTime(staffList, allAssignments, day, 1065);
@@ -771,13 +810,16 @@ function generateSchedule(staffList, year, month, requests, settings) {
                 if (deficit > bestDeficit) {
                     bestDeficit = deficit;
                     chosenDay = d;
-                    // 最も不足しているチェックポイントをカバーするシフトを選ぶ
+                    // 最も不足しているチェックポイントをカバーするシフトを選ぶ（A/Bバランス考慮）
+                    const stEarly = countShiftType(allAssignments[st.id], SHIFT_TYPES.EARLY, daysInMonth);
+                    const stLate = countShiftType(allAssignments[st.id], SHIFT_TYPES.LATE, daysInMonth);
                     if (ec <= mc && ec <= nc) {
                         chosenShift = SHIFT_TYPES.LATE;
                     } else if (mc <= nc) {
                         chosenShift = SHIFT_TYPES.EARLY;
                     } else {
-                        chosenShift = (mc <= ec) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+                        // A/Bバランスで決める
+                        chosenShift = (stEarly <= stLate) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
                     }
                 }
             }
@@ -812,12 +854,15 @@ function generateSchedule(staffList, year, month, requests, settings) {
                 const nc = countStaffAtTime(staffList, allAssignments, chosenDay, 600);
                 const ec = countStaffAtTime(staffList, allAssignments, chosenDay, 1065);
 
+                // A/Bバランスを考慮してシフト選択
+                const stEarly2 = countShiftType(allAssignments[st.id], SHIFT_TYPES.EARLY, daysInMonth);
+                const stLate2 = countShiftType(allAssignments[st.id], SHIFT_TYPES.LATE, daysInMonth);
                 if (ec <= mc && ec <= nc) {
                     chosenShift = SHIFT_TYPES.LATE;
                 } else if (mc <= nc) {
                     chosenShift = SHIFT_TYPES.EARLY;
                 } else {
-                    chosenShift = (mc <= ec) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+                    chosenShift = (stEarly2 <= stLate2) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
                 }
             }
 
@@ -894,11 +939,45 @@ function generateSchedule(staffList, year, month, requests, settings) {
         });
     }
 
-    // 公休数の警告
+    // ===== フェーズ5.8: A/B均等化（最終調整） =====
+    // A(早番)とB(遅番)の回数差が大きいスタッフのシフトを入れ替える
+    fullStaff.forEach(st => {
+        const earlyC = countShiftType(allAssignments[st.id], SHIFT_TYPES.EARLY, daysInMonth);
+        const lateC = countShiftType(allAssignments[st.id], SHIFT_TYPES.LATE, daysInMonth);
+        const diff = Math.abs(earlyC - lateC);
+        if (diff <= 2) return; // 差が2以内なら許容
+
+        // 多い方のシフトを少ない方に入れ替え可能な日を探す
+        const fromType = (earlyC > lateC) ? SHIFT_TYPES.EARLY : SHIFT_TYPES.LATE;
+        const toType = (earlyC > lateC) ? SHIFT_TYPES.LATE : SHIFT_TYPES.EARLY;
+        let swapCount = Math.floor(diff / 2); // 半分入れ替えれば均等になる
+
+        for (let d = 1; d <= daysInMonth && swapCount > 0; d++) {
+            if (allAssignments[st.id][d] !== fromType) continue;
+
+            // 入れ替え後も時間帯の人数が維持できるかチェック
+            const mornBefore = countStaffAtTime(staffList, allAssignments, d, 420);
+            const eveBefore = countStaffAtTime(staffList, allAssignments, d, 1065);
+
+            allAssignments[st.id][d] = toType;
+
+            const mornAfter = countStaffAtTime(staffList, allAssignments, d, 420);
+            const eveAfter = countStaffAtTime(staffList, allAssignments, d, 1065);
+
+            // 朝か夕方が4人を下回ったら戻す
+            if (mornAfter < 4 || eveAfter < 4) {
+                allAssignments[st.id][d] = fromType; // 元に戻す
+            } else {
+                swapCount--;
+            }
+        }
+    });
+
+    // 公休数の警告（目標を下回った場合のみ警告。上回るのはOK）
     staffList.forEach(staff => {
         const targetOff = staff.monthlyDaysOff || 9;
         const finalOff = countOffDays(allAssignments[staff.id], daysInMonth);
-        if (finalOff !== targetOff) {
+        if (finalOff < targetOff) {
             warnings.push(`${staff.name}さん：公休が${finalOff}日です（目標${targetOff}日）`);
         }
     });
