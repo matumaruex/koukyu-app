@@ -809,6 +809,11 @@ thead .staff-name-cell {
     color: #1d4ed8;
 }
 
+.staff-tag.tag-late-only {
+    background: #fef3c7;
+    color: #b45309;
+}
+
 .staff-tag.tag-consecutive {
     background: #fee2e2;
     color: #dc2626;

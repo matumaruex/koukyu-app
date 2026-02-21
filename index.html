@@ -96,12 +96,12 @@
 
             <!-- 凡例 -->
             <div class="legend">
-                <span class="legend-item"><span class="shift-badge shift-early">早</span> 早出 7:00〜16:00</span>
-                <span class="legend-item"><span class="shift-badge shift-late">遅</span> 遅出 9:30〜18:30</span>
+                <span class="legend-item"><span class="shift-badge shift-early">A</span> 早出 7:00〜16:00</span>
+                <span class="legend-item"><span class="shift-badge shift-late">B</span> 遅出 9:30〜18:30</span>
                 <span class="legend-item"><span class="shift-badge shift-night">夜</span> 夜勤</span>
                 <span class="legend-item"><span class="shift-badge shift-nightoff">明</span> 明け</span>
                 <span class="legend-item"><span class="shift-badge shift-off">休</span> 休み</span>
-                <span class="legend-item"><span class="shift-badge shift-overtime">通</span> 早残 7:00〜18:30</span>
+                <span class="legend-item"><span class="shift-badge shift-overtime">A残</span> 早残 7:00〜18:30</span>
             </div>
         </section>
     </main>
@@ -146,10 +146,16 @@
                     </label>
                 </div>
 
-                <!-- パート用：早出のみ設定 -->
+                <!-- パート用：早出のみ / 遅出のみ設定 -->
                 <div class="form-group" id="early-only-group" style="display:none">
                     <label>
-                        <input type="checkbox" id="staff-early-only"> 早出のみ
+                        <input type="checkbox" id="staff-early-only"> 早出（A）のみ
+                    </label>
+                </div>
+
+                <div class="form-group" id="late-only-group" style="display:none">
+                    <label>
+                        <input type="checkbox" id="staff-late-only"> 遅出（B）のみ
                     </label>
                 </div>
 
@@ -220,10 +226,10 @@
             <div class="modal-body">
                 <p id="shift-modal-info" class="shift-modal-info"></p>
                 <div class="shift-options">
-                    <button class="btn shift-option shift-early" data-shift="early">早出</button>
-                    <button class="btn shift-option shift-late" data-shift="late">遅出</button>
+                    <button class="btn shift-option shift-early" data-shift="early">A（早出）</button>
+                    <button class="btn shift-option shift-late" data-shift="late">B（遅出）</button>
                     <button class="btn shift-option shift-night" data-shift="night">夜勤</button>
-                    <button class="btn shift-option shift-overtime" data-shift="overtime">早残</button>
+                    <button class="btn shift-option shift-overtime" data-shift="overtime">A残</button>
                     <button class="btn shift-option shift-off" data-shift="off">休み</button>
                 </div>
                 <div id="shift-warning" class="shift-warning" style="display:none"></div>

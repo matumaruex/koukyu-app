@@ -153,7 +153,12 @@ function renderStaffList() {
 
         // 早出のみ（パート）
         if (staff.type === 'part' && staff.earlyOnly) {
-            tags.push('<span class="staff-tag tag-early-only">早出のみ</span>');
+            tags.push('<span class="staff-tag tag-early-only">早出(A)のみ</span>');
+        }
+
+        // 遅出のみ（パート）
+        if (staff.type === 'part' && staff.lateOnly) {
+            tags.push('<span class="staff-tag tag-late-only">遅出(B)のみ</span>');
         }
 
         tags.push(`<span class="staff-tag">公休${staff.monthlyDaysOff}日</span>`);
@@ -216,14 +221,16 @@ function initStaffModal() {
         const overtimeGroup = document.getElementById('overtime-group');
         const maxDaysGroup = document.getElementById('max-days-group');
         const earlyOnlyGroup = document.getElementById('early-only-group');
+        const lateOnlyGroup = document.getElementById('late-only-group');
         const workHoursGroup = document.getElementById('work-hours-group');
 
         if (type === 'part') {
-            // パート：夜勤・残業は非表示、早出のみ・週の出勤日数・勤務時間を表示
+            // パート：夜勤・残業は非表示、早出のみ・遅出のみ・週の出勤日数・勤務時間を表示
             nightGroup.style.display = 'none';
             overtimeGroup.style.display = 'none';
             maxDaysGroup.style.display = '';
             earlyOnlyGroup.style.display = '';
+            lateOnlyGroup.style.display = '';
             workHoursGroup.style.display = '';
             document.getElementById('staff-night-type').value = 'none';
             document.getElementById('staff-overtime').checked = false;
@@ -233,8 +240,10 @@ function initStaffModal() {
             overtimeGroup.style.display = '';
             maxDaysGroup.style.display = 'none';
             earlyOnlyGroup.style.display = 'none';
+            lateOnlyGroup.style.display = 'none';
             workHoursGroup.style.display = 'none';
             document.getElementById('staff-early-only').checked = false;
+            document.getElementById('staff-late-only').checked = false;
         }
     }
 
@@ -247,6 +256,7 @@ function initStaffModal() {
         document.getElementById('staff-night-type').value = 'none';
         document.getElementById('staff-overtime').checked = false;
         document.getElementById('staff-early-only').checked = false;
+        document.getElementById('staff-late-only').checked = false;
         document.getElementById('staff-days-off').value = 9;
         document.getElementById('staff-max-days').value = 3;
         document.getElementById('staff-max-consecutive').value = 0;
@@ -284,6 +294,7 @@ function initStaffModal() {
             nightShiftType: document.getElementById('staff-night-type').value,
             canOvertime: document.getElementById('staff-overtime').checked,
             earlyOnly: document.getElementById('staff-early-only').checked,
+            lateOnly: document.getElementById('staff-late-only').checked,
             monthlyDaysOff: parseInt(document.getElementById('staff-days-off').value) || 9,
             maxDaysPerWeek: parseInt(document.getElementById('staff-max-days').value) || 3,
             maxConsecutive: parseInt(document.getElementById('staff-max-consecutive').value) || 0,
@@ -297,9 +308,14 @@ function initStaffModal() {
         if (staffData.type === 'part') {
             staffData.nightShiftType = 'none';
             staffData.canOvertime = false;
+            // 早出のみと遅出のみは同時に選べない
+            if (staffData.earlyOnly && staffData.lateOnly) {
+                staffData.lateOnly = false; // 早出のみを優先
+            }
         } else {
-            // フルタイムの場合は早出のみ・勤務時間を無効に
+            // フルタイムの場合は早出のみ・遅出のみ・勤務時間を無効に
             staffData.earlyOnly = false;
+            staffData.lateOnly = false;
             staffData.startTime = '';
             staffData.endTime = '';
         }
@@ -334,6 +350,7 @@ function editStaff(id) {
     document.getElementById('staff-night-type').value = staff.nightShiftType || 'none';
     document.getElementById('staff-overtime').checked = staff.canOvertime;
     document.getElementById('staff-early-only').checked = staff.earlyOnly || false;
+    document.getElementById('staff-late-only').checked = staff.lateOnly || false;
     document.getElementById('staff-days-off').value = staff.monthlyDaysOff;
     document.getElementById('staff-max-days').value = staff.maxDaysPerWeek || 3;
     document.getElementById('staff-max-consecutive').value = staff.maxConsecutive || 0;
@@ -345,6 +362,7 @@ function editStaff(id) {
     const overtimeGroup = document.getElementById('overtime-group');
     const maxDaysGroup = document.getElementById('max-days-group');
     const earlyOnlyGroup = document.getElementById('early-only-group');
+    const lateOnlyGroup = document.getElementById('late-only-group');
     const workHoursGroup = document.getElementById('work-hours-group');
 
     if (staff.type === 'part') {
@@ -352,12 +370,14 @@ function editStaff(id) {
         overtimeGroup.style.display = 'none';
         maxDaysGroup.style.display = '';
         earlyOnlyGroup.style.display = '';
+        lateOnlyGroup.style.display = '';
         workHoursGroup.style.display = '';
     } else {
         nightGroup.style.display = '';
         overtimeGroup.style.display = '';
         maxDaysGroup.style.display = 'none';
         earlyOnlyGroup.style.display = 'none';
+        lateOnlyGroup.style.display = 'none';
         workHoursGroup.style.display = 'none';
     }
 
@@ -421,7 +441,7 @@ function renderSchedule() {
     }
 
     // 集計列
-    headerRow1 += '<th>早</th><th>遅</th><th>夜</th><th>通</th><th>休</th>';
+    headerRow1 += '<th>A</th><th>B</th><th>夜</th><th>A残</th><th>休</th>';
     headerRow2 += '<th></th><th></th><th></th><th></th><th></th>';
 
     thead.innerHTML = headerRow1 + '</tr>' + headerRow2 + '</tr>';
@@ -532,8 +552,8 @@ function renderSummary(daysInMonth, schedule) {
             // 必要人数との比較
             const sunday = isSunday(currentYear, currentMonth, day);
             let required;
-            if (idx === 0) required = 4; // 朝は4人必要
-            else if (idx === 1) required = 4; // 夕方は4人必要
+            if (idx === 0) required = sunday ? 4 : 4; // 朝はいつも４人必要
+            else if (idx === 1) required = sunday ? 3 : 4; // 夕方は日曜3人、それ以外4人
             else required = 1; // 夜勤は1人
 
             const isOk = count >= required;
