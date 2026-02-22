@@ -251,6 +251,15 @@ function assignShift(staff, allAssignments, day, shiftType, settings, consecutiv
 }
 
 /**
+ * 指定日の前日または翌日にA残が入っているかチェック（A残連日禁止用）
+ */
+function hasAdjacentOvertime(assignments, day, daysInMonth) {
+    if (day > 1 && assignments[day - 1] === SHIFT_TYPES.OVERTIME) return true;
+    if (day < daysInMonth && assignments[day + 1] === SHIFT_TYPES.OVERTIME) return true;
+    return false;
+}
+
+/**
  * 指定日にこのスタッフを夜勤に割り当て可能かチェック
  */
 function canAssignNight(staff, assignments, day, daysInMonth, settings, year, month) {
@@ -499,14 +508,20 @@ function generateSchedule(staffList, year, month, requests, settings) {
                         if (ws && ws !== SHIFT_TYPES.OFF && ws !== SHIFT_TYPES.NIGHT_OFF) weekWork++;
                     }
                     if (weekWork >= maxPerWeek) continue;
-                    // 連勤チェック（テスト用は簡易版）
+                    // 連勤チェック（過去方向 + 未来方向の両方）
                     let pastC = 0;
                     for (let pd = d - 1; pd >= 1; pd--) {
                         const ps = testAssignment[pd];
                         if (ps && ps !== SHIFT_TYPES.OFF && ps !== SHIFT_TYPES.NIGHT_OFF) pastC++;
                         else break;
                     }
-                    if (pastC >= maxConsec) continue;
+                    let fwdC = 0;
+                    for (let fd = d + 1; fd <= daysInMonth; fd++) {
+                        const fs = testAssignment[fd];
+                        if (fs && fs !== SHIFT_TYPES.OFF && fs !== SHIFT_TYPES.NIGHT_OFF) fwdC++;
+                        else break;
+                    }
+                    if (pastC + 1 + fwdC > maxConsec) continue;
 
                     testAssignment[d] = SHIFT_TYPES.PART;
                     testWork++;
@@ -611,8 +626,18 @@ function generateSchedule(staffList, year, month, requests, settings) {
     // ===== フェーズ4: フルタイム日勤の最適配置（全面新設） =====
     const fullStaff = staffList.filter(st => st.type !== 'part');
 
-    // その日に出勤可能なフルタイムスタッフを取得（公休保証付き）
+    // その日に出勤可能なフルタイムスタッフを取得（人数確保を最優先）
     const getAvailableFull = (day) => {
+        return fullStaff.filter(st => {
+            if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
+            if (!canWorkOnDay(st, allAssignments[st.id], day, s, consecutivePlus1Used)) return false;
+            if (requestedDays[st.id].has(day)) return false;
+            return true;
+        });
+    };
+
+    // その日に出勤可能なフルタイムスタッフを取得（公休保証付き：追加出勤用）
+    const getAvailableFullSafe = (day) => {
         return fullStaff.filter(st => {
             if (allAssignments[st.id][day] !== SHIFT_TYPES.OFF) return false;
             if (!canWorkOnDay(st, allAssignments[st.id], day, s, consecutivePlus1Used)) return false;
@@ -671,12 +696,13 @@ function generateSchedule(staffList, year, month, requests, settings) {
         const TARGET_OT = 5; // A残の目標回数（これ未満なら積極利用、以上なら最後の手段）
         const otWant = Math.min(mNeed, eNeed);
         if (otWant > 0) {
-            // A残回数が少ない人（4回未満）のみ候補にする
+            // A残回数が少ない人（目標未満）のみ候補にする + A残連日禁止
             const otCands = sortForOT(
                 getAvailableFull(day).filter(st => {
                     if (!st.canOvertime) return false;
+                    if (hasAdjacentOvertime(allAssignments[st.id], day, daysInMonth)) return false;
                     const otCount = countShiftType(allAssignments[st.id], SHIFT_TYPES.OVERTIME, daysInMonth);
-                    return otCount < TARGET_OT; // 4回未満のみ
+                    return otCount < TARGET_OT;
                 })
             );
             let assigned = 0;
@@ -747,12 +773,13 @@ function generateSchedule(staffList, year, month, requests, settings) {
             }
         }
 
-        // ステップ6: A残フォールバック — 上記で足りない場合のみ（5回目以降も許容）
+        // ステップ6: A残フォールバック — 上記で足りない場合のみ（5回目以降も許容、連日禁止）
         // 夕方不足 → 早番の人をA残にアップグレード
         eve = countStaffAtTime(staffList, allAssignments, day, 1065);
         if (eve < 4) {
             const upgradable = fullStaff.filter(st =>
-                allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime
+                allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime &&
+                !hasAdjacentOvertime(allAssignments[st.id], day, daysInMonth)
             );
             const sorted = sortForOT(upgradable);
             for (let i = 0; i < sorted.length && eve < 4; i++) {
@@ -765,7 +792,8 @@ function generateSchedule(staffList, year, month, requests, settings) {
         morn = countStaffAtTime(staffList, allAssignments, day, 420);
         if (morn < 4) {
             const upgradable = fullStaff.filter(st =>
-                allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime
+                allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime &&
+                !hasAdjacentOvertime(allAssignments[st.id], day, daysInMonth)
             );
             const sorted = sortForOT(upgradable);
             for (let i = 0; i < sorted.length && morn < 4; i++) {
@@ -881,13 +909,13 @@ function generateSchedule(staffList, year, month, requests, settings) {
             while (count < required) {
                 let rescued = false;
 
-                // 救済1: A残アップグレード（夕方不足→早番をA残、朝不足→遅番をA残）
+                // 救済1: A残アップグレード（夕方不足→早番をA残、朝不足→遅番をA残、連日禁止）
                 if (cp.minutes >= 1065) {
-                    const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime);
+                    const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime && !hasAdjacentOvertime(allAssignments[st.id], day, daysInMonth));
                     const sorted = sortForOT(up);
                     if (sorted.length > 0) { allAssignments[sorted[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 } else if (cp.minutes <= 420) {
-                    const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime);
+                    const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime && !hasAdjacentOvertime(allAssignments[st.id], day, daysInMonth));
                     const sorted = sortForOT(up);
                     if (sorted.length > 0) { allAssignments[sorted[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 }
@@ -940,6 +968,52 @@ function generateSchedule(staffList, year, month, requests, settings) {
             }
         });
     }
+
+    // ===== フェーズ5.7: 公休回復（目標未達のスタッフの出勤を削る） =====
+    // フェーズ4で公休保証なしで配置したため、公休が目標未満のスタッフがいる場合に
+    // 人数に余裕がある日の出勤を休みに戻す
+    staffList.forEach(st => {
+        const targetOff = st.monthlyDaysOff || 9;
+        let currentOff = countOffDays(allAssignments[st.id], daysInMonth);
+
+        while (currentOff < targetOff) {
+            // 削れる日を探す（日勤のみ対象、人数に余裕がある日）
+            let bestDay = -1;
+            let bestSurplus = 0; // 余剰人数が最も多い日を優先
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const shift = allAssignments[st.id][d];
+                // 日勤(A/B/A残/P)のみ削除候補。夜勤・明けは触らない
+                if (shift !== SHIFT_TYPES.EARLY && shift !== SHIFT_TYPES.LATE &&
+                    shift !== SHIFT_TYPES.OVERTIME && shift !== SHIFT_TYPES.PART) continue;
+                if (requestedDays[st.id] && requestedDays[st.id].has(d)) continue;
+
+                // この日の各チェックポイントで、この人を休みにしても4人以上か確認
+                let canRemove = true;
+                let minSurplus = Infinity;
+                TIME_CHECKPOINTS.forEach(cp => {
+                    const count = countStaffAtTime(staffList, allAssignments, d, cp.minutes);
+                    const sunday = isSunday(year, month, d);
+                    const required = sunday ? cp.sundayRequired : cp.required;
+                    // この人がそのチェックポイントにいるか確認
+                    if (isStaffPresentAt(st, shift, cp.minutes)) {
+                        const afterCount = count - 1;
+                        if (afterCount < required) canRemove = false;
+                        minSurplus = Math.min(minSurplus, afterCount - required);
+                    }
+                });
+
+                if (canRemove && minSurplus > bestSurplus) {
+                    bestSurplus = minSurplus;
+                    bestDay = d;
+                }
+            }
+
+            if (bestDay === -1) break; // これ以上削れない
+            allAssignments[st.id][bestDay] = SHIFT_TYPES.OFF;
+            currentOff = countOffDays(allAssignments[st.id], daysInMonth);
+        }
+    });
 
     // ===== フェーズ5.8: A/B均等化（最終調整） =====
     // A(早番)とB(遅番)の回数差が大きいスタッフのシフトを入れ替える
