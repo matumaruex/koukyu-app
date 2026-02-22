@@ -884,10 +884,12 @@ function generateSchedule(staffList, year, month, requests, settings) {
                 // 救済1: A残アップグレード（夕方不足→早番をA残、朝不足→遅番をA残）
                 if (cp.minutes >= 1065) {
                     const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.EARLY && st.canOvertime);
-                    if (up.length > 0) { allAssignments[sortForOT(up)[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
+                    const sorted = sortForOT(up);
+                    if (sorted.length > 0) { allAssignments[sorted[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 } else if (cp.minutes <= 420) {
                     const up = fullStaff.filter(st => allAssignments[st.id][day] === SHIFT_TYPES.LATE && st.canOvertime);
-                    if (up.length > 0) { allAssignments[sortForOT(up)[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
+                    const sorted = sortForOT(up);
+                    if (sorted.length > 0) { allAssignments[sorted[0].id][day] = SHIFT_TYPES.OVERTIME; rescued = true; }
                 }
 
                 // 救済2: OFFのフルタイムを追加出勤（公休保証付き）
