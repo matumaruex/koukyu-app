@@ -63,7 +63,7 @@ const TIME_CHECKPOINTS = [
     { label: '夕(17:45)', minutes: 1065, required: 4, sundayRequired: 4, sundayMin: 4 }
 ];
 const MAX_SUNDAY_REDUCED = 3; // 日曜の朝昼を3人にできる最大回数/月
-const MAX_OT_PER_PERSON = 5; // A残の1人あたり月間上限（絶対）
+const MAX_OT_PER_PERSON = 6; // A残の1人あたり月間上限（絶対）
 
 /**
  * デフォルトの設定値
@@ -392,7 +392,109 @@ function getStaffCoverage(staff, shiftType) {
 /**
  * メインの自動生成関数
  */
+const TRIAL_COUNT = 15; // 複数回試行の回数
+
+/**
+ * スケジュールの品質をスコアリング（高いほど良い）
+ * 公休違反が最重要ペナルティ
+ */
+function scoreSchedule(staffList, allAssignments, year, month, settings) {
+    const s = { ...DEFAULT_SETTINGS, ...settings };
+    const daysInMonth = getDaysInMonth(year, month);
+    let score = 1000; // 基本スコア
+
+    staffList.forEach(staff => {
+        const assignments = allAssignments[staff.id];
+        if (!assignments) return;
+
+        // 公休違反: -200点/日（最重要）
+        const targetOff = staff.monthlyDaysOff || 9;
+        const actualOff = countOffDays(assignments, daysInMonth);
+        if (actualOff < targetOff) {
+            score -= (targetOff - actualOff) * 200;
+        }
+
+        // A残超過: -50点/回
+        const otCount = countShiftType(assignments, SHIFT_TYPES.OVERTIME, daysInMonth);
+        if (otCount > MAX_OT_PER_PERSON) {
+            score -= (otCount - MAX_OT_PER_PERSON) * 50;
+        }
+
+        // A残連日: -30点/回
+        for (let d = 1; d < daysInMonth; d++) {
+            if (assignments[d] === SHIFT_TYPES.OVERTIME && assignments[d + 1] === SHIFT_TYPES.OVERTIME) {
+                score -= 30;
+            }
+        }
+
+        // 連勤超過: -20点/回
+        const maxConsec = getStaffMaxConsecutive(staff, s);
+        let consecutive = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+            const shift = assignments[d];
+            if (shift && shift !== SHIFT_TYPES.OFF && shift !== SHIFT_TYPES.NIGHT_OFF) {
+                consecutive++;
+                if (consecutive > maxConsec + 1) score -= 20; // +1を超えたらペナルティ
+            } else {
+                consecutive = 0;
+            }
+        }
+
+        // A/Bバランス: -5点/差（2以上）
+        if (staff.type !== 'part') {
+            const earlyC = countShiftType(assignments, SHIFT_TYPES.EARLY, daysInMonth);
+            const lateC = countShiftType(assignments, SHIFT_TYPES.LATE, daysInMonth);
+            const diff = Math.abs(earlyC - lateC);
+            if (diff > 2) score -= (diff - 2) * 5;
+        }
+    });
+
+    // 人数不足: -100点/日・時間帯
+    for (let day = 1; day <= daysInMonth; day++) {
+        const sunday = isSunday(year, month, day);
+        TIME_CHECKPOINTS.forEach(cp => {
+            const required = sunday ? cp.sundayRequired : cp.required;
+            const count = countStaffAtTime(staffList, allAssignments, day, cp.minutes);
+            if (count < required) {
+                score -= (required - count) * 100;
+            }
+        });
+    }
+
+    return score;
+}
+
+/**
+ * シフト自動生成（複数回試行＋最良選択）
+ * TRIAL_COUNT回実行して最高スコアの結果を返す
+ */
 function generateSchedule(staffList, year, month, requests, settings) {
+    let bestResult = null;
+    let bestScore = -Infinity;
+
+    for (let trial = 0; trial < TRIAL_COUNT; trial++) {
+        const result = generateScheduleOnce(staffList, year, month, requests, settings);
+        const score = scoreSchedule(staffList, result.assignments, year, month, settings);
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestResult = result;
+        }
+
+        // スコア1000（満点）なら即終了
+        if (score >= 1000) break;
+    }
+
+    // 試行回数を警告に追加（デバッグ用）
+    bestResult.warnings.push(`※ ${TRIAL_COUNT}回試行し最良スコア${bestScore}の結果を採用`);
+
+    return bestResult;
+}
+
+/**
+ * シフト自動生成（1回分のアルゴリズム）
+ */
+function generateScheduleOnce(staffList, year, month, requests, settings) {
     const s = { ...DEFAULT_SETTINGS, ...settings };
     const daysInMonth = getDaysInMonth(year, month);
     const warnings = [];
