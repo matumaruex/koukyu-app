@@ -19,12 +19,21 @@ const AVATAR_COLORS = [
 // ===== 状態管理 =====
 let staffList = [];               // スタッフ一覧
 let schedules = {};               // 全月のスケジュールデータ
-let currentYear = new Date().getFullYear();
-let currentMonth = new Date().getMonth() + 2; // 来月をデフォルトに
-if (currentMonth > 12) {
-    currentMonth = 1;
-    currentYear++;
+
+// 期間の初期値を計算（16日区切り）
+// 今日が16日以降なら今月が現在の期間、それより前なら前月が現在の期間
+const _today = new Date();
+let currentYear = _today.getFullYear();
+let currentMonth;
+if (_today.getDate() >= 16) {
+    currentMonth = _today.getMonth() + 1; // 1-indexed
+} else {
+    currentMonth = _today.getMonth(); // 前月 (0-indexedのまま、1-indexedで前月)
+    if (currentMonth < 1) { currentMonth = 12; currentYear--; }
 }
+// デフォルトは次の期間（来期）を表示
+currentMonth++;
+if (currentMonth > 12) { currentMonth = 1; currentYear++; }
 
 // ===== 初期化 =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -420,9 +429,12 @@ function renderSchedule() {
     const noStaffEl = document.getElementById('schedule-no-staff');
     const containerEl = document.getElementById('schedule-container');
 
-    // 月の表示を更新
-    document.getElementById('current-month').textContent =
-        `${currentYear}年${currentMonth}月`;
+    // 期間の表示を更新（16日〜翌月15日）
+    let nextMonth = currentMonth + 1;
+    let nextYear = currentYear;
+    if (nextMonth > 12) { nextMonth = 1; nextYear++; }
+    const periodLabel = `${currentYear}年${currentMonth}月16日〜${nextYear !== currentYear ? nextYear + '年' : ''}${nextMonth}月15日`;
+    document.getElementById('current-month').textContent = periodLabel;
 
     if (staffList.length === 0) {
         noStaffEl.style.display = 'block';
@@ -443,13 +455,14 @@ function renderSchedule() {
     let headerRow2 = '<tr><th class="staff-name-cell"></th>';
 
     for (let day = 1; day <= daysInMonth; day++) {
+        const actualDate = periodDayToDate(currentYear, currentMonth, day);
         const dow = getDayOfWeek(currentYear, currentMonth, day);
         const dowName = dayNames[dow];
         let dayClass = '';
         if (dow === 0) dayClass = 'day-sunday';
         if (dow === 6) dayClass = 'day-saturday';
 
-        headerRow1 += `<th class="${dayClass}">${day}</th>`;
+        headerRow1 += `<th class="${dayClass}">${actualDate.day}</th>`;
         headerRow2 += `<th class="${dayClass}" style="font-size:0.65rem">${dowName}</th>`;
     }
 
@@ -704,9 +717,11 @@ function renderRequestCalendar() {
     const staffId = document.getElementById('request-staff').value;
     const schedule = getCurrentSchedule();
     const requests = schedule.requests[staffId] || [];
-    const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-    const firstDow = getDayOfWeek(currentYear, currentMonth, 1);
+    const daysInPeriod = getDaysInMonth(currentYear, currentMonth);
     const dayHeaders = ['日', '月', '火', '水', '木', '金', '土'];
+
+    // 期間の最初の日（16日）の曜日を取得
+    const firstDow = getDayOfWeek(currentYear, currentMonth, 1);
 
     let html = '';
 
@@ -718,20 +733,25 @@ function renderRequestCalendar() {
         html += `<div class="${cls}">${d}</div>`;
     });
 
-    // 1日までの空白
+    // 16日までの空白
     for (let i = 0; i < firstDow; i++) {
         html += '<div class="cal-day empty"></div>';
     }
 
-    // 各日
-    for (let day = 1; day <= daysInMonth; day++) {
+    // 各期間日
+    for (let day = 1; day <= daysInPeriod; day++) {
+        const actualDate = periodDayToDate(currentYear, currentMonth, day);
         const dow = getDayOfWeek(currentYear, currentMonth, day);
         const isSelected = requests.includes(day);
         let cls = 'cal-day';
         if (isSelected) cls += ' selected';
         if (dow === 0) cls += ' sunday';
 
-        html += `<div class="${cls}" data-day="${day}">${day}</div>`;
+        // 月が変わる境界にマーカーを表示
+        const displayDay = actualDate.day;
+        const monthLabel = (actualDate.day === 1 && day > 1) ? `<span class="cal-month-label">${actualDate.month}月</span>` : '';
+
+        html += `<div class="${cls}" data-day="${day}">${monthLabel}${displayDay}</div>`;
     }
 
     calEl.innerHTML = html;
@@ -787,12 +807,13 @@ function openShiftModal(staffId, day) {
     editingDay = day;
 
     const modal = document.getElementById('shift-modal');
+    const actualDate = periodDayToDate(currentYear, currentMonth, day);
     const dow = getDayOfWeek(currentYear, currentMonth, day);
     const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
     document.getElementById('shift-modal-title').textContent = 'シフト変更';
     document.getElementById('shift-modal-info').textContent =
-        `${staff.name}さん ─ ${currentMonth}月${day}日（${dayNames[dow]}）`;
+        `${staff.name}さん ─ ${actualDate.month}月${actualDate.day}日（${dayNames[dow]}）`;
 
     // 警告をクリア
     document.getElementById('shift-warning').style.display = 'none';

@@ -363,9 +363,9 @@ body {
 }
 
 .month-label {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    min-width: 140px;
+    min-width: 280px;
     text-align: center;
 }
 
@@ -696,6 +696,7 @@ thead .staff-name-cell {
 .request-calendar .cal-day {
     aspect-ratio: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-sm);
@@ -705,6 +706,7 @@ thead .staff-name-cell {
     transition: var(--transition);
     border: 2px solid transparent;
     background: var(--bg);
+    position: relative;
 }
 
 .request-calendar .cal-day:hover {
@@ -724,6 +726,15 @@ thead .staff-name-cell {
 
 .request-calendar .cal-day.sunday {
     color: var(--sunday);
+}
+
+/* 月変わりラベル（期間カレンダーで16日〜15日表示時の境界表示） */
+.cal-month-label {
+    font-size: 0.5rem;
+    color: var(--primary);
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 1px;
 }
 
 /* ===== シフト変更モーダル ===== */

@@ -130,17 +130,41 @@ function countStaffAtTime(staffList, allAssignments, day, checkMinutes) {
 }
 
 /**
- * 指定月の日数を取得
+ * 指定月の日数を取得（＝期間の日数と一致）
+ * 期間: month月16日〜(month+1)月15日 の日数 = month月の日数
  */
 function getDaysInMonth(year, month) {
     return new Date(year, month, 0).getDate();
 }
 
 /**
- * 指定日の曜日を取得（0=日曜, 6=土曜）
+ * 期間内の日番号（1-based）から実際の日付を返す
+ * 期間: month月16日〜(month+1)月15日
+ * periodDay=1 → month月16日, periodDay=16(3月なら) → month月31日
+ * periodDay=17(3月なら) → (month+1)月1日, ...
  */
-function getDayOfWeek(year, month, day) {
-    return new Date(year, month - 1, day).getDay();
+function periodDayToDate(year, month, periodDay) {
+    const daysInStartMonth = getDaysInMonth(year, month);
+    const firstHalfDays = daysInStartMonth - 15; // 16日〜月末の日数
+    if (periodDay <= firstHalfDays) {
+        // 前半: month月の16日〜月末
+        return { year: year, month: month, day: periodDay + 15 };
+    } else {
+        // 後半: 翌月の1日〜15日
+        let nextMonth = month + 1;
+        let nextYear = year;
+        if (nextMonth > 12) { nextMonth = 1; nextYear++; }
+        return { year: nextYear, month: nextMonth, day: periodDay - firstHalfDays };
+    }
+}
+
+/**
+ * 期間内の日番号から曜日を取得（0=日曜, 6=土曜）
+ * periodDay を実際の日付に変換してから曜日を計算
+ */
+function getDayOfWeek(year, month, periodDay) {
+    const actual = periodDayToDate(year, month, periodDay);
+    return new Date(actual.year, actual.month - 1, actual.day).getDay();
 }
 
 /**
@@ -324,11 +348,13 @@ function countOffDays(assignments, daysInMonth) {
 
 /**
  * パートスタッフの週ごとの勤務日数をチェック
+ * 期間日番号を実際の日付に変換して週の境界を計算
  */
-function getWeekWorkDays(assignments, day, year, month) {
-    const date = new Date(year, month - 1, day);
+function getWeekWorkDays(assignments, periodDay, year, month) {
+    const actual = periodDayToDate(year, month, periodDay);
+    const date = new Date(actual.year, actual.month - 1, actual.day);
     const dayOfWeek = date.getDay();
-    const monday = day - ((dayOfWeek + 6) % 7);
+    const monday = periodDay - ((dayOfWeek + 6) % 7);
     let count = 0;
     for (let d = monday; d < monday + 7; d++) {
         if (d < 1 || d > getDaysInMonth(year, month)) continue;
@@ -529,7 +555,8 @@ function generateScheduleOnce(staffList, year, month, requests, settings) {
                 canAssignNight(st, allAssignments[st.id], day, daysInMonth, s, year, month)
             );
             if (candidates.length === 0) {
-                warnings.push(`${month}月${day}日：夜勤に入れるスタッフが見つかりません`);
+                const warnDate = periodDayToDate(year, month, day);
+                warnings.push(`${warnDate.month}月${warnDate.day}日：夜勤に入れるスタッフが見つかりません`);
                 continue;
             }
             const scored = candidates.map(st => ({
@@ -600,8 +627,9 @@ function generateScheduleOnce(staffList, year, month, requests, settings) {
                     if (requestedDays[staff.id].has(d)) continue;
                     // 週の制限チェック
                     // countWorkDaysForTestはテスト用なので、直接計算
-                    const date = new Date(year, month - 1, d);
-                    const dayOfWeek = date.getDay();
+                    const actualD = periodDayToDate(year, month, d);
+                    const dateD = new Date(actualD.year, actualD.month - 1, actualD.day);
+                    const dayOfWeek = dateD.getDay();
                     const monday = d - ((dayOfWeek + 6) % 7);
                     let weekWork = 0;
                     for (let wd = monday; wd < monday + 7; wd++) {
@@ -1231,7 +1259,8 @@ function generateScheduleOnce(staffList, year, month, requests, settings) {
             const required = sunday ? cp.sundayRequired : cp.required;
             const count = countStaffAtTime(staffList, allAssignments, day, cp.minutes);
             if (count < required) {
-                const msg = `${month}月${day}日：${cp.label}の人数が${count}人です（必要${required}人）`;
+                const warnDate = periodDayToDate(year, month, day);
+                const msg = `${warnDate.month}月${warnDate.day}日：${cp.label}の人数が${count}人です（必要${required}人）`;
                 if (!warnings.includes(msg)) warnings.push(msg);
             }
         });
@@ -1264,7 +1293,8 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
             if (shift && shift !== SHIFT_TYPES.OFF && shift !== SHIFT_TYPES.NIGHT_OFF) {
                 consecutive++;
                 if (consecutive > maxConsec) {
-                    warnings.push(`${staff.name}さん：${day}日目で${consecutive}連勤（上限${maxConsec}日）`);
+                    const warnDate = periodDayToDate(year, month, day);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日で${consecutive}連勤（上限${maxConsec}日）`);
                 }
             } else {
                 consecutive = 0;
@@ -1275,14 +1305,15 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
         const nightType = staff.nightShiftType || (staff.canNightShift ? 'all' : 'none');
         for (let day = 1; day <= daysInMonth; day++) {
             if (assignments[day] === SHIFT_TYPES.NIGHT) {
+                const warnDate = periodDayToDate(year, month, day);
                 if (nightType === 'none' || staff.type === 'part') {
-                    warnings.push(`${staff.name}さん：${day}日に夜勤が入っていますが、夜勤不可です`);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日に夜勤が入っていますが、夜勤不可です`);
                 }
                 if (nightType === 'weekday' && isFriSatSun(year, month, day)) {
-                    warnings.push(`${staff.name}さん：${day}日（金土日）に夜勤が入っていますが、平日のみOKです`);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日（金土日）に夜勤が入っていますが、平日のみOKです`);
                 }
                 if (day + 1 <= daysInMonth && assignments[day + 1] !== SHIFT_TYPES.NIGHT_OFF) {
-                    warnings.push(`${staff.name}さん：${day}日の夜勤後、翌日が明けになっていません`);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日の夜勤後、翌日が明けになっていません`);
                 }
             }
         }
@@ -1291,7 +1322,8 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
         for (let day = 1; day <= daysInMonth; day++) {
             if (assignments[day] === SHIFT_TYPES.OVERTIME) {
                 if (!staff.canOvertime || staff.type === 'part') {
-                    warnings.push(`${staff.name}さん：${day}日に通し勤務が入っていますが、残業不可です`);
+                    const warnDate = periodDayToDate(year, month, day);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日に通し勤務が入っていますが、残業不可です`);
                 }
             }
         }
@@ -1300,14 +1332,16 @@ function validateSchedule(staffList, allAssignments, year, month, settings) {
         if (staff.type === 'part' && staff.earlyOnly) {
             for (let day = 1; day <= daysInMonth; day++) {
                 if (assignments[day] === SHIFT_TYPES.LATE || assignments[day] === SHIFT_TYPES.OVERTIME) {
-                    warnings.push(`${staff.name}さん：${day}日に遅番が入っていますが、早出のみです`);
+                    const warnDate = periodDayToDate(year, month, day);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日に遅番が入っていますが、早出のみです`);
                 }
             }
         }
         if (staff.type === 'part' && staff.lateOnly) {
             for (let day = 1; day <= daysInMonth; day++) {
                 if (assignments[day] === SHIFT_TYPES.EARLY || assignments[day] === SHIFT_TYPES.OVERTIME) {
-                    warnings.push(`${staff.name}さん：${day}日に早番が入っていますが、遅出のみです`);
+                    const warnDate = periodDayToDate(year, month, day);
+                    warnings.push(`${staff.name}さん：${warnDate.month}月${warnDate.day}日に早番が入っていますが、遅出のみです`);
                 }
             }
         }
