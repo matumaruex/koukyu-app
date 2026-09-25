@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "public",
+  "functions": {
+    "api/schedule.py": {
+      "maxDuration": 90,
+      "excludeFiles": "{solver/tests/**,solver/results/**,solver/lab.html,user_data.json,work/**}"
+    }
+  },
+  "headers": [
+    {"source": "/(.*)", "headers": [
+      {"key": "X-Content-Type-Options", "value": "nosniff"},
+      {"key": "Referrer-Policy", "value": "same-origin"}
+    ]},
+    {"source": "/", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
+  ]
+}

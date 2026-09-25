@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+
+# 勤務データと個別の検証表は公開しない。
+public/example.json
+solver/results/
+ソルへの引継ぎ.md

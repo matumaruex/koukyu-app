@@ -1,0 +1,10 @@
+.git
+.venv
+__pycache__
+**/__pycache__
+solver/results
+solver/tests
+solver/lab.html
+user_data.json
+
+public/example.json
