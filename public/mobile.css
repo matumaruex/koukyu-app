@@ -6,3 +6,16 @@
 
 /* 前期入力を短く、保存操作を画面内に保つ */
 .history-rows .field{grid-template-columns:minmax(100px,1fr) minmax(0,1.3fr);align-items:center;gap:8px;margin:8px 0}.history-rows select{padding:8px;min-height:48px}.dialog-save{position:sticky;bottom:-24px;background:white;padding:10px 0 14px;border-top:1px solid #dfe6dc}.dialog-save p{margin:0;font-size:14px}.dialog-save .wide{margin-top:6px}.history-dialog>p{margin:8px 0;font-size:14px}
+
+/* 保存の知らせ：画面下に重ねて出し、下の要素の操作を妨げない */
+#toast{position:fixed;left:0;right:0;margin:0 auto;width:fit-content;bottom:calc(84px + env(safe-area-inset-bottom));z-index:6;max-width:calc(100% - 32px);padding:10px 18px;border-radius:24px;background:#276652;color:white;font-size:15px;text-align:center;box-shadow:0 6px 20px #17362333;pointer-events:none}
+
+/* 作れない理由 */
+.problem{margin-bottom:16px}.problem strong{display:block;font-size:17px;margin-bottom:4px}.problem p{margin:6px 0}.problem ul{margin:8px 0;padding-left:20px}.problem li{margin:6px 0}.problem .actions button{background:white}
+
+/* 1か月の表：曜日・勤務の色・人数行 */
+.month-title{font-size:16px;margin:4px 0 10px}.month-table td,.month-table th{padding:8px 6px}.month-table th:first-child{position:static}.month-table .name{position:sticky;left:0;z-index:1;background:#edf3e8;text-align:left}.month-table th.sun{color:#b0392b}.month-table th.sat{color:#2d5f9a}.month-table td.total{font-weight:700}
+.month-table td.early{background:#eef5e6;color:#416727}.month-table td.late{background:#e6f2f7;color:#376575}.month-table td.overtime{background:#fff0dc;color:#805016;font-weight:700}.month-table td.night{background:#e9eefe;color:#384675;font-weight:700}.month-table td.nightOff{background:#f2ecfb;color:#695185}.month-table td.off{background:#f0f1ed;color:#7c8573}.month-table td.part{background:#f7f9f5}
+.month-table .count-row td{background:#fafbf8}.month-table .count-row.first>*{border-top:2px solid #9fb3a0}.month-table td.short{background:#fdecea;color:#b0392b;font-weight:700}.month-table td.relaxed{background:#fff4dc;color:#8a5a00}
+@page{size:A4 landscape;margin:8mm}
+@media print{:root{background:white}.period-label,#toast{display:none!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.month-title{font-size:15px;margin:0 0 6px}.month-table{font-size:11px;width:100%;table-layout:fixed}.month-table th,.month-table td{padding:4px 1px}.month-table .name{position:static;width:6.5em;padding-left:4px}.month-table .total{width:2.6em}.legend{font-size:10px;margin:6px 0 0}}
