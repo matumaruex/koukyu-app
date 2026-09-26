@@ -2,6 +2,8 @@
 import argparse
 import json
 import math
+import threading
+import time
 from datetime import timedelta
 from pathlib import Path
 from ortools.sat.python import cp_model
@@ -28,9 +30,55 @@ def quality_value(p, assignments):
     return (max(extras) - min(extras)) * (len(p['staff']) * n + 1) * secondary + sum(extras) * secondary + minor
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None):
+class _FirstSolution(cp_model.CpSolverSolutionCallback):
+    """最初の表が見つかった時刻だけを記録する。"""
+
+    def __init__(self):
+        super().__init__()
+        self.first = None
+
+    def on_solution_callback(self):
+        if self.first is None:
+            self.first = time.monotonic()
+
+
+def _solve_with_stop_rule(solver, model, min_seconds, after_first):
+    """min_seconds 経過し、かつ最初の表から after_first 秒たったら探索を止める。
+    表が見つからない間は max_time_in_seconds まで探す。最適・不成立を証明できればその時点で終わる。"""
+    tracker, done, start = _FirstSolution(), threading.Event(), time.monotonic()
+    stopped = []
+
+    def watch():
+        while not done.wait(0.1):
+            now = time.monotonic()
+            if tracker.first is not None and now - start >= min_seconds and now - tracker.first >= after_first:
+                stopped.append(True)
+                solver.stop_search()
+                return
+
+    thread = threading.Thread(target=watch, daemon=True)
+    thread.start()
+    try:
+        status = solver.solve(model, tracker)
+    finally:
+        done.set()
+        thread.join()
+    first = None if tracker.first is None else round(tracker.first - start, 3)
+    return status, bool(stopped), first
+
+
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None):
+    """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。"""
     if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
         return {'status': 'INVALID_INPUT', 'errors': ['seconds must be finite and positive']}
+    if (min_seconds is None) != (after_first is None):
+        return {'status': 'INVALID_INPUT', 'errors': ['min_seconds and after_first must be given together']}
+    if min_seconds is not None:
+        for v in (min_seconds, after_first):
+            if type(v) not in (int, float) or not math.isfinite(v) or v < 0:
+                return {'status': 'INVALID_INPUT', 'errors': ['min_seconds and after_first must be finite and non-negative']}
+        if min_seconds > seconds:
+            return {'status': 'INVALID_INPUT', 'errors': ['min_seconds must not exceed seconds']}
     try:
         p = normalize(raw)
     except (ValueError, TypeError) as exc:
@@ -177,8 +225,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None):
     solver.parameters.random_seed = seed
     # 固定シードの再現性を優先。困難な例は時間切れとして明示する。
     solver.parameters.num_search_workers = 1
-    status = solver.solve(model)
+    stop_rule = min_seconds is not None
+    if stop_rule:
+        status, stopped_early, first_seconds = _solve_with_stop_rule(solver, model, min_seconds, after_first)
+    else:
+        status = solver.solve(model)
     result = {'status': solver.status_name(status), 'seconds': round(solver.wall_time, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
+    if stop_rule:
+        result['stopRule'] = {'minSeconds': min_seconds, 'afterFirst': after_first, 'stoppedEarly': stopped_early, 'firstSolutionSeconds': first_seconds}
     keep_previous = status == cp_model.UNKNOWN and initial_assignments is not None
     if keep_previous:
         result.update(status='FEASIBLE', previousKept=True, explanation='改善を時間内に確認できなかったため、検査済みの元の表を保持しました。')
