@@ -19,3 +19,13 @@
 .month-table .count-row td{background:#fafbf8}.month-table .count-row.first>*{border-top:2px solid #9fb3a0}.month-table td.short{background:#fdecea;color:#b0392b;font-weight:700}.month-table td.relaxed{background:#fff4dc;color:#8a5a00}
 @page{size:A4 landscape;margin:8mm}
 @media print{:root{background:white}.period-label,#toast{display:none!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.month-title{font-size:15px;margin:0 0 6px}.month-table{font-size:11px;width:100%;table-layout:fixed}.month-table th,.month-table td{padding:4px 1px}.month-table .name{position:static;width:6.5em;padding-left:4px}.month-table .total{width:2.6em}.legend{font-size:10px;margin:6px 0 0}}
+
+
+/* 月表示のマスを押して修正 */
+.month-table td.editable{cursor:pointer}.month-table td.editable:hover{outline:2px solid #9fb3a0;outline-offset:-2px}.month-table td.editable:focus-visible{outline:3px solid #ce7d23;outline-offset:-3px}
+
+/* 職員の並べ替え */
+.staff-tools{display:flex;gap:6px;flex-shrink:0}.staff-tools .move{min-width:44px;padding:8px 0}.staff-tools .move:disabled{opacity:.3;cursor:default}
+
+/* スマホでは見出しを詰めて、カレンダーや表を広く見せる */
+@media(max-width:480px){.top{padding:12px 16px 4px}.top small{display:none}.top h1{font-size:22px}.period{margin-top:4px}.period button{min-height:44px}.period input{font-size:20px}.period-label{margin:0 0 12px}}
