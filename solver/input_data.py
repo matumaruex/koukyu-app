@@ -18,6 +18,24 @@ def normalize(raw):
     if type(p['maxExtraOffSpread']) is not int or not 0 <= p['maxExtraOffSpread'] <= p['days']:
         raise ValueError('maxExtraOffSpread must be an integer from 0 to period length.')
     p['start'] = date(year, month, 16)
+    p.setdefault('requiredStaff', [4, 4, 4])
+    p.setdefault('maxReducedSundays', 3)
+    def valid_counts(values):
+        return isinstance(values, list) and len(values) == 3 and all(type(v) is int and 0 <= v <= 40 for v in values)
+    if not valid_counts(p['requiredStaff']):
+        raise ValueError('requiredStaff must contain morning, noon and evening counts (0..40).')
+    if type(p['maxReducedSundays']) is not int or not 0 <= p['maxReducedSundays'] <= 5:
+        raise ValueError('maxReducedSundays must be an integer from 0 to 5.')
+    p.setdefault('dailyRequiredStaff', {})
+    if not isinstance(p['dailyRequiredStaff'], dict):
+        raise ValueError('dailyRequiredStaff must map period days to three counts.')
+    daily = {}
+    for key, counts in p['dailyRequiredStaff'].items():
+        if (not str(key).isdigit() or not 1 <= int(key) <= p['days']
+                or int(key) in daily or not valid_counts(counts)):
+            raise ValueError('dailyRequiredStaff contains an invalid day or staffing counts.')
+        daily[int(key)] = counts
+    p['dailyRequiredStaff'] = daily
     if not isinstance(p.get('staff'), list) or not p['staff']:
         raise ValueError('staff must be a nonempty list.')
     ids = set()

@@ -106,12 +106,15 @@ def validate(raw, assignments):
                 counts[j] += span[0] <= t < span[1]
         if night_count != 1:
             fail('night_coverage', day=d, detail=f'{night_count} night staff')
-        sunday = dt.weekday() == 6
+        needs = p['dailyRequiredStaff'].get(d, p['requiredStaff'])
+        sunday = dt.weekday() == 6 and d not in p['dailyRequiredStaff'] and p['maxReducedSundays'] > 0
         for j, count in enumerate(counts):
-            if count < (3 if sunday and j < 2 else 4):
-                fail('coverage', day=d, detail=f'{(420, 600, 1065)[j]}: {count}')
-        if sunday and (counts[0] < 4 or counts[1] < 4):
+            need = max(0, needs[j] - 1) if sunday and j < 2 else needs[j]
+            if count < need:
+                fail('coverage', day=d, detail=f'{(420, 600, 1065)[j]}: {count} < {need}')
+                errors[-1].update(time=(420, 600, 1065)[j], actual=count, required=need)
+        if sunday and (counts[0] < needs[0] or counts[1] < needs[1]):
             reduced += 1
-    if reduced > 3:
-        fail('sunday_limit', detail=f'{reduced} reduced Sundays')
+    if reduced > p['maxReducedSundays']:
+        fail('sunday_limit', detail=f'{reduced} reduced Sundays > {p["maxReducedSundays"]}')
     return errors

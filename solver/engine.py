@@ -203,13 +203,16 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     for d in range(n):
         dt = p['start'] + timedelta(days=d)
         required(sum(x[st['id'], d, 'night'] for st in p['staff']) == 1, f'night_{d}', f'{dt}の夜勤1人')
-        relax = model.new_bool_var(f'reduced_{d}') if dt.weekday() == 6 else 0
-        if dt.weekday() == 6:
+        counts_required = p['dailyRequiredStaff'].get(d + 1, p['requiredStaff'])
+        can_reduce = dt.weekday() == 6 and d + 1 not in p['dailyRequiredStaff'] and p['maxReducedSundays'] > 0
+        relax = model.new_bool_var(f'reduced_{d}') if can_reduce else 0
+        if can_reduce:
             reduced.append(relax)
-        for t in (420, 600, 1065):
+        for j, t in enumerate((420, 600, 1065)):
             count = sum(x[st['id'], d, k] for st in p['staff'] for k in SHIFTS if covers(st, k, t))
-            required(count >= 4 - (relax if t != 1065 else 0), f'coverage_{d}_{t}', f'{dt} {t // 60:02}:{t % 60:02}の必要人数')
-    required(sum(reduced) <= 3, 'sundays', '日曜の朝昼3人への緩和は月3日以内')
+            need = counts_required[j]
+            required(count >= need - (relax if j < 2 and need > 0 else 0), f'coverage_{d}_{t}', f'{dt} {t // 60:02}:{t % 60:02}の必要人数{need}人')
+    required(sum(reduced) <= p['maxReducedSundays'], 'sundays', f'日曜の朝昼を1人減らせる日は月{p["maxReducedSundays"]}日以内')
     max_extra = model.new_int_var(-n, n, 'max_extra_off')
     min_extra = model.new_int_var(-n, n, 'min_extra_off')
     if compared_extra_off:
