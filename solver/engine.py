@@ -153,6 +153,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', label + 'のA残は月6回以内・連日不可')
             if d + 1 in p['requests'].get(sid, []):
                 required(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休')
+            requested = p['shiftRequests'].get(sid, {}).get(d + 1)
+            if requested is not None:
+                shift_label = {'early': 'A（早出）', 'late': 'B（遅出）', 'overtime': 'A残', 'night': '夜勤', 'part': 'P'}[requested]
+                required(x[sid, d, requested] == 1, f'{sid}_shift_request_{d}',
+                         label + f'の{dt}の希望勤務「{shift_label}」')
             locked = p['locked'].get(sid, {}).get(d + 1)
             if locked is not None:
                 required(x[sid, d, locked] == 1, sid + '_locked', label + 'の固定済み勤務')

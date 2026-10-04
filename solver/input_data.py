@@ -80,14 +80,27 @@ def normalize(raw):
             or len(excluded) != len(set(excluded))):
         raise ValueError('fairnessExcludedStaff must contain unique registered staff IDs.')
     p.setdefault('requests', {})
+    p.setdefault('shiftRequests', {})
     p.setdefault('locked', {})
     p.setdefault('history', {})
-    for field in ('requests', 'locked', 'history'):
+    for field in ('requests', 'shiftRequests', 'locked', 'history'):
         if not isinstance(p[field], dict) or set(p[field]) - ids:
             raise ValueError(f'{field}: unknown staff ID or invalid mapping.')
     for sid, days in p['requests'].items():
         if not isinstance(days, list) or any(type(d) is not int or not 1 <= d <= p['days'] for d in days):
             raise ValueError(f'{sid}: request days must be period-relative integers.')
+    for sid, values in p['shiftRequests'].items():
+        if not isinstance(values, dict):
+            raise ValueError(f'{sid}: shiftRequests must map period day to requested shift.')
+        normalized = {}
+        for key, value in values.items():
+            if (type(key) not in (str, int) or not str(key).isdigit()
+                    or not 1 <= int(key) <= p['days'] or int(key) in normalized
+                    or not isinstance(value, str)
+                    or value not in ('early', 'late', 'overtime', 'night', 'part')):
+                raise ValueError(f'{sid}: invalid requested shift or day.')
+            normalized[int(key)] = value
+        p['shiftRequests'][sid] = normalized
     for sid, values in p['locked'].items():
         if not isinstance(values, dict):
             raise ValueError(f'{sid}: locked must map period day to shift.')

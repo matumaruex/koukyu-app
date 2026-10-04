@@ -68,6 +68,10 @@ def validate(raw, assignments):
                     fail('adjacent_overtime', sid, day)
                 if day in p['requests'].get(sid, []) and shift != 'off':
                     fail('request', sid, day)
+                requested = p['shiftRequests'].get(sid, {}).get(day)
+                if requested is not None and shift != requested:
+                    fail('shift_request', sid, day)
+                    errors[-1].update(requested=requested, actual=shift)
                 expected = p['locked'].get(sid, {}).get(day)
                 if expected is not None and shift != expected:
                     fail('locked', sid, day)
