@@ -93,7 +93,8 @@ class DayShiftTypeTests(unittest.TestCase):
         a = deepcopy(self.result['assignments'])
         before = quality_value(p, a)
         a['s0']['1'] = 'overtime'
-        self.assertEqual(quality_value(p, a) - before, 1)
+        # 月全体の残業を最優先にする新評価でも、不要なA残は必ず悪化。
+        self.assertGreater(quality_value(p, a), before)
 
     def test_staffing_shortfalls_never_relax_day_shift_eligibility(self):
         for mode, needs, expected_shortfall in [('early', [0,0,2], 28), ('late', [2,0,0], 29)]:

@@ -27,8 +27,10 @@ class SolverTests(unittest.TestCase):
 
     def test_real_roster_february_and_fairness(self):
         self.assertEqual(validate(self.raw, self.table), [])
-        self.assertEqual(self.result['fairness']['spread'], 0)
-        self.assertTrue(all(n == 0 for n in self.result['fairness']['extraDaysOff'].values()))
+        # 残業と過剰配置を減らすための追加公休は許容する。公休最低日数と
+        # 設定された公平差は必須で、旧「追加公休を最小化」の最適値は要求しない。
+        self.assertLessEqual(self.result['fairness']['spread'], self.result['fairness']['limit'])
+        self.assertTrue(all(n >= 0 for n in self.result['fairness']['extraDaysOff'].values()))
         self.assertEqual(self.result['verificationScope'], 'PERIOD_ONLY')
 
     def test_requested_holidays_including_night_eve(self):

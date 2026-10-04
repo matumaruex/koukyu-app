@@ -9,29 +9,7 @@ from pathlib import Path
 from ortools.sat.python import cp_model
 from .input_data import normalize, SHIFTS
 from .validator import validate
-
-
-def quality_value(p, assignments):
-    """再計算で既存案より悪化させないため、同じ評価式を確定表に適用する。"""
-    n = p['days']
-    extras, compared_extras, nights = [], [], []
-    minor = 0
-    for st in p['staff']:
-        values = list(assignments[st['id']].values())
-        extras.append(values.count('off') - st['monthlyDaysOff'])
-        if st['id'] not in p['fairnessExcludedStaff']:
-            compared_extras.append(extras[-1])
-        minor += values.count('overtime')
-        if st['type'] != 'part':
-            if st.get('dayShiftType', 'both') == 'both':
-                minor += 2 * abs(values.count('early') - values.count('late'))
-            if st['nightShiftType'] != 'none':
-                nights.append(values.count('night'))
-    if nights:
-        minor += 5 * (max(nights) - min(nights))
-    secondary = len(p['staff']) * 3 * n + 5 * n + 1
-    spread = max(compared_extras) - min(compared_extras) if compared_extras else 0
-    return spread * (len(p['staff']) * n + 1) * secondary + sum(extras) * secondary + minor
+from .allocation import POLICY, covers, metrics, weights, quality_value
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -91,7 +69,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
     if initial_assignments is not None:
         errors = validate(raw, initial_assignments)
-        if errors:
+        if errors and (not allow_staffing_shortfall or any(e['code'] not in ('coverage', 'sunday_limit') for e in errors)):
             return {'status': 'INVALID_INPUT', 'errors': ['比較する元の表が現在の条件に合いません。'], 'validationErrors': errors}
         initial_assignments = {sid: {str(d): k for d, k in row.items()} for sid, row in initial_assignments.items()}
     model = cp_model.CpModel()
@@ -133,6 +111,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     extra_off = []
     compared_extra_off = []
     night_totals = []
+    overtime_totals, overtime_squares = [], []
     for i, st in enumerate(p['staff']):
         sid = st['id']
         label = f'職員{i + 1}'
@@ -192,7 +171,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         extra_off.append(extra)
         if sid not in p['fairnessExcludedStaff']:
             compared_extra_off.append(extra)
-        quality.append(ot)
+        if st['type'] != 'part' and st['canOvertime']:
+            total_ot = model.new_int_var(0, n, sid + '_ot_total')
+            model.add(total_ot == ot)
+            square = model.new_int_var(0, n * n, sid + '_ot_square')
+            model.add_multiplication_equality(square, [total_ot, total_ot])
+            overtime_totals.append(total_ot)
+            overtime_squares.append(square)
         if st['type'] == 'part':
             mondays = {d - (p['start'] + timedelta(days=d)).weekday() for d in range(n)}
             for monday in sorted(mondays):
@@ -213,18 +198,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add_min_equality(low, night_totals)
         quality.append(5 * (high - low))
 
-    def covers(st, shift, checkpoint):
-        # 検査側とは共有しない生成専用のカバー定義。
-        if shift == 'part':
-            if st['type'] != 'part':
-                return False
-            start = int(st['startTime'][:2]) * 60 + int(st['startTime'][3:])
-            end = int(st['endTime'][:2]) * 60 + int(st['endTime'][3:])
-            return start <= checkpoint < end
-        return shift in {420: ('early', 'overtime', 'nightOff'), 600: ('early', 'late', 'overtime'), 1065: ('late', 'overtime', 'night')}[checkpoint]
-
     reduced = []
     shortfalls = []
+    surpluses = []
     for d in range(n):
         dt = p['start'] + timedelta(days=d)
         required(sum(x[st['id'], d, 'night'] for st in p['staff']) == 1, f'night_{d}', f'{dt}の夜勤1人')
@@ -237,6 +213,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             count = sum(x[st['id'], d, k] for st in p['staff'] for k in SHIFTS if covers(st, k, t))
             need = counts_required[j]
             target = need - (relax if j < 2 and need > 0 else 0)
+            surplus = model.new_int_var(0, len(p['staff']), f'surplus_{d}_{t}')
+            model.add_max_equality(surplus, [0, count - need])
+            surpluses.append(surplus)
             if allow_staffing_shortfall:
                 missing = model.new_int_var(0, need, f'shortfall_{d}_{t}')
                 model.add(count + missing >= target)
@@ -253,20 +232,31 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add(max_extra == 0)
         model.add(min_extra == 0)
     required(max_extra - min_extra <= p['maxExtraOffSpread'], 'fairness', f'余分な公休の差は{p["maxExtraOffSpread"]}日以内')
-    shortage_weight = 0
+    overtime_range = 0
+    if overtime_totals:
+        high_ot, low_ot = model.new_int_var(0, n, 'ot_high'), model.new_int_var(0, n, 'ot_low')
+        model.add_max_equality(high_ot, overtime_totals)
+        model.add_min_equality(low_ot, overtime_totals)
+        overtime_range = high_ot - low_ot
+    initial_metric = metrics(p, initial_assignments) if initial_assignments is not None else None
+    if initial_metric is not None:
+        # 全員に配れている追加公休を、残業削減のために取り上げない。
+        model.add(min_extra >= initial_metric['commonExtraDaysOff'])
+    shortage_weight = weights(p)[1]
+    initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
+                           if e['code'] == 'coverage') if initial_metric is not None else 0
     if optimize or allow_staffing_shortfall:
-        # 辞書式優先度：余分な公休の格差 → 余分な公休総数 → 勤務のバランス。
-        # 下位項の最大値を超える係数で、公平さを他の点数と交換しない。
-        secondary_bound = len(p['staff']) * 3 * n + 5 * n + 1
-        spread_weight = (len(p['staff']) * n + 1) * secondary_bound
-        objective = (max_extra - min_extra) * spread_weight + sum(extra_off) * secondary_bound + sum(quality)
+        # 月全体：不足 → 残業総数 → 人数超過 → 残業の偏り → 全員の追加公休 → その他のバランス。
+        # 公休差の設定は必須のまま。部分的な追加公休やA/B合わせのために残業を増やさない。
+        minor = ((max_extra - min_extra) * (36 * len(p['staff']) + 2 * len(p['staff']) * n + 5 * n + 1)
+                 + sum(overtime_squares) + sum(quality))
+        terms = (sum(overtime_totals), sum(surpluses), overtime_range, n - min_extra, minor)
+        objective = sum(term * weight for term, weight in zip(terms, weights(p)[0]))
         if allow_staffing_shortfall:
-            # 人数不足を最優先で減らす。夜勤・職員の条件・公休の公平性は必須のまま。
-            shortage_weight = n * spread_weight + len(p['staff']) * n * secondary_bound + secondary_bound
             objective += sum(shortfalls) * shortage_weight
         model.minimize(objective)
         if initial_assignments is not None:
-            model.add(objective <= quality_value(p, initial_assignments))
+            model.add(objective <= quality_value(p, initial_assignments) + initial_shortage * shortage_weight)
     if initial_assignments is not None:
         for (sid, d, shift), variable in x.items():
             model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
@@ -313,7 +303,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     compared = [sid for sid in extras if sid not in p['fairnessExcludedStaff']]
     compared_values = [extras[sid] for sid in compared]
     spread = max(compared_values) - min(compared_values) if compared_values else 0
-    result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': p['fairnessExcludedStaff'], 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0 or (optimize and status == cp_model.OPTIMAL), 'provenOptimal': optimize and status == cp_model.OPTIMAL}
+    result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': p['fairnessExcludedStaff'], 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0, 'provenOptimal': optimize and status == cp_model.OPTIMAL}
+    result['optimizationPolicy'] = POLICY
+    result['allocation'] = metrics(p, assignments)
+    result['allocation']['minimumOvertimeProven'] = bool((optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
+    result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
+    if initial_metric is not None:
+        result['allocation']['before'] = initial_metric
+        result['allocation']['overtimeReducedBy'] = initial_metric['overtimeTotal'] - result['allocation']['overtimeTotal']
     result['carryForward'] = {}
     for sid, row in assignments.items():
         next_days = ['nightOff', 'off'] if row[str(n)] == 'night' else ['off'] if row[str(n)] == 'nightOff' else []
@@ -327,7 +324,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if not keep_previous:
             result['bestBound'] = solver.best_objective_bound
         if initial_assignments is not None:
-            result['improved'] = result['objective'] < quality_value(p, initial_assignments)
+            result['improved'] = result['objective'] < quality_value(p, initial_assignments) + initial_shortage * shortage_weight
     return result
 
 

@@ -61,10 +61,20 @@ class ShortfallDraftTests(unittest.TestCase):
         self.assertEqual(validate(p,r['assignments']), [])
         self.assertEqual(r['validationErrors'], [])
 
-    def test_invalid_draft_flag_and_draft_initial_comparison_rejected(self):
+    def test_invalid_draft_flag_and_hard_invalid_initial_comparison_rejected(self):
         for value in (1, None, 'true'):
             self.assertEqual(dispatch({'input':self.raw,'allowStaffingShortfall':value})['status'],'INVALID_INPUT')
-        self.assertEqual(solve(self.raw, initial_assignments=self.table, allow_staffing_shortfall=True)['status'],'INVALID_INPUT')
+        bad = deepcopy(self.table)
+        bad['s0']['2'] = 'early'
+        self.assertEqual(solve(self.raw, initial_assignments=bad, allow_staffing_shortfall=True)['status'],'INVALID_INPUT')
+
+    def test_verified_draft_can_be_improved_without_worsening_shortfall(self):
+        r = solve(self.raw, seconds=3, initial_assignments=self.table, allow_staffing_shortfall=True)
+        self.assertEqual(r['status'],'DRAFT')
+        self.assertLessEqual(r['staffingShortfallTotal'],self.result['staffingShortfallTotal'])
+        self.assertLessEqual(r['objective'],self.result['objective'])
+        self.assertGreaterEqual(r['allocation']['commonExtraDaysOff'],self.result['allocation']['commonExtraDaysOff'])
+        self.assertTrue(all(e['code']=='coverage' for e in validate(self.raw,r['assignments'])))
 
 
 if __name__ == '__main__':
