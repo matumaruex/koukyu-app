@@ -23,7 +23,8 @@ def quality_value(p, assignments):
             compared_extras.append(extras[-1])
         minor += values.count('overtime')
         if st['type'] != 'part':
-            minor += 2 * abs(values.count('early') - values.count('late'))
+            if st.get('dayShiftType', 'both') == 'both':
+                minor += 2 * abs(values.count('early') - values.count('late'))
             if st['nightShiftType'] != 'none':
                 nights.append(values.count('night'))
     if nights:
@@ -142,12 +143,16 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             dt = p['start'] + timedelta(days=d)
             allowed = {'off', 'part'} if st['type'] == 'part' else {'off', 'early', 'late', 'nightOff'}
             if st['type'] != 'part':
+                if st['dayShiftType'] == 'early':
+                    allowed.remove('late')
+                elif st['dayShiftType'] == 'late':
+                    allowed.remove('early')
                 if st['canOvertime']:
                     allowed.add('overtime')
                 if nt == 'all' or (nt == 'weekday' and dt.weekday() < 4):
                     allowed.add('night')
             for k in sorted(set(SHIFTS) - allowed):
-                required(x[sid, d, k] == 0, sid + '_eligibility', label + 'の勤務可能時間・夜勤資格')
+                required(x[sid, d, k] == 0, sid + '_eligibility', label + 'の勤務可能時間・A/Bの可否・夜勤資格')
             required(x[sid, d, 'nightOff'] == value(sid, d - 1, 'night'), sid + '_night_link', label + 'の夜勤翌日は明け（期間境界を含む）')
             required(x[sid, d, 'off'] >= value(sid, d - 1, 'nightOff'), sid + '_night_rest', label + 'の夜勤明け翌日は必ず公休（期間境界を含む）')
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', label + 'のA残は月6回以内・連日不可')
@@ -193,9 +198,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             for monday in sorted(mondays):
                 required(sum(working(sid, d) for d in range(monday, min(n, monday + 7))) <= st['maxDaysPerWeek'], sid + '_weekly', label + f'の週{st["maxDaysPerWeek"]}日以内（月曜始まり）')
         else:
-            diff = model.new_int_var(0, n, sid + '_ab_difference')
-            model.add_abs_equality(diff, sum(x[sid, d, 'early'] - x[sid, d, 'late'] for d in range(n)))
-            quality.append(2 * diff)
+            if st['dayShiftType'] == 'both':
+                diff = model.new_int_var(0, n, sid + '_ab_difference')
+                model.add_abs_equality(diff, sum(x[sid, d, 'early'] - x[sid, d, 'late'] for d in range(n)))
+                quality.append(2 * diff)
             if nt != 'none':
                 total = model.new_int_var(0, n, sid + '_night_total')
                 model.add(total == sum(x[sid, d, 'night'] for d in range(n)))

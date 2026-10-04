@@ -48,6 +48,9 @@ def normalize(raw):
         ids.add(sid)
         if st.get('type') not in ('full', 'fulltime', 'part'):
             raise ValueError(f'{sid}: invalid staff type.')
+        st.setdefault('dayShiftType', 'both')
+        if st['dayShiftType'] not in ('both', 'early', 'late'):
+            raise ValueError(f'{sid}: invalid dayShiftType.')
         st.setdefault('nightShiftType', 'all' if st.get('canNightShift') else 'none')
         if st['nightShiftType'] not in ('none', 'all', 'weekday'):
             raise ValueError(f'{sid}: invalid nightShiftType.')

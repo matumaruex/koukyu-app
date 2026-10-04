@@ -60,6 +60,10 @@ def validate(raw, assignments):
                     fail('eligibility', sid, day, 'Part-time staff may only work P.')
                 if st['type'] != 'part' and shift == 'part':
                     fail('eligibility', sid, day, 'Full-time staff may not work P.')
+                if st['type'] != 'part' and ((st['dayShiftType'] == 'early' and shift == 'late')
+                                             or (st['dayShiftType'] == 'late' and shift == 'early')):
+                    fail('day_shift_eligibility', sid, day)
+                    errors[-1].update(allowed=st['dayShiftType'], actual=shift)
                 if shift == 'night' and (night_type == 'none' or st['type'] == 'part' or (night_type == 'weekday' and dt.weekday() in (4, 5, 6))):
                     fail('night_eligibility', sid, day)
                 if shift == 'overtime' and (not st['canOvertime'] or st['type'] == 'part'):
