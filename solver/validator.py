@@ -27,8 +27,9 @@ def validate(raw, assignments):
         rows[sid] = values
     if errors:
         return errors
-    extras = [rows[st['id']].count('off') - st['monthlyDaysOff'] for st in p['staff']]
-    if max(extras) - min(extras) > p['maxExtraOffSpread']:
+    extras = [rows[st['id']].count('off') - st['monthlyDaysOff'] for st in p['staff']
+              if st['id'] not in p['fairnessExcludedStaff']]
+    if len(extras) >= 2 and max(extras) - min(extras) > p['maxExtraOffSpread']:
         fail('fairness', detail=f'Extra-off spread exceeds {p["maxExtraOffSpread"]}.')
 
     for st in p['staff']:

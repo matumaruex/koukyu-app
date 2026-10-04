@@ -14,11 +14,13 @@ from .validator import validate
 def quality_value(p, assignments):
     """再計算で既存案より悪化させないため、同じ評価式を確定表に適用する。"""
     n = p['days']
-    extras, nights = [], []
+    extras, compared_extras, nights = [], [], []
     minor = 0
     for st in p['staff']:
         values = list(assignments[st['id']].values())
         extras.append(values.count('off') - st['monthlyDaysOff'])
+        if st['id'] not in p['fairnessExcludedStaff']:
+            compared_extras.append(extras[-1])
         minor += values.count('overtime')
         if st['type'] != 'part':
             minor += 2 * abs(values.count('early') - values.count('late'))
@@ -27,7 +29,8 @@ def quality_value(p, assignments):
     if nights:
         minor += 5 * (max(nights) - min(nights))
     secondary = len(p['staff']) * 3 * n + 5 * n + 1
-    return (max(extras) - min(extras)) * (len(p['staff']) * n + 1) * secondary + sum(extras) * secondary + minor
+    spread = max(compared_extras) - min(compared_extras) if compared_extras else 0
+    return spread * (len(p['staff']) * n + 1) * secondary + sum(extras) * secondary + minor
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -120,6 +123,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
 
     quality = []
     extra_off = []
+    compared_extra_off = []
     night_totals = []
     for i, st in enumerate(p['staff']):
         sid = st['id']
@@ -163,6 +167,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         extra = model.new_int_var(-n, n, sid + '_extra_off')
         model.add(extra == off - st['monthlyDaysOff'])
         extra_off.append(extra)
+        if sid not in p['fairnessExcludedStaff']:
+            compared_extra_off.append(extra)
         quality.append(ot)
         if st['type'] == 'part':
             mondays = {d - (p['start'] + timedelta(days=d)).weekday() for d in range(n)}
@@ -206,8 +212,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     required(sum(reduced) <= 3, 'sundays', '日曜の朝昼3人への緩和は月3日以内')
     max_extra = model.new_int_var(-n, n, 'max_extra_off')
     min_extra = model.new_int_var(-n, n, 'min_extra_off')
-    model.add_max_equality(max_extra, extra_off)
-    model.add_min_equality(min_extra, extra_off)
+    if compared_extra_off:
+        model.add_max_equality(max_extra, compared_extra_off)
+        model.add_min_equality(min_extra, compared_extra_off)
+    else:
+        model.add(max_extra == 0)
+        model.add(min_extra == 0)
     required(max_extra - min_extra <= p['maxExtraOffSpread'], 'fairness', f'余分な公休の差は{p["maxExtraOffSpread"]}日以内')
     if optimize:
         # 辞書式優先度：余分な公休の格差 → 余分な公休総数 → 勤務のバランス。
@@ -252,8 +262,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['validationErrors'] = []
     result['verificationScope'] = 'WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY'
     extras = {st['id']: sum(k == 'off' for k in assignments[st['id']].values()) - st['monthlyDaysOff'] for st in p['staff']}
-    spread = max(extras.values()) - min(extras.values())
-    result['fairness'] = {'extraDaysOff': extras, 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0 or (optimize and status == cp_model.OPTIMAL), 'provenOptimal': optimize and status == cp_model.OPTIMAL}
+    compared = [sid for sid in extras if sid not in p['fairnessExcludedStaff']]
+    compared_values = [extras[sid] for sid in compared]
+    spread = max(compared_values) - min(compared_values) if compared_values else 0
+    result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': p['fairnessExcludedStaff'], 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0 or (optimize and status == cp_model.OPTIMAL), 'provenOptimal': optimize and status == cp_model.OPTIMAL}
     result['carryForward'] = {}
     for sid, row in assignments.items():
         next_days = ['nightOff', 'off'] if row[str(n)] == 'night' else ['off'] if row[str(n)] == 'nightOff' else []
