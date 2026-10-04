@@ -102,7 +102,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     def guard(key, label):
         if key not in groups:
             bit = model.new_bool_var(key)
-            model.add_assumption(bit)
+            if allow_staffing_shortfall:
+                # 下書きでも必須条件をすべて有効に固定する。
+                # 原因集合の抽出用の仮定を外し、複数の探索を使えるようにする。
+                model.add(bit == 1)
+            else:
+                model.add_assumption(bit)
             assumptions[bit.index] = label
             groups[key] = bit
         return groups[key]
@@ -251,8 +256,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = seconds
     solver.parameters.random_seed = seed
-    # 固定シードの再現性を優先。困難な例は時間切れとして明示する。
-    solver.parameters.num_search_workers = 1
+    # 通常作成は原因診断・再現性を優先。下書きは複数の探索で不足を減らす。
+    solver.parameters.num_search_workers = 4 if allow_staffing_shortfall else 1
     stop_rule = min_seconds is not None
     if stop_rule:
         status, stopped_early, first_seconds = _solve_with_stop_rule(solver, model, min_seconds, after_first)

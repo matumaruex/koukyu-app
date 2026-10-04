@@ -1,5 +1,6 @@
 """「最低時間を過ぎ、最初の表から一定時間たったら止める」計算の止め方を確認する。"""
 import unittest
+from unittest.mock import patch
 from solver.benchmark import cases
 from solver.engine import solve
 from solver.service import dispatch
@@ -60,6 +61,15 @@ class StopRuleTests(unittest.TestCase):
         self.assertEqual(r['stopRule']['afterFirst'], 10)
         self.assertLess(r['seconds'], 59)
         self.assertEqual(validate(raw, r['assignments']), [])
+
+    def test_draft_does_not_stop_just_after_first_candidate(self):
+        raw = next(cases())[1]
+        with patch('solver.service.solve', return_value={'status': 'UNKNOWN'}) as calculation:
+            dispatch({'input': raw, 'seconds': 60, 'adaptive': True, 'allowStaffingShortfall': True})
+        self.assertEqual(calculation.call_args.kwargs['seconds'], 60)
+        self.assertTrue(calculation.call_args.kwargs['allow_staffing_shortfall'])
+        self.assertNotIn('min_seconds', calculation.call_args.kwargs)
+        self.assertNotIn('after_first', calculation.call_args.kwargs)
 
 
 if __name__ == '__main__':
