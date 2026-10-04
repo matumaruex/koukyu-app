@@ -138,6 +138,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             for k in sorted(set(SHIFTS) - allowed):
                 required(x[sid, d, k] == 0, sid + '_eligibility', label + 'の勤務可能時間・夜勤資格')
             required(x[sid, d, 'nightOff'] == value(sid, d - 1, 'night'), sid + '_night_link', label + 'の夜勤翌日は明け（期間境界を含む）')
+            required(x[sid, d, 'off'] >= value(sid, d - 1, 'nightOff'), sid + '_night_rest', label + 'の夜勤明け翌日は必ず公休（期間境界を含む）')
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', label + 'のA残は月6回以内・連日不可')
             if d + 1 in p['requests'].get(sid, []):
                 required(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休')
@@ -253,7 +254,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     extras = {st['id']: sum(k == 'off' for k in assignments[st['id']].values()) - st['monthlyDaysOff'] for st in p['staff']}
     spread = max(extras.values()) - min(extras.values())
     result['fairness'] = {'extraDaysOff': extras, 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0 or (optimize and status == cp_model.OPTIMAL), 'provenOptimal': optimize and status == cp_model.OPTIMAL}
-    result['carryForward'] = {sid: {'history': [row[str(d)] for d in range(n - 6, n + 1)], 'nextDay': 'nightOff' if row[str(n)] == 'night' else None} for sid, row in assignments.items()}
+    result['carryForward'] = {}
+    for sid, row in assignments.items():
+        next_days = ['nightOff', 'off'] if row[str(n)] == 'night' else ['off'] if row[str(n)] == 'nightOff' else []
+        result['carryForward'][sid] = {
+            'history': [row[str(d)] for d in range(n - 6, n + 1)],
+            'nextDay': next_days[0] if next_days else None,
+            'nextDays': next_days,
+        }
     if optimize:
         result['objective'] = quality_value(p, assignments)
         if not keep_previous:

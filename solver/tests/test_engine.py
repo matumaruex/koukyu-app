@@ -171,11 +171,18 @@ class SolverTests(unittest.TestCase):
         self.assertIn('consecutive_plus_one', self.codes(p, a))
 
     def test_extra_holidays_are_distributed_equally(self):
-        from solver.benchmark import cases
-        p = list(cases())[-1][1]
-        r = solve(p, seconds=20)
+        # 十分な人員を置き、公休配分そのものを検証する。旧13人ケースは
+        # 夜勤→明け→公休を追加すると不成立になるため、公平性の成立例に使わない。
+        from solver.tests.test_night_rest import roomy_fixture
+        p = roomy_fixture()
+        p['locked'] = {'s0': {str(d): 'off' for d in range(1, 12)}}
+        r = solve(p, seconds=10, optimize=False)
         self.assertIn(r['status'], ('OPTIMAL', 'FEASIBLE'))
-        self.assertEqual(set(r['fairness']['extraDaysOff'].values()), {2})
+        # 必須の公平性を検査する。時間制限下の解に余分な公休総数の最適性は要求しない。
+        extras = r['fairness']['extraDaysOff']
+        self.assertGreaterEqual(extras['s0'], 2)
+        self.assertLessEqual(max(extras.values()) - min(extras.values()), 1)
+        self.assertTrue(all(r['assignments']['s0'][str(d)] == 'off' for d in range(1, 12)))
         self.assertEqual(validate(p, r['assignments']), [])
 
     def test_fairness_is_never_silently_relaxed(self):

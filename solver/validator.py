@@ -53,6 +53,8 @@ def validate(raw, assignments):
                     extensions += 1
                 if (shift == 'nightOff') != (all_days[i - 1] == 'night'):
                     fail('night_link', sid, day)
+                if all_days[i - 1] == 'nightOff' and shift != 'off':
+                    fail('night_rest', sid, day, 'A public holiday is required after night-shift recovery.')
                 if st['type'] == 'part' and shift not in ('off', 'part'):
                     fail('eligibility', sid, day, 'Part-time staff may only work P.')
                 if st['type'] != 'part' and shift == 'part':
