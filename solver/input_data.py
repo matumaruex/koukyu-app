@@ -74,6 +74,11 @@ def normalize(raw):
                     raise ValueError()
             except (KeyError, ValueError, TypeError):
                 raise ValueError(f'{sid}: valid same-day part-time start/end required.') from None
+    p.setdefault('nightRestRequiredStaff', [])
+    selected = p['nightRestRequiredStaff']
+    if (not isinstance(selected, list) or any(not isinstance(sid, str) or sid not in ids for sid in selected)
+            or len(selected) != len(set(selected))):
+        raise ValueError('nightRestRequiredStaff must contain unique registered staff IDs.')
     p.setdefault('fairnessExcludedStaff', [])
     excluded = p['fairnessExcludedStaff']
     if (not isinstance(excluded, list) or any(not isinstance(sid, str) or sid not in ids for sid in excluded)

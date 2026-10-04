@@ -68,6 +68,11 @@ def validate(raw, assignments):
                     fail('adjacent_overtime', sid, day)
                 if day in p['requests'].get(sid, []) and shift != 'off':
                     fail('request', sid, day)
+                if (sid in p['nightRestRequiredStaff']
+                        and day in p['requests'].get(sid, [])
+                        and day - 1 not in p['requests'].get(sid, [])
+                        and (all_days[i - 2] != 'night' or all_days[i - 1] != 'nightOff')):
+                    fail('request_night_rest', sid, day, 'Requested holiday must follow night and recovery.')
                 requested = p['shiftRequests'].get(sid, {}).get(day)
                 if requested is not None and shift != requested:
                     fail('shift_request', sid, day)

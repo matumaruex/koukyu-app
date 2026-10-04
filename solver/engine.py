@@ -153,6 +153,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', label + 'のA残は月6回以内・連日不可')
             if d + 1 in p['requests'].get(sid, []):
                 required(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休')
+                if sid in p['nightRestRequiredStaff'] and d not in p['requests'].get(sid, []):
+                    # 連続する希望休の先頭のみ。期間冒頭は前期の実績に接続する。
+                    key = f'{sid}_requested_night_rest_{d}'
+                    description = label + f'の{dt}の希望休は夜勤→明け→公休（連休は初日）'
+                    required(value(sid, d - 2, 'night') == 1, key, description)
+                    required(value(sid, d - 1, 'nightOff') == 1, key, description)
             requested = p['shiftRequests'].get(sid, {}).get(d + 1)
             if requested is not None:
                 shift_label = {'early': 'A（早出）', 'late': 'B（遅出）', 'overtime': 'A残', 'night': '夜勤', 'part': 'P'}[requested]
