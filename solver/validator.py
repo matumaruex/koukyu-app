@@ -85,7 +85,7 @@ def validate(raw, assignments):
             if monday >= first_monday and count > st['maxDaysPerWeek']:
                 fail('weekly', sid, detail=f'{monday}: {count} > {st["maxDaysPerWeek"]}')
 
-    reduced = 0
+    coverage_days = []
     for d in range(1, p['days'] + 1):
         dt = p['start'] + timedelta(days=d - 1)
         counts = [0, 0, 0]
@@ -108,13 +108,18 @@ def validate(raw, assignments):
             fail('night_coverage', day=d, detail=f'{night_count} night staff')
         needs = p['dailyRequiredStaff'].get(d, p['requiredStaff'])
         sunday = dt.weekday() == 6 and d not in p['dailyRequiredStaff'] and p['maxReducedSundays'] > 0
+        coverage_days.append((d, counts, needs, sunday))
+    # ソルバーの緩和変数を信用せず、実人数から有効な日曜の割当を再評価。
+    reduced = [row for row in coverage_days if row[3] and any(row[1][i] < row[2][i] for i in (0, 1))]
+    benefit = lambda row: sum(row[1][i] < row[2][i] for i in (0, 1))
+    allowed = {row[0] for row in sorted(reduced, key=lambda row: (-benefit(row), row[0]))[:p['maxReducedSundays']]}
+    for d, counts, needs, sunday in coverage_days:
         for j, count in enumerate(counts):
-            need = max(0, needs[j] - 1) if sunday and j < 2 else needs[j]
+            need = max(0, needs[j] - 1) if d in allowed and j < 2 else needs[j]
             if count < need:
                 fail('coverage', day=d, detail=f'{(420, 600, 1065)[j]}: {count} < {need}')
                 errors[-1].update(time=(420, 600, 1065)[j], actual=count, required=need)
-        if sunday and (counts[0] < needs[0] or counts[1] < needs[1]):
-            reduced += 1
-    if reduced > p['maxReducedSundays']:
-        fail('sunday_limit', detail=f'{reduced} reduced Sundays > {p["maxReducedSundays"]}')
+    if len(reduced) > p['maxReducedSundays']:
+        fail('sunday_limit', detail=f'{len(reduced)} reduced Sundays > {p["maxReducedSundays"]}')
+        errors[-1].update(days=[row[0] for row in reduced], actual=len(reduced), required=p['maxReducedSundays'])
     return errors

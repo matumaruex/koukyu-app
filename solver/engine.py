@@ -70,10 +70,12 @@ def _solve_with_stop_rule(solver, model, min_seconds, after_first):
     return status, bool(stopped), first
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None):
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False):
     """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。"""
     if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
         return {'status': 'INVALID_INPUT', 'errors': ['seconds must be finite and positive']}
+    if type(allow_staffing_shortfall) is not bool:
+        return {'status': 'INVALID_INPUT', 'errors': ['allow_staffing_shortfall must be boolean.']}
     if (min_seconds is None) != (after_first is None):
         return {'status': 'INVALID_INPUT', 'errors': ['min_seconds and after_first must be given together']}
     if min_seconds is not None:
@@ -200,6 +202,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return shift in {420: ('early', 'overtime', 'nightOff'), 600: ('early', 'late', 'overtime'), 1065: ('late', 'overtime', 'night')}[checkpoint]
 
     reduced = []
+    shortfalls = []
     for d in range(n):
         dt = p['start'] + timedelta(days=d)
         required(sum(x[st['id'], d, 'night'] for st in p['staff']) == 1, f'night_{d}', f'{dt}の夜勤1人')
@@ -211,7 +214,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         for j, t in enumerate((420, 600, 1065)):
             count = sum(x[st['id'], d, k] for st in p['staff'] for k in SHIFTS if covers(st, k, t))
             need = counts_required[j]
-            required(count >= need - (relax if j < 2 and need > 0 else 0), f'coverage_{d}_{t}', f'{dt} {t // 60:02}:{t % 60:02}の必要人数{need}人')
+            target = need - (relax if j < 2 and need > 0 else 0)
+            if allow_staffing_shortfall:
+                missing = model.new_int_var(0, need, f'shortfall_{d}_{t}')
+                model.add(count + missing >= target)
+                shortfalls.append(missing)
+            else:
+                required(count >= target, f'coverage_{d}_{t}', f'{dt} {t // 60:02}:{t % 60:02}の必要人数{need}人')
     required(sum(reduced) <= p['maxReducedSundays'], 'sundays', f'日曜の朝昼を1人減らせる日は月{p["maxReducedSundays"]}日以内')
     max_extra = model.new_int_var(-n, n, 'max_extra_off')
     min_extra = model.new_int_var(-n, n, 'min_extra_off')
@@ -222,12 +231,17 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add(max_extra == 0)
         model.add(min_extra == 0)
     required(max_extra - min_extra <= p['maxExtraOffSpread'], 'fairness', f'余分な公休の差は{p["maxExtraOffSpread"]}日以内')
-    if optimize:
+    shortage_weight = 0
+    if optimize or allow_staffing_shortfall:
         # 辞書式優先度：余分な公休の格差 → 余分な公休総数 → 勤務のバランス。
         # 下位項の最大値を超える係数で、公平さを他の点数と交換しない。
         secondary_bound = len(p['staff']) * 3 * n + 5 * n + 1
         spread_weight = (len(p['staff']) * n + 1) * secondary_bound
         objective = (max_extra - min_extra) * spread_weight + sum(extra_off) * secondary_bound + sum(quality)
+        if allow_staffing_shortfall:
+            # 人数不足を最優先で減らす。夜勤・職員の条件・公休の公平性は必須のまま。
+            shortage_weight = n * spread_weight + len(p['staff']) * n * secondary_bound + secondary_bound
+            objective += sum(shortfalls) * shortage_weight
         model.minimize(objective)
         if initial_assignments is not None:
             model.add(objective <= quality_value(p, initial_assignments))
@@ -259,11 +273,20 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return result
     assignments = initial_assignments if keep_previous else {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k])) for d in range(n)} for st in p['staff']}
     errors = validate(raw, assignments)
-    if errors:
+    hard_errors = [e for e in errors if e['code'] not in ('coverage', 'sunday_limit')]
+    if errors and (not allow_staffing_shortfall or hard_errors):
         return {'status': 'VALIDATION_FAILED', 'errors': errors, 'seconds': result['seconds']}
+    is_draft = bool(errors)
+    if is_draft:
+        result['solverStatus'] = result['status']
+        result['status'] = 'DRAFT'
+        result['unmetConditions'] = errors
+        result['staffingShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'coverage')
+        result['shortfallProvenMinimum'] = status == cp_model.OPTIMAL
+        result['explanation'] = '朝昼夕の人数が不足する下書きです。希望休・連勤・夜勤後公休など他の登録条件は守っています。'
     result['assignments'] = assignments
-    result['validationErrors'] = []
-    result['verificationScope'] = 'WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY'
+    result['validationErrors'] = errors
+    result['verificationScope'] = ('DRAFT_' if is_draft else '') + ('WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY')
     extras = {st['id']: sum(k == 'off' for k in assignments[st['id']].values()) - st['monthlyDaysOff'] for st in p['staff']}
     compared = [sid for sid in extras if sid not in p['fairnessExcludedStaff']]
     compared_values = [extras[sid] for sid in compared]
@@ -277,8 +300,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             'nextDay': next_days[0] if next_days else None,
             'nextDays': next_days,
         }
-    if optimize:
-        result['objective'] = quality_value(p, assignments)
+    if optimize or allow_staffing_shortfall:
+        result['objective'] = quality_value(p, assignments) + result.get('staffingShortfallTotal', 0) * shortage_weight
         if not keep_previous:
             result['bestBound'] = solver.best_objective_bound
         if initial_assignments is not None:

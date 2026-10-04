@@ -29,7 +29,10 @@ def dispatch(payload):
         seed = payload.get('seed', 1)
         if type(seed) is not int or not 1 <= seed <= 1000:
             raise ValueError('seed は1〜1000の整数で指定してください。')
+        allow_shortfall = payload.get('allowStaffingShortfall', False)
+        if type(allow_shortfall) is not bool:
+            raise ValueError('allowStaffingShortfall は true か false で指定してください。')
     except (ValueError, TypeError) as exc:
         return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
     rule = {'min_seconds': min(ADAPTIVE_MIN_SECONDS, seconds), 'after_first': ADAPTIVE_AFTER_FIRST} if adaptive else {}
-    return solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), **rule)
+    return solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), allow_staffing_shortfall=allow_shortfall, **rule)
