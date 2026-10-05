@@ -13,7 +13,7 @@ from solver.tests.test_monthly_allocation import exchange_fixture
 
 def fixture():
     p = roomy_fixture(); p['requiredStaff'] = [0, 0, 0]
-    p['requests'] = {'s0': [6, 7, 8, 15, 28]}; p['nightRestRequiredStaff'] = ['s0']
+    p['requests'] = {'s0': [6, 7, 8, 15, 28]}
     p['shiftRequests'] = {'s0': {'1': 'early', '2': 'late', '3': 'overtime'}}
     return p
 
@@ -35,7 +35,7 @@ class RequestedNightRestTests(unittest.TestCase):
         self.assertEqual([r['assignments']['s0'][str(d)] for d in (4,5,6,7,8)],['night','nightOff','off','off','off'])
 
     def test_two_staff_same_block_have_exactly_one_exception(self):
-        p=fixture();p['requests']['s1']=[6];p['nightRestRequiredStaff'].append('s1')
+        p=fixture();p['requests']['s1']=[6]
         for draft in (False,True):
             r=self.checked(p,draft);self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
             self.assertEqual(r['nightRestPreferences']['unmet'][0]['day'],6)
@@ -55,7 +55,9 @@ class RequestedNightRestTests(unittest.TestCase):
         p=fixture();p['requests']['s0']=[6,8];self.assertEqual(len(self.checked(p)['nightRestPreferences']['unmet']),1)
         p=fixture();p['staff'][0]['nightShiftType']='weekday';p['requests']['s0']=[15]
         self.assertEqual(self.checked(p)['nightRestPreferences']['unmet'][0]['day'],15)
-        p['staff'][0]['nightShiftType']='none';self.assertEqual(len(self.checked(p)['nightRestPreferences']['unmet']),1)
+        p['staff'][0]['nightShiftType']='none';r=self.checked(p)
+        self.assertEqual(r['nightRestPreferences']['requestedCount'],0)
+        self.assertEqual(r['nightRestPreferences']['unmet'],[])
 
     def test_first_block_respects_actual_history_and_can_be_ordinary_holiday(self):
         for day,hist,expected in [(1,['off']*5+['night','nightOff'],0),(2,['off']*6+['night'],0),(1,['off']*7,1),(2,['off']*7,1)]:
@@ -87,7 +89,10 @@ class RequestedNightRestTests(unittest.TestCase):
         p['maxExtraOffSpread']=28
         r=self.checked(p,optimize=True);self.assertEqual(r['nightRestPreferences']['unmet'],[])
         self.assertGreater(r['allocation']['overtimeTotal'],0)
-        p['nightRestRequiredStaff']=[];self.assertEqual(self.checked(p,optimize=True)['allocation']['overtimeTotal'],0)
+        # 旧設定が空でも、基本機能として同じ希望を優先する。
+        p['nightRestRequiredStaff']=[];r=self.checked(p,optimize=True)
+        self.assertEqual(r['nightRestPreferences']['unmet'],[])
+        self.assertGreater(r['allocation']['overtimeTotal'],0)
 
     def test_staffing_in_draft_takes_precedence_over_night_rest_preference(self):
         p,a=exchange_fixture()
@@ -128,6 +133,26 @@ class RequestedNightRestTests(unittest.TestCase):
     def test_invalid_selection_and_duplicate_ids_are_rejected(self):
         for value in [True,None,'s0',{},['unknown'],['s0','s0'],[1]]:
             p=fixture();p['nightRestRequiredStaff']=value;self.assertEqual(dispatch({'input':p})['status'],'INVALID_INPUT')
-        p=fixture();del p['nightRestRequiredStaff'];self.assertEqual(normalize(p)['nightRestRequiredStaff'],[])
+        p=fixture();self.assertEqual(normalize(p)['nightRestRequiredStaff'],[st['id'] for st in p['staff']])
+
+    def test_legacy_selection_cannot_turn_off_other_night_staff(self):
+        p=fixture();p['requests']['s1']=[6]
+        for legacy in ([],['s0'],['s1']):
+            p['nightRestRequiredStaff']=legacy
+            r=self.checked(p)
+            self.assertEqual(r['nightRestPreferences']['requestedCount'],4)
+            self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
+
+    def test_part_time_and_no_night_staff_are_not_preference_targets(self):
+        p=fixture();p['staff'][0]['nightShiftType']='none'
+        p['staff'][1].update(type='part',nightShiftType='all',startTime='09:00',endTime='17:00',maxDaysPerWeek=3)
+        p['requests']['s1']=[6]
+        self.assertNotIn('s0',normalize(p)['nightRestRequiredStaff'])
+        self.assertNotIn('s1',normalize(p)['nightRestRequiredStaff'])
+        r=self.checked(p)
+        self.assertEqual(r['nightRestPreferences']['requestedCount'],0)
+        self.assertEqual(r['assignments']['s0']['6'],'off')
+        self.assertEqual(r['assignments']['s1']['6'],'off')
 
 if __name__=='__main__':unittest.main()
+

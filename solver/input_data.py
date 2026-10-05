@@ -82,6 +82,9 @@ def normalize(raw):
     if (not isinstance(selected, list) or any(not isinstance(sid, str) or sid not in ids for sid in selected)
             or len(selected) != len(set(selected))):
         raise ValueError('nightRestRequiredStaff must contain unique registered staff IDs.')
+    # 希望休を夜勤後にするのは基本機能。旧バックアップのオン・オフは使用しない。
+    p['nightRestRequiredStaff'] = [st['id'] for st in p['staff']
+                                   if st['type'] != 'part' and st['nightShiftType'] != 'none']
     p.setdefault('fairnessExcludedStaff', [])
     excluded = p['fairnessExcludedStaff']
     if (not isinstance(excluded, list) or any(not isinstance(sid, str) or sid not in ids for sid in excluded)
@@ -124,3 +127,4 @@ def normalize(raw):
     for sid in ids:
         p['history'].setdefault(sid, ['off'] * 7)
     return p
+
