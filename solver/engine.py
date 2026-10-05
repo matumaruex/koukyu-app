@@ -50,12 +50,16 @@ def _solve_with_stop_rule(solver, model, min_seconds, after_first):
     return status, bool(stopped), first
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False):
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False):
     """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。"""
     if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
         return {'status': 'INVALID_INPUT', 'errors': ['seconds must be finite and positive']}
     if type(allow_staffing_shortfall) is not bool:
         return {'status': 'INVALID_INPUT', 'errors': ['allow_staffing_shortfall must be boolean.']}
+    if type(allow_night_shortfall) is not bool or (allow_night_shortfall and not allow_staffing_shortfall):
+        return {'status': 'INVALID_INPUT', 'errors': ['夜勤未配置は人数不足の下書きでのみ指定できます。']}
+    def permitted_shortfall(e):
+        return e['code'] in ('coverage', 'sunday_limit') or (allow_night_shortfall and e['code'] == 'night_coverage' and e.get('actual') == 0 and e.get('required') == 1)
     if (min_seconds is None) != (after_first is None):
         return {'status': 'INVALID_INPUT', 'errors': ['min_seconds and after_first must be given together']}
     if min_seconds is not None:
@@ -70,7 +74,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
     if initial_assignments is not None:
         errors = validate(raw, initial_assignments)
-        if errors and (not allow_staffing_shortfall or any(e['code'] not in ('coverage', 'sunday_limit') for e in errors)):
+        if errors and (not allow_staffing_shortfall or any(not permitted_shortfall(e) for e in errors)):
             return {'status': 'INVALID_INPUT', 'errors': ['比較する元の表が現在の条件に合いません。'], 'validationErrors': errors}
         initial_assignments = {sid: {str(d): k for d, k in row.items()} for sid, row in initial_assignments.items()}
     model = cp_model.CpModel()
@@ -206,7 +210,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     surpluses = []
     for d in range(n):
         dt = p['start'] + timedelta(days=d)
-        required(sum(x[st['id'], d, 'night'] for st in p['staff']) == 1, f'night_{d}', f'{dt}の夜勤1人')
+        night_count = sum(x[st['id'], d, 'night'] for st in p['staff'])
+        if allow_night_shortfall:
+            missing_night = model.new_bool_var(f'missing_night_{d}')
+            model.add(night_count + missing_night == 1)
+            shortfalls.append(missing_night)
+        else:
+            required(night_count == 1, f'night_{d}', f'{dt}の夜勤1人')
         counts_required = p['dailyRequiredStaff'].get(d + 1, p['requiredStaff'])
         can_reduce = dt.weekday() == 6 and d + 1 not in p['dailyRequiredStaff'] and p['maxReducedSundays'] > 0
         relax = model.new_bool_var(f'reduced_{d}') if can_reduce else 0
@@ -247,7 +257,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add(min_extra >= initial_metric['commonExtraDaysOff'])
     shortage_weight = weights(p)[1]
     initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
-                           if e['code'] == 'coverage') if initial_metric is not None else 0
+                           if e['code'] in ('coverage', 'night_coverage')) if initial_metric is not None else 0
     # 希望件数を上位に掛けた巨大な係数を避け、優先希望のある入力だけ二段階で解く。
     # 第1段階：人数不足（下書きのみ）→夜勤後にできない希望休の件数。
     # 第2段階：第1段階の結果を維持し、月全体の残業・配置を改善する。
@@ -362,7 +372,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['nightRestPreferences'] = preferences
     result['preferencePriorityProven'] = priority_proven
     errors = validate(raw, assignments)
-    hard_errors = [e for e in errors if e['code'] not in ('coverage', 'sunday_limit')]
+    hard_errors = [e for e in errors if not permitted_shortfall(e)]
     if errors and (not allow_staffing_shortfall or hard_errors):
         return {'status': 'VALIDATION_FAILED', 'errors': errors, 'seconds': result['seconds']}
     is_draft = bool(errors)
@@ -370,9 +380,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         result['solverStatus'] = result['status']
         result['status'] = 'DRAFT'
         result['unmetConditions'] = errors
-        result['staffingShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'coverage')
+        result['staffingShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
+        result['nightShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
+        result['daytimeShortfallTotal'] = result['staffingShortfallTotal'] - result['nightShortfallTotal']
         result['shortfallProvenMinimum'] = priority_proven if preference_misses else status == cp_model.OPTIMAL
-        result['explanation'] = '朝昼夕の人数が不足する下書きです。希望休・連勤・夜勤後公休など他の登録条件は守っています。'
+        result['explanation'] = '人数不足・夜勤未配置のある下書きです。希望休・希望勤務・勤務資格・連勤・実際の夜勤後公休は守っています。'
     result['assignments'] = assignments
     result['validationErrors'] = errors
     result['verificationScope'] = ('DRAFT_' if is_draft else '') + ('WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY')

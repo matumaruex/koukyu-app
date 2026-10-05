@@ -36,8 +36,11 @@ def dispatch(payload):
         allow_shortfall = payload.get('allowStaffingShortfall', False)
         if type(allow_shortfall) is not bool:
             raise ValueError('allowStaffingShortfall は true か false で指定してください。')
+        allow_night_shortfall = payload.get('allowNightShortfall', False)
+        if type(allow_night_shortfall) is not bool or (allow_night_shortfall and not allow_shortfall):
+            raise ValueError('夜勤未配置は人数不足の下書きでのみ指定できます。')
     except (ValueError, TypeError) as exc:
         return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
     # 下書きは人数不足を減らすために上限まで探す。最初の候補だけで切り上げない。
     rule = {'min_seconds': min(ADAPTIVE_MIN_SECONDS, seconds), 'after_first': ADAPTIVE_AFTER_FIRST} if adaptive and not allow_shortfall else {}
-    return solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), allow_staffing_shortfall=allow_shortfall, **rule)
+    return solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), allow_staffing_shortfall=allow_shortfall, allow_night_shortfall=allow_night_shortfall, **rule)

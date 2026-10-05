@@ -114,6 +114,7 @@ def validate(raw, assignments):
                 counts[j] += span[0] <= t < span[1]
         if night_count != 1:
             fail('night_coverage', day=d, detail=f'{night_count} night staff')
+            errors[-1].update(actual=night_count, required=1)
         needs = p['dailyRequiredStaff'].get(d, p['requiredStaff'])
         sunday = dt.weekday() == 6 and d not in p['dailyRequiredStaff'] and p['maxReducedSundays'] > 0
         coverage_days.append((d, counts, needs, sunday))
