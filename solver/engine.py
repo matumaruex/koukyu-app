@@ -25,10 +25,13 @@ class _FirstSolution(cp_model.CpSolverSolutionCallback):
             self.first = time.monotonic()
 
 
-def _solve_with_stop_rule(solver, model, min_seconds, after_first):
+def _solve_with_stop_rule(solver, model, min_seconds, after_first, *, tracker=None, start=None):
     """min_seconds 経過し、かつ最初の表から after_first 秒たったら探索を止める。
     表が見つからない間は max_time_in_seconds まで探す。最適・不成立を証明できればその時点で終わる。"""
-    tracker, done, start = _FirstSolution(), threading.Event(), time.monotonic()
+    # 複数段階でも、全体の開始時刻と最初の採用可能な表を引き継ぐ。
+    tracker = tracker if tracker is not None else _FirstSolution()
+    start = time.monotonic() if start is None else start
+    done = threading.Event()
     stopped = []
 
     def watch():
@@ -331,6 +334,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k]))
                            for d in range(n)} for st in p['staff']}
     stop_rule = min_seconds is not None
+    search_start, tracker = time.monotonic(), _FirstSolution()
+    if stop_rule and initial_assignments is not None:
+        # 検査済みの元の表も候補。新しい表が見つからなくても早く返せる。
+        tracker.first = search_start
     stopped_early, first_seconds = False, None
     priority_proven, priority_value = False, None
     phase_seconds, phase_candidate, lower_bound = 0, None, None
@@ -340,7 +347,17 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if preference_misses:
         if objective is not None:
             # 表が出ない間は全上限まで探す。最初の表が出れば残り時間を配置改善へ回す。
-            status, _, _ = _solve_with_stop_rule(solver, model, min(seconds / 3, 15), min(3, seconds / 4))
+            phase_min, phase_after = min(seconds / 3, 15), min(3, seconds / 4)
+            if stop_rule:
+                phase_min, phase_after = min(phase_min, min_seconds), min(phase_after, after_first)
+                if initial_assignments is not None:
+                    # この段階で候補が出なくても元の表を返す。全体の終了条件を守る。
+                    phase_min, phase_after = min_seconds, after_first
+            status, phase_stopped, first_seconds = _solve_with_stop_rule(
+                solver, model, phase_min, phase_after, tracker=tracker, start=search_start)
+        elif stop_rule:
+            status, stopped_early, first_seconds = _solve_with_stop_rule(
+                solver, model, min_seconds, after_first, tracker=tracker, start=search_start)
         else:
             status = solver.solve(model)
         phase_seconds = solver.wall_time
@@ -364,35 +381,48 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 if (initial_priority == priority_value
                         and quality_value(p, phase_candidate) > quality_value(p, initial_assignments)):
                     phase_candidate = initial_assignments
-                solver = new_solver(max(0.000001, seconds - phase_seconds))
-                if stop_rule:
-                    status, stopped_early, first_seconds = _solve_with_stop_rule(
-                        solver, model, max(0, min_seconds - phase_seconds), after_first)
-                    if first_seconds is not None:
-                        first_seconds += phase_seconds
+                early_deadline = (max(search_start + min_seconds, tracker.first + after_first)
+                                  if stop_rule and tracker.first is not None else None)
+                if early_deadline is not None and time.monotonic() >= early_deadline:
+                    # 第1段階の表を返す。配置の最適性までは証明していない。
+                    status, stopped_early = cp_model.FEASIBLE, True
+                    elapsed = phase_seconds
                 else:
-                    status = solver.solve(model)
-                lower_bound = solver.best_objective_bound
-                if status == cp_model.UNKNOWN:
-                    status = cp_model.FEASIBLE
-                elif status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
-                    phase_candidate = extract(solver)
-                else:
-                    return {'status': 'VALIDATION_FAILED', 'errors': ['配置改善の計算を確認できませんでした。元の表は変更していません。']}
+                    solver = new_solver(max(0.000001, seconds - (time.monotonic() - search_start)))
+                    if stop_rule:
+                        status, stopped_early, first_seconds = _solve_with_stop_rule(
+                            solver, model, min_seconds, after_first, tracker=tracker, start=search_start)
+                    else:
+                        status = solver.solve(model)
+                    lower_bound = solver.best_objective_bound
+                    if status == cp_model.UNKNOWN:
+                        status = cp_model.FEASIBLE
+                    elif status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+                        phase_candidate = extract(solver)
+                    else:
+                        return {'status': 'VALIDATION_FAILED', 'errors': ['配置改善の計算を確認できませんでした。元の表は変更していません。']}
+                    elapsed = phase_seconds + solver.wall_time
                 if not priority_proven:
                     status = cp_model.FEASIBLE
-            # 2段階の時間の合計。最適化なしの場合は第1段階だけ。
-            elapsed = phase_seconds + (solver.wall_time if objective is not None else 0)
+            else:
+                elapsed = phase_seconds
         else:
             elapsed = phase_seconds
+            if stop_rule and objective is not None:
+                stopped_early = phase_stopped
     else:
         if stop_rule:
-            status, stopped_early, first_seconds = _solve_with_stop_rule(solver, model, min_seconds, after_first)
+            status, stopped_early, first_seconds = _solve_with_stop_rule(
+                solver, model, min_seconds, after_first, tracker=tracker, start=search_start)
         else:
             status = solver.solve(model)
         elapsed = solver.wall_time
         lower_bound = solver.best_objective_bound
     result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
+    reason = ('early_return' if stopped_early else 'optimal' if status == cp_model.OPTIMAL
+              else 'infeasible' if status == cp_model.INFEASIBLE
+              else 'time_limit' if elapsed >= seconds - 0.1 else 'completed')
+    result['timing'] = {'mode': 'adaptive' if stop_rule else 'full', 'maxSeconds': seconds, 'reason': reason}
     if stop_rule:
         result['stopRule'] = {'minSeconds': min_seconds, 'afterFirst': after_first, 'stoppedEarly': stopped_early, 'firstSolutionSeconds': first_seconds}
     keep_previous = status == cp_model.UNKNOWN and initial_assignments is not None
@@ -482,3 +512,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
