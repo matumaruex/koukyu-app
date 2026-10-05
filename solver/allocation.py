@@ -1,6 +1,6 @@
 """月全体の残業・配置を評価する。完成表の独立検査とは別の計算。"""
 
-POLICY = 'ab-ratio-1'
+POLICY = 'night-rest-default-1'
 CHECKPOINTS = (420, 600, 1065)
 
 
@@ -93,3 +93,4 @@ def quality_value(p, assignments):
     terms = (m['overtimeTotal'], m['surplusTotal'], m['overtimeSpread'],
              p['days'] - m['commonExtraDaysOff'], m['minor'])
     return sum(v * w for v, w in zip(terms, weights(p)[0]))
+
