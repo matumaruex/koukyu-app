@@ -9,7 +9,7 @@ from pathlib import Path
 from ortools.sat.python import cp_model
 from .input_data import normalize, SHIFTS
 from .validator import validate
-from .allocation import POLICY, covers, metrics, weights, quality_value
+from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit
 from .night_preferences import report as preference_report
 
 
@@ -116,7 +116,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     quality = []
     extra_off = []
     compared_extra_off = []
-    night_totals = []
+    night_totals, ab_totals = [], []
     overtime_totals, overtime_squares = [], []
     for i, st in enumerate(p['staff']):
         sid = st['id']
@@ -179,9 +179,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if sid not in p['fairnessExcludedStaff']:
             compared_extra_off.append(extra)
         if st['type'] != 'part' and st['canOvertime']:
-            total_ot = model.new_int_var(0, n, sid + '_ot_total')
+            total_ot = model.new_int_var(0, min(6, n), sid + '_ot_total')
             model.add(total_ot == ot)
-            square = model.new_int_var(0, n * n, sid + '_ot_square')
+            square = model.new_int_var(0, min(6, n) ** 2, sid + '_ot_square')
             model.add_multiplication_equality(square, [total_ot, total_ot])
             overtime_totals.append(total_ot)
             overtime_squares.append(square)
@@ -190,20 +190,48 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             for monday in sorted(mondays):
                 required(sum(working(sid, d) for d in range(monday, min(n, monday + 7))) <= st['maxDaysPerWeek'], sid + '_weekly', label + f'の週{st["maxDaysPerWeek"]}日以内（月曜始まり）')
         else:
-            if st['dayShiftType'] == 'both':
-                diff = model.new_int_var(0, n, sid + '_ab_difference')
-                model.add_abs_equality(diff, sum(x[sid, d, 'early'] - x[sid, d, 'late'] for d in range(n)))
-                quality.append(2 * diff)
+            if st['dayShiftType'] == 'both' and (optimize or allow_staffing_shortfall):
+                a = model.new_int_var(0, n, sid + '_a_total')
+                b = model.new_int_var(0, n, sid + '_b_total')
+                model.add(a == sum(x[sid, d, 'early'] for d in range(n)))
+                model.add(b == sum(x[sid, d, 'late'] for d in range(n)))
+                ab_totals.append((sid, a, b))
             if nt != 'none':
                 total = model.new_int_var(0, n, sid + '_night_total')
                 model.add(total == sum(x[sid, d, 'night'] for d in range(n)))
                 night_totals.append(total)
 
+    night_spread = 0
     if night_totals:
         high, low = model.new_int_var(0, n, 'night_high'), model.new_int_var(0, n, 'night_low')
         model.add_max_equality(high, night_totals)
         model.add_min_equality(low, night_totals)
-        quality.append(5 * (high - low))
+        night_spread = high - low
+        quality.append((100 * len(p['staff']) + 1) * night_spread)
+
+    if ab_totals:
+        def percentage(a, b, maximum, name):
+            days = model.new_int_var(0, maximum, name + '_days')
+            denominator = model.new_int_var(1, max(1, maximum), name + '_denominator')
+            percent = model.new_int_var(0, 100, name + '_percent')
+            model.add(days == a + b)
+            model.add_max_equality(denominator, [1, days])
+            # 1%単位で四捨五入。A残・明け・公休は分母に含めない。
+            model.add_division_equality(percent, 200 * a + days, 2 * denominator)
+            return days, percent
+        _, target = percentage(sum(a for _, a, _ in ab_totals),
+                               sum(b for _, _, b in ab_totals), n * len(ab_totals), 'ab_pool')
+        for sid, a, b in ab_totals:
+            days, percent = percentage(a, b, n, sid + '_ab')
+            active = model.new_bool_var(sid + '_ab_active')
+            model.add(days >= 1).only_enforce_if(active)
+            model.add(days == 0).only_enforce_if(active.Not())
+            difference = model.new_int_var(0, 100, sid + '_ab_difference')
+            model.add_abs_equality(difference, percent - target)
+            deviation = model.new_int_var(0, 100, sid + '_ab_deviation')
+            model.add(deviation == difference).only_enforce_if(active)
+            model.add(deviation == 0).only_enforce_if(active.Not())
+            quality.append(deviation)
 
     reduced = []
     shortfalls = []
@@ -252,12 +280,21 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add_min_equality(low_ot, overtime_totals)
         overtime_range = high_ot - low_ot
     initial_metric = metrics(p, initial_assignments) if initial_assignments is not None else None
+    initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
+                           if e['code'] in ('coverage', 'night_coverage')) if initial_metric is not None else 0
+    preserved_night_spread = None
     if initial_metric is not None:
         # 全員に配れている追加公休を、残業削減のために取り上げない。
         model.add(min_extra >= initial_metric['commonExtraDaysOff'])
+        if not preference_misses:
+            guard = model.add(night_spread <= initial_metric['nightSpread'])
+            if initial_shortage and shortfalls:
+                same_shortage = model.new_bool_var('preserve_nights_at_same_shortage')
+                model.add(sum(shortfalls) >= initial_shortage).only_enforce_if(same_shortage)
+                model.add(sum(shortfalls) < initial_shortage).only_enforce_if(same_shortage.Not())
+                guard.only_enforce_if(same_shortage)
+            preserved_night_spread = initial_metric['nightSpread']
     shortage_weight = weights(p)[1]
-    initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
-                           if e['code'] in ('coverage', 'night_coverage')) if initial_metric is not None else 0
     # 希望件数を上位に掛けた巨大な係数を避け、優先希望のある入力だけ二段階で解く。
     # 第1段階：人数不足（下書きのみ）→夜勤後にできない希望休の件数。
     # 第2段階：第1段階の結果を維持し、月全体の残業・配置を改善する。
@@ -267,7 +304,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                         + len(initial_preferences['unmet'])) if initial_preferences is not None else None
     objective = None
     if optimize or allow_staffing_shortfall:
-        minor = ((max_extra - min_extra) * (36 * len(p['staff']) + 2 * len(p['staff']) * n + 5 * n + 1)
+        minor = ((max_extra - min_extra) * minor_unit(p)
                  + sum(overtime_squares) + sum(quality))
         terms = (sum(overtime_totals), sum(surpluses), overtime_range, n - min_extra, minor)
         objective = sum(term * weight for term, weight in zip(terms, weights(p)[0]))
@@ -316,6 +353,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 model.minimize(objective)
                 if initial_priority == priority_value:
                     model.add(objective <= quality_value(p, initial_assignments))
+                    model.add(night_spread <= initial_metric['nightSpread'])
+                    preserved_night_spread = initial_metric['nightSpread']
+                    if metrics(p, phase_candidate)['nightSpread'] > preserved_night_spread:
+                        phase_candidate = initial_assignments
                 model.clear_hints()
                 for (sid, d, shift), variable in x.items():
                     model.add_hint(variable, int(phase_candidate[sid][str(d + 1)] == shift))
@@ -399,6 +440,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if preference_misses:
         result['allocation']['minimumOvertimeScope'] = 'WITH_MINIMUM_NIGHT_REST_EXCEPTIONS'
     result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
+    if not preference_misses and result.get('staffingShortfallTotal', 0) < initial_shortage:
+        preserved_night_spread = None
+    result['allocation']['preservedNightSpread'] = preserved_night_spread
     if initial_metric is not None:
         result['allocation']['before'] = initial_metric
         result['allocation']['overtimeReducedBy'] = initial_metric['overtimeTotal'] - result['allocation']['overtimeTotal']
