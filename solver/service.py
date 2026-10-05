@@ -2,6 +2,7 @@
 from .engine import solve
 from .input_data import normalize
 from .validator import validate
+from .night_preferences import report
 
 ADAPTIVE_MIN_SECONDS = 15
 ADAPTIVE_AFTER_FIRST = 10
@@ -17,7 +18,10 @@ def dispatch(payload):
             raise ValueError('40人以内で指定してください。')
         if payload.get('action') == 'validate':
             errors = validate(raw, payload.get('assignments'))
-            return {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete']}
+            result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete']}
+            if not any(e['code'] == 'structure' for e in errors):
+                result['nightRestPreferences'] = report(p, payload['assignments'])
+            return result
         seconds = payload.get('seconds', 15)
         if type(seconds) not in (int, float) or not 0 < seconds <= 60:
             raise ValueError('計算時間は1〜60秒にしてください。')

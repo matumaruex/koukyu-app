@@ -10,6 +10,7 @@ from ortools.sat.python import cp_model
 from .input_data import normalize, SHIFTS
 from .validator import validate
 from .allocation import POLICY, covers, metrics, weights, quality_value
+from .night_preferences import report as preference_report
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -107,6 +108,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     def working(sid, d):
         return 1 - value(sid, d, 'off') - value(sid, d, 'nightOff')
 
+    preference_misses = []
     quality = []
     extra_off = []
     compared_extra_off = []
@@ -138,11 +140,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             if d + 1 in p['requests'].get(sid, []):
                 required(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休')
                 if sid in p['nightRestRequiredStaff'] and d not in p['requests'].get(sid, []):
-                    # 連続する希望休の先頭のみ。期間冒頭は前期の実績に接続する。
-                    key = f'{sid}_requested_night_rest_{d}'
-                    description = label + f'の{dt}の希望休は夜勤→明け→公休（連休は初日）'
-                    required(value(sid, d - 2, 'night') == 1, key, description)
-                    required(value(sid, d - 1, 'nightOff') == 1, key, description)
+                    # この逆向きの指定だけは優先希望。実際の夜勤→明け→公休は必須のまま。
+                    missed = model.new_bool_var(f'{sid}_preferred_night_rest_{d}')
+                    model.add(missed >= 1 - value(sid, d - 2, 'night'))
+                    model.add(missed >= 1 - value(sid, d - 1, 'nightOff'))
+                    model.add(missed <= 2 - value(sid, d - 2, 'night') - value(sid, d - 1, 'nightOff'))
+                    preference_misses.append(missed)
             requested = p['shiftRequests'].get(sid, {}).get(d + 1)
             if requested is not None:
                 shift_label = {'early': 'A（早出）', 'late': 'B（遅出）', 'overtime': 'A残', 'night': '夜勤', 'part': 'P'}[requested]
@@ -245,32 +248,100 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     shortage_weight = weights(p)[1]
     initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
                            if e['code'] == 'coverage') if initial_metric is not None else 0
+    # 希望件数を上位に掛けた巨大な係数を避け、優先希望のある入力だけ二段階で解く。
+    # 第1段階：人数不足（下書きのみ）→夜勤後にできない希望休の件数。
+    # 第2段階：第1段階の結果を維持し、月全体の残業・配置を改善する。
+    priority = sum(shortfalls) * (len(preference_misses) + 1) + sum(preference_misses)
+    initial_preferences = preference_report(p, initial_assignments) if initial_assignments is not None else None
+    initial_priority = (initial_shortage * (len(preference_misses) + 1)
+                        + len(initial_preferences['unmet'])) if initial_preferences is not None else None
+    objective = None
     if optimize or allow_staffing_shortfall:
-        # 月全体：不足 → 残業総数 → 人数超過 → 残業の偏り → 全員の追加公休 → その他のバランス。
-        # 公休差の設定は必須のまま。部分的な追加公休やA/B合わせのために残業を増やさない。
         minor = ((max_extra - min_extra) * (36 * len(p['staff']) + 2 * len(p['staff']) * n + 5 * n + 1)
                  + sum(overtime_squares) + sum(quality))
         terms = (sum(overtime_totals), sum(surpluses), overtime_range, n - min_extra, minor)
         objective = sum(term * weight for term, weight in zip(terms, weights(p)[0]))
-        if allow_staffing_shortfall:
+        if not preference_misses and allow_staffing_shortfall:
             objective += sum(shortfalls) * shortage_weight
+    if preference_misses:
+        model.minimize(priority)
+        if initial_priority is not None:
+            model.add(priority <= initial_priority)
+    elif objective is not None:
         model.minimize(objective)
         if initial_assignments is not None:
             model.add(objective <= quality_value(p, initial_assignments) + initial_shortage * shortage_weight)
     if initial_assignments is not None:
         for (sid, d, shift), variable in x.items():
             model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = seconds
-    solver.parameters.random_seed = seed
-    # 通常作成は原因診断・再現性を優先。下書きは複数の探索で不足を減らす。
-    solver.parameters.num_search_workers = 4 if allow_staffing_shortfall else 1
+    def new_solver(limit):
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = limit
+        solver.parameters.random_seed = seed
+        solver.parameters.num_search_workers = 4 if allow_staffing_shortfall else 1
+        return solver
+    def extract(solver):
+        return {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k]))
+                           for d in range(n)} for st in p['staff']}
     stop_rule = min_seconds is not None
-    if stop_rule:
-        status, stopped_early, first_seconds = _solve_with_stop_rule(solver, model, min_seconds, after_first)
+    stopped_early, first_seconds = False, None
+    priority_proven, priority_value = False, None
+    phase_seconds, phase_candidate, lower_bound = 0, None, None
+    # 時間内に最少を証明できなければ、見つかった表の件数を維持して改善する。
+    # 第2段階だけが最適でも全体の最適・希望件数の最少とは説明しない。
+    solver = new_solver(seconds)
+    if preference_misses:
+        if objective is not None:
+            # 表が出ない間は全上限まで探す。最初の表が出れば残り時間を配置改善へ回す。
+            status, _, _ = _solve_with_stop_rule(solver, model, min(seconds / 3, 15), min(3, seconds / 4))
+        else:
+            status = solver.solve(model)
+        phase_seconds = solver.wall_time
+        if status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+            phase_candidate = extract(solver)
+            priority_value = int(solver.value(priority))
+            priority_proven = status == cp_model.OPTIMAL
+            model.add(priority == priority_value)
+            if objective is not None:
+                model.minimize(objective)
+                if initial_priority == priority_value:
+                    model.add(objective <= quality_value(p, initial_assignments))
+                model.clear_hints()
+                for (sid, d, shift), variable in x.items():
+                    model.add_hint(variable, int(phase_candidate[sid][str(d + 1)] == shift))
+                # 第2段階が時間切れなら、その段階の比較上限を守る表を返す。
+                if (initial_priority == priority_value
+                        and quality_value(p, phase_candidate) > quality_value(p, initial_assignments)):
+                    phase_candidate = initial_assignments
+                solver = new_solver(max(0.000001, seconds - phase_seconds))
+                if stop_rule:
+                    status, stopped_early, first_seconds = _solve_with_stop_rule(
+                        solver, model, max(0, min_seconds - phase_seconds), after_first)
+                    if first_seconds is not None:
+                        first_seconds += phase_seconds
+                else:
+                    status = solver.solve(model)
+                lower_bound = solver.best_objective_bound
+                if status == cp_model.UNKNOWN:
+                    status = cp_model.FEASIBLE
+                elif status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+                    phase_candidate = extract(solver)
+                else:
+                    return {'status': 'VALIDATION_FAILED', 'errors': ['配置改善の計算を確認できませんでした。元の表は変更していません。']}
+                if not priority_proven:
+                    status = cp_model.FEASIBLE
+            # 2段階の時間の合計。最適化なしの場合は第1段階だけ。
+            elapsed = phase_seconds + (solver.wall_time if objective is not None else 0)
+        else:
+            elapsed = phase_seconds
     else:
-        status = solver.solve(model)
-    result = {'status': solver.status_name(status), 'seconds': round(solver.wall_time, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
+        if stop_rule:
+            status, stopped_early, first_seconds = _solve_with_stop_rule(solver, model, min_seconds, after_first)
+        else:
+            status = solver.solve(model)
+        elapsed = solver.wall_time
+        lower_bound = solver.best_objective_bound
+    result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
     if stop_rule:
         result['stopRule'] = {'minSeconds': min_seconds, 'afterFirst': after_first, 'stoppedEarly': stopped_early, 'firstSolutionSeconds': first_seconds}
     keep_previous = status == cp_model.UNKNOWN and initial_assignments is not None
@@ -283,7 +354,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if status not in (cp_model.FEASIBLE, cp_model.OPTIMAL) and not keep_previous:
         result['explanation'] = '時間内に成立する表を確認できませんでした。不可能と判定したわけではありません。'
         return result
-    assignments = initial_assignments if keep_previous else {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k])) for d in range(n)} for st in p['staff']}
+    assignments = initial_assignments if keep_previous else phase_candidate if phase_candidate is not None else extract(solver)
+    preferences = preference_report(p, assignments)
+    if preference_misses and not keep_previous and len(preferences['unmet']) != priority_value % (len(preference_misses) + 1):
+        return {'status': 'VALIDATION_FAILED', 'errors': ['希望休の確認結果が計算と一致しません。']}
+    preferences['minimumUnmetProven'] = bool(not preferences['unmet'] or priority_proven)
+    result['nightRestPreferences'] = preferences
+    result['preferencePriorityProven'] = priority_proven
     errors = validate(raw, assignments)
     hard_errors = [e for e in errors if e['code'] not in ('coverage', 'sunday_limit')]
     if errors and (not allow_staffing_shortfall or hard_errors):
@@ -294,7 +371,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         result['status'] = 'DRAFT'
         result['unmetConditions'] = errors
         result['staffingShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'coverage')
-        result['shortfallProvenMinimum'] = status == cp_model.OPTIMAL
+        result['shortfallProvenMinimum'] = priority_proven if preference_misses else status == cp_model.OPTIMAL
         result['explanation'] = '朝昼夕の人数が不足する下書きです。希望休・連勤・夜勤後公休など他の登録条件は守っています。'
     result['assignments'] = assignments
     result['validationErrors'] = errors
@@ -307,6 +384,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['optimizationPolicy'] = POLICY
     result['allocation'] = metrics(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool((optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
+    if preference_misses:
+        result['allocation']['minimumOvertimeScope'] = 'WITH_MINIMUM_NIGHT_REST_EXCEPTIONS'
     result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
     if initial_metric is not None:
         result['allocation']['before'] = initial_metric
@@ -321,10 +400,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         }
     if optimize or allow_staffing_shortfall:
         result['objective'] = quality_value(p, assignments) + result.get('staffingShortfallTotal', 0) * shortage_weight
-        if not keep_previous:
-            result['bestBound'] = solver.best_objective_bound
+        if not keep_previous and lower_bound is not None:
+            result['bestBound'] = lower_bound
+            if preference_misses:
+                result['bestBoundScope'] = 'FIXED_PREFERENCE_PRIORITY'
         if initial_assignments is not None:
-            result['improved'] = result['objective'] < quality_value(p, initial_assignments) + initial_shortage * shortage_weight
+            old_quality = quality_value(p, initial_assignments) + initial_shortage * shortage_weight
+            result['improved'] = ((initial_shortage, len(initial_preferences['unmet']), old_quality)
+                                  > (result.get('staffingShortfallTotal', 0), len(preferences['unmet']), result['objective']))
     return result
 
 
