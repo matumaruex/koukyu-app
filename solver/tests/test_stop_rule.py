@@ -62,15 +62,26 @@ class StopRuleTests(unittest.TestCase):
         self.assertLess(r['seconds'], 59)
         self.assertEqual(validate(raw, r['assignments']), [])
 
-    def test_draft_does_not_stop_just_after_first_candidate(self):
+    def test_normal_draft_receives_the_stop_rule(self):
         raw = next(cases())[1]
         with patch('solver.service.solve', return_value={'status': 'UNKNOWN'}) as calculation:
             dispatch({'input': raw, 'seconds': 60, 'adaptive': True, 'allowStaffingShortfall': True})
         self.assertEqual(calculation.call_args.kwargs['seconds'], 60)
         self.assertTrue(calculation.call_args.kwargs['allow_staffing_shortfall'])
+        self.assertEqual(calculation.call_args.kwargs['min_seconds'], 15)
+        self.assertEqual(calculation.call_args.kwargs['after_first'], 10)
+
+    def test_extended_draft_keeps_the_full_time_budget(self):
+        raw = next(cases())[1]
+        with patch('solver.service.solve', return_value={'status': 'UNKNOWN'}) as calculation:
+            dispatch({'input': raw, 'seconds': 60, 'adaptive': False,
+                      'allowStaffingShortfall': True, 'allowNightShortfall': True})
+        self.assertEqual(calculation.call_args.kwargs['seconds'], 60)
+        self.assertTrue(calculation.call_args.kwargs['allow_night_shortfall'])
         self.assertNotIn('min_seconds', calculation.call_args.kwargs)
         self.assertNotIn('after_first', calculation.call_args.kwargs)
 
 
 if __name__ == '__main__':
     unittest.main()
+
