@@ -38,3 +38,6 @@
 
 /* 勤務の集計：同じ列を縦に見比べられるよう、勤務別の色で区別。 */
 .month-table .count-night{background:#e9eefe;color:#384675}.month-table .count-early{background:#eef5e6;color:#416727}.month-table .count-late{background:#e6f2f7;color:#376575}
+
+/* 今期に入れる職員：登録と希望を残して期間ごとに切り替える。 */
+.staff-main{flex:1;min-width:0}.participation-toggle{margin:10px 0 0;gap:8px;font-size:14px;cursor:pointer;flex-wrap:wrap;min-height:44px}.participation-toggle input{appearance:none;-webkit-appearance:none;flex-shrink:0;position:relative;width:44px;height:26px;border:1px solid #81968b;border-radius:20px;background:#e6eae4;margin:0;cursor:pointer}.participation-toggle input::before{content:'';position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#687a6e}.participation-toggle input:checked{background:#276652;border-color:#276652}.participation-toggle input:checked::before{background:white;transform:translateX(18px)}.participation-toggle input:focus-visible{outline:3px solid #8baf9e;outline-offset:3px}.participation-status{font-weight:700;color:#526357}.not-in-period .participation-status{color:#755e43}.not-in-period{background:#faf9f5}
