@@ -35,3 +35,6 @@
 
 /* 作成は表より上に常時表示し、操作時の移動先に余白を取る。 */
 #creation-panel,#roster-result,#notice{scroll-margin-top:12px}#creation-panel:focus,#roster-result:focus{outline:none}.creation-actions{margin-bottom:18px}.creation-actions>.wide:first-child{margin-top:0}
+
+/* 勤務の集計：同じ列を縦に見比べられるよう、勤務別の色で区別。 */
+.month-table .count-night{background:#e9eefe;color:#384675}.month-table .count-early{background:#eef5e6;color:#416727}.month-table .count-late{background:#e6f2f7;color:#376575}
