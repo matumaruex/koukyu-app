@@ -1,4 +1,4 @@
-"""条件 → 残業 → 配置の順に改善する。
+"""条件 → 残業合計 → 残業回数差 → 配置の順に改善する。
 各段階は、最少と証明できたとき、または一定時間良くならなかったときに次の段階へ進む。
 証明を待ち続けて次の段階に届かない、時間で区切って良くなっている途中で打ち切る、の両方を避けるため。
 60秒ずつの呼び出しに分けても続きから再開できるよう、段階と「最後に良くなってからの秒数」を返す。"""
@@ -7,12 +7,13 @@ import time
 from ortools.sat.python import cp_model
 from .allocation import metrics, quality_value
 
-STAGES = ('conditions', 'overtime', 'placement')
+STAGES = ('conditions', 'overtime', 'overtime_fairness', 'placement')
 # 何秒良くならなかったら次の段階へ進むか。2026年10月の実測（偽名11人の設定・5条件）で、
 # 改善と改善の間隔は最大で 条件26秒・残業21秒・配置9秒だったが、人数不足が出る月は条件段階で
 # 30秒以上空いてから不足が減った例があった。人数不足は最優先なので条件段階は長めにとる。
 # 夜勤を必須にすると、不足のない月の条件段階は数秒で証明できるため、長くしても待ち時間は増えない。
-IDLE_SECONDS = {'conditions': 60, 'overtime': 40, 'placement': 30}
+# 残業回数差の30秒は配置段階に合わせた初期設定。公平化段階の実測に基づく値ではない。
+IDLE_SECONDS = {'conditions': 60, 'overtime': 40, 'overtime_fairness': 30, 'placement': 30}
 
 
 class Progress(cp_model.CpSolverSolutionCallback):
@@ -35,7 +36,7 @@ class Progress(cp_model.CpSolverSolutionCallback):
 
 
 def search(model, p, *, seconds, priority, objective, overtime, new_solver,
-           extract, priority_of, initial_assignments=None, resume=None, idle_seconds=None):
+           extract, priority_of, overtime_spread=None, initial_assignments=None, resume=None, idle_seconds=None):
     limits = dict(IDLE_SECONDS, **(idle_seconds or {}))
     start = time.monotonic()
     resume = resume or {}
@@ -48,7 +49,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     idle = float(resume.get('idle', 0))
     pending = None
     priority_bound = lower_bound = last_quality_improvement = None
-    exprs = {'conditions': priority, 'overtime': overtime, 'placement': objective}
+    exprs = {'conditions': priority, 'overtime': overtime,
+             'overtime_fairness': overtime_spread, 'placement': objective}
 
     def remaining():
         return max(0.0, seconds - (time.monotonic() - start))
@@ -61,6 +63,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             return priority_of(a)
         if name == 'overtime':
             return metrics(p, a)['overtimeTotal']
+        if name == 'overtime_fairness':
+            return metrics(p, a)['overtimeSpread']
         return quality_value(p, a)
 
     def hints():
@@ -124,8 +128,15 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             break
         if candidate is not None and name != 'conditions':
             model.add(objective <= quality_value(p, candidate))
-            if name == 'overtime':
-                model.add(overtime <= metrics(p, candidate)['overtimeTotal'])
+            # 公平化や配置のために残業合計を増やさない。通信をまたいでも維持する。
+            current = metrics(p, candidate)
+            model.add(overtime <= current['overtimeTotal'])
+            if proven.get('overtime'):
+                # 最少合計が証明済みなら固定し、算術的な回数差の下限もモデルへ伝える。
+                model.add(overtime == current['overtimeTotal'])
+                if name == 'overtime_fairness' and overtime_spread is not None:
+                    count = len(current['overtimeByStaff'])
+                    model.add(overtime_spread >= int(bool(count) and current['overtimeTotal'] % count != 0))
         progress, stalled = run(name, expression, idle)
         if name == 'conditions' and status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
             priority_bound = solver.best_objective_bound
@@ -158,6 +169,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
         solver = cp_model.CpSolver()
     priority_proven = priority is None or bool(proven.get('conditions'))
     overtime_proven = priority_proven and bool(proven.get('overtime'))
+    overtime_spread_proven = overtime_proven and bool(proven.get('overtime_fairness'))
     major_ready = False
     if candidate is not None:
         m = metrics(p, candidate)
@@ -171,7 +183,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     return {'solver': solver, 'status': status, 'candidate': candidate,
             'priorityProven': priority_proven,
             'priorityValue': priority_of(candidate) if candidate is not None and priority is not None else None,
-            'overtimeProven': overtime_proven, 'lowerBound': lower_bound, 'priorityBound': priority_bound,
+            'overtimeProven': overtime_proven, 'overtimeSpreadProven': overtime_spread_proven,
+            'lowerBound': lower_bound, 'priorityBound': priority_bound,
             'seconds': time.monotonic() - start,
             'info': {'stages': stages, 'done': done, 'majorQualityReady': bool(major_ready),
                      'continueRecommended': bool(keep_going),

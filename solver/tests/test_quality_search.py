@@ -1,4 +1,4 @@
-"""条件確認と残業最少を確定してから、残り時間で配置を改善する。"""
+"""条件・残業合計・回数差を確定してから、残り時間で配置を改善する。"""
 import unittest
 from unittest.mock import patch
 from ortools.sat.python import cp_model
@@ -9,7 +9,7 @@ from solver.tests.test_night_fairness import six_staff, equal_shortfall_fixture
 
 
 class QualitySearchTests(unittest.TestCase):
-    def test_three_stages_validate_complete_table_and_can_finish_early(self):
+    def test_four_stages_validate_complete_table_and_can_finish_early(self):
         raw = six_staff()
         r = solve(raw, seconds=5, quality_first=True)
         self.assertEqual(validate(raw, r['assignments']), [])
@@ -17,7 +17,7 @@ class QualitySearchTests(unittest.TestCase):
         self.assertTrue(r['allocation']['minimumOvertimeProven'])
         self.assertEqual(r['allocation']['overtimeTotal'], 0)
         self.assertEqual(r['timing']['mode'], 'quality')
-        self.assertEqual([s['stage'] for s in r['search']['stages']], ['conditions','overtime','placement'])
+        self.assertEqual([s['stage'] for s in r['search']['stages']], ['conditions','overtime','overtime_fairness','placement'])
         if r['status'] == 'OPTIMAL': self.assertFalse(r['search']['continueRecommended'])
 
     def test_hard_impossibility_returns_without_spending_whole_budget(self):

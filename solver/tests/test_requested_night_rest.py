@@ -11,8 +11,10 @@ from solver.night_preferences import report
 from solver.tests.test_night_rest import roomy_fixture
 from solver.tests.test_monthly_allocation import exchange_fixture
 
-def fixture():
+def fixture(staff_count=16):
     p = roomy_fixture(); p['requiredStaff'] = [0, 0, 0]
+    p['staff'] = p['staff'][:staff_count]
+    p['history'] = {st['id']: p['history'][st['id']] for st in p['staff']}
     p['requests'] = {'s0': [6, 7, 8, 15, 28]}
     p['shiftRequests'] = {'s0': {'1': 'early', '2': 'late', '3': 'overtime'}}
     return p
@@ -35,7 +37,8 @@ class RequestedNightRestTests(unittest.TestCase):
         self.assertEqual([r['assignments']['s0'][str(d)] for d in (4,5,6,7,8)],['night','nightOff','off','off','off'])
 
     def test_two_staff_same_block_have_exactly_one_exception(self):
-        p=fixture();p['requests']['s1']=[6]
+        # 希望の衝突を検証する。16人の夜勤公平性の証明が3秒で終わるかには依存しない。
+        p=fixture(6);p['requests']['s1']=[6]
         for draft in (False,True):
             r=self.checked(p,draft);self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
             self.assertEqual(r['nightRestPreferences']['unmet'][0]['day'],6)
@@ -43,11 +46,11 @@ class RequestedNightRestTests(unittest.TestCase):
 
     def test_explicit_night_and_fixed_work_take_precedence(self):
         for field,row in [('shiftRequests',{'4':'early'}),('locked',{'5':'early'})]:
-            p=fixture();p.setdefault(field,{})['s0']=row
+            p=fixture(6);p.setdefault(field,{})['s0']=row
             for draft in (False,True):
                 r=self.checked(p,draft);self.assertEqual([(e['staff'],e['day']) for e in r['nightRestPreferences']['unmet']],[('s0',6)])
                 for d,k in row.items():self.assertEqual(r['assignments']['s0'][d],k)
-        p=fixture();p['shiftRequests']['s1']={'4':'night'};r=self.checked(p)
+        p=fixture(6);p['shiftRequests']['s1']={'4':'night'};r=self.checked(p)
         self.assertEqual([r['assignments']['s1'][str(d)] for d in (4,5,6)],['night','nightOff','off'])
         self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
 
@@ -155,4 +158,3 @@ class RequestedNightRestTests(unittest.TestCase):
         self.assertEqual(r['assignments']['s1']['6'],'off')
 
 if __name__=='__main__':unittest.main()
-

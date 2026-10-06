@@ -20,7 +20,7 @@ const label=(h,text)=>h.nodes['dialog-body'].all('label').find(l=>l.text.include
 
  // 作成結果の例外は一覧と点線枠で示す。
  const consecutive={code:'consecutive',staff:'s0',day:4,actual:4,limit:3,plusOne:false};
- const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'1':'early','2':'early','3':'early','4':'early'},s1:{'1':'off'}},seconds:3,ruleExceptions:[consecutive],exceptionCount:1,exceptionsProvenMinimum:true,validationErrors:[consecutive],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-2'})});
+ const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'1':'early','2':'early','3':'early','4':'early'},s1:{'1':'off'}},seconds:3,ruleExceptions:[consecutive],exceptionCount:1,exceptionsProvenMinimum:true,validationErrors:[consecutive],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-3'})});
  await made.ctx.generate();
  assert(made.nodes.view.text.includes('連勤・日勤の種類の例外：1件'));
  assert(made.nodes.view.text.includes('職員Aさん 10月19日（月）：4連勤目（上限3日）'));

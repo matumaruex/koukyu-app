@@ -1,6 +1,6 @@
 """月全体の残業・配置を評価する。完成表の独立検査とは別の計算。"""
 
-POLICY = 'quality-first-2'
+POLICY = 'quality-first-3'
 CHECKPOINTS = (420, 600, 1065)
 
 
@@ -45,12 +45,15 @@ def weights(p):
     # 全項が非負。1つ上の項1単位を下位の改善で逆転できない係数。
     # 40人・31日・不足3720人分でもCP-SATの64bit整数範囲に収まる。
     minor_bound = (n + 1) * (minor_unit(p) - 1) + n
-    bounds = (6 * k, 3 * k * n, 6, n, minor_bound)
+    # 残業合計 → 残業回数差 → 人数超過 → 追加公休 → 細部。
+    bounds = (6 * k, 6, 3 * k * n, n, minor_bound)
     result, lower = [], 0
     for bound in reversed(bounds):
         result.append(lower + 1)
         lower += bound * (lower + 1)
-    return tuple(reversed(result)), lower + 1
+    w = tuple(reversed(result))
+    # 呼び出し側の項の並び（合計・超過・差・公休・細部）は維持する。
+    return (w[0], w[2], w[1], w[3], w[4]), lower + 1
 
 
 def metrics(p, assignments):
@@ -93,4 +96,3 @@ def quality_value(p, assignments):
     terms = (m['overtimeTotal'], m['surplusTotal'], m['overtimeSpread'],
              p['days'] - m['commonExtraDaysOff'], m['minor'])
     return sum(v * w for v, w in zip(terms, weights(p)[0]))
-

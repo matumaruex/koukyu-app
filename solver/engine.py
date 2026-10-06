@@ -464,6 +464,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     + (metrics(p, a)['nightSpread'] if balance_nights else 0))
         quality_result = quality_search(model, p, seconds=seconds, priority=priority if has_priority else None,
                                         objective=objective, overtime=sum(overtime_totals),
+                                        overtime_spread=overtime_range if overtime_totals else None,
                                         new_solver=new_solver, extract=extract, priority_of=priority_of,
                                         initial_assignments=initial_assignments, resume=resume)
         solver, status = quality_result['solver'], quality_result['status']
@@ -613,6 +614,19 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['allocation'] = metrics(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None
                                                        else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
+    ot_counts = result['allocation']['overtimeByStaff']
+    ot_total = result['allocation']['overtimeTotal']
+    ot_spread = result['allocation']['overtimeSpread']
+    ideal_ot_spread = int(bool(ot_counts) and ot_total % len(ot_counts) != 0)
+    spread_proven = bool(ot_spread == ideal_ot_spread or
+                         (quality_result['overtimeSpreadProven'] if quality_result is not None
+                          else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL))
+    result['overtimeFairness'] = {
+        'byStaff': ot_counts, 'total': ot_total, 'spread': ot_spread,
+        'idealSpread': ideal_ot_spread, 'minimumSpreadProven': spread_proven,
+        'scope': 'FIXED_STAFFING_NIGHT_REST_NIGHT_BALANCE_AND_OVERTIME_TOTAL',
+        'reason': 'balanced' if ot_spread == ideal_ot_spread else 'constraints' if spread_proven else 'not_proven',
+    }
     if has_priority:
         result['allocation']['minimumOvertimeScope'] = 'WITH_FIXED_STAFFING_NIGHT_REST_AND_NIGHT_BALANCE'
     result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
@@ -676,4 +690,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
