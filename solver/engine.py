@@ -289,31 +289,32 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if initial_metric is not None:
         # 全員に配れている追加公休を、残業削減のために取り上げない。
         model.add(min_extra >= initial_metric['commonExtraDaysOff'])
-        if not preference_misses:
-            guard = model.add(night_spread <= initial_metric['nightSpread'])
-            if initial_shortage and shortfalls:
-                same_shortage = model.new_bool_var('preserve_nights_at_same_shortage')
-                model.add(sum(shortfalls) >= initial_shortage).only_enforce_if(same_shortage)
-                model.add(sum(shortfalls) < initial_shortage).only_enforce_if(same_shortage.Not())
-                guard.only_enforce_if(same_shortage)
-            preserved_night_spread = initial_metric['nightSpread']
     shortage_weight = weights(p)[1]
-    # 希望件数を上位に掛けた巨大な係数を避け、優先希望のある入力だけ二段階で解く。
-    # 第1段階：人数不足（下書きのみ）→夜勤後にできない希望休の件数。
-    # 第2段階：第1段階の結果を維持し、月全体の残業・配置を改善する。
-    priority = sum(shortfalls) * (len(preference_misses) + 1) + sum(preference_misses)
     initial_preferences = preference_report(p, initial_assignments) if initial_assignments is not None else None
-    initial_priority = (initial_shortage * (len(preference_misses) + 1)
-                        + len(initial_preferences['unmet'])) if initial_preferences is not None else None
     objective = None
     if optimize or allow_staffing_shortfall:
         minor = ((max_extra - min_extra) * minor_unit(p)
                  + sum(overtime_squares) + sum(quality))
         terms = (sum(overtime_totals), sum(surpluses), overtime_range, n - min_extra, minor)
         objective = sum(term * weight for term, weight in zip(terms, weights(p)[0]))
-        if not preference_misses and allow_staffing_shortfall:
-            objective += sum(shortfalls) * shortage_weight
-    if preference_misses:
+    # 第1段階は小さな整数だけで優先順を確定する。
+    # 不足合計 → 未配置夜勤 → 希望休の夜勤後配置 → 夜勤回数の差。
+    # 下位項の最大値より1大きい係数なので、上位の1件を下位で逆転できない。
+    balance_nights = bool(night_totals and objective is not None)
+    preference_weight = n + 1 if balance_nights else 1
+    gap_weight = (len(preference_misses) + 1) * preference_weight
+    shortage_priority_weight = (n + 1 if allow_night_shortfall else 1) * gap_weight
+    night_gaps = sum(v for v in shortfalls if v.name.startswith('missing_night_'))
+    priority = (sum(shortfalls) * shortage_priority_weight + night_gaps * gap_weight
+                + sum(preference_misses) * preference_weight
+                + (night_spread if balance_nights else 0))
+    has_priority = bool(preference_misses or shortfalls or balance_nights)
+    initial_night_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
+                                 if e['code'] == 'night_coverage') if initial_metric is not None else 0
+    initial_priority = (initial_shortage * shortage_priority_weight + initial_night_shortage * gap_weight
+                        + len(initial_preferences['unmet']) * preference_weight
+                        + (initial_metric['nightSpread'] if balance_nights else 0)) if initial_metric is not None else None
+    if has_priority:
         model.minimize(priority)
         if initial_priority is not None:
             model.add(priority <= initial_priority)
@@ -344,7 +345,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 時間内に最少を証明できなければ、見つかった表の件数を維持して改善する。
     # 第2段階だけが最適でも全体の最適・希望件数の最少とは説明しない。
     solver = new_solver(seconds)
-    if preference_misses:
+    if has_priority:
         if objective is not None:
             # 表が出ない間は全上限まで探す。最初の表が出れば残り時間を配置改善へ回す。
             phase_min, phase_after = min(seconds / 3, 15), min(3, seconds / 4)
@@ -437,7 +438,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return result
     assignments = initial_assignments if keep_previous else phase_candidate if phase_candidate is not None else extract(solver)
     preferences = preference_report(p, assignments)
-    if preference_misses and not keep_previous and len(preferences['unmet']) != priority_value % (len(preference_misses) + 1):
+    if has_priority and not keep_previous and len(preferences['unmet']) != (priority_value // preference_weight) % (len(preference_misses) + 1):
         return {'status': 'VALIDATION_FAILED', 'errors': ['希望休の確認結果が計算と一致しません。']}
     preferences['minimumUnmetProven'] = bool(not preferences['unmet'] or priority_proven)
     result['nightRestPreferences'] = preferences
@@ -454,7 +455,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         result['staffingShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
         result['nightShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
         result['daytimeShortfallTotal'] = result['staffingShortfallTotal'] - result['nightShortfallTotal']
-        result['shortfallProvenMinimum'] = priority_proven if preference_misses else status == cp_model.OPTIMAL
+        result['shortfallProvenMinimum'] = priority_proven if has_priority else status == cp_model.OPTIMAL
         result['explanation'] = '人数不足・夜勤未配置のある下書きです。希望休・希望勤務・勤務資格・連勤・実際の夜勤後公休は守っています。'
     result['assignments'] = assignments
     result['validationErrors'] = errors
@@ -467,12 +468,26 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['optimizationPolicy'] = POLICY
     result['allocation'] = metrics(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool((optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
-    if preference_misses:
-        result['allocation']['minimumOvertimeScope'] = 'WITH_MINIMUM_NIGHT_REST_EXCEPTIONS'
+    if has_priority:
+        result['allocation']['minimumOvertimeScope'] = 'WITH_FIXED_STAFFING_NIGHT_REST_AND_NIGHT_BALANCE'
     result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
     if not preference_misses and result.get('staffingShortfallTotal', 0) < initial_shortage:
         preserved_night_spread = None
     result['allocation']['preservedNightSpread'] = preserved_night_spread
+    night_counts = {st['id']: sum(v == 'night' for v in assignments[st['id']].values())
+                    for st in p['staff'] if st['type'] != 'part' and st['nightShiftType'] != 'none'}
+    if night_counts:
+        filled = sum(night_counts.values())
+        ideal_spread = int(filled % len(night_counts) != 0)
+        spread = max(night_counts.values()) - min(night_counts.values())
+        proven = balance_nights and (priority_proven or spread == ideal_spread)
+        result['nightFairness'] = {'byStaff': night_counts, 'spread': spread,
+                                  'idealSpread': ideal_spread, 'filledNights': filled,
+                                  'minimumSpreadProven': bool(proven),
+                                  'priorityProven': priority_proven,
+                                  'scope': 'FIXED_STAFFING_AND_NIGHT_REST_PRIORITY',
+                                  'reason': 'balanced' if spread == ideal_spread else
+                                            'constraints' if proven else 'not_proven'}
     if initial_metric is not None:
         result['allocation']['before'] = initial_metric
         result['allocation']['overtimeReducedBy'] = initial_metric['overtimeTotal'] - result['allocation']['overtimeTotal']
@@ -488,12 +503,15 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         result['objective'] = quality_value(p, assignments) + result.get('staffingShortfallTotal', 0) * shortage_weight
         if not keep_previous and lower_bound is not None:
             result['bestBound'] = lower_bound
-            if preference_misses:
-                result['bestBoundScope'] = 'FIXED_PREFERENCE_PRIORITY'
+            if has_priority:
+                result['bestBoundScope'] = 'FIXED_STAFFING_AND_NIGHT_BALANCE_PRIORITY'
         if initial_assignments is not None:
             old_quality = quality_value(p, initial_assignments) + initial_shortage * shortage_weight
-            result['improved'] = ((initial_shortage, len(initial_preferences['unmet']), old_quality)
-                                  > (result.get('staffingShortfallTotal', 0), len(preferences['unmet']), result['objective']))
+            new_priority = (result.get('staffingShortfallTotal', 0) * shortage_priority_weight
+                            + result.get('nightShortfallTotal', 0) * gap_weight
+                            + len(preferences['unmet']) * preference_weight
+                            + (result['allocation']['nightSpread'] if balance_nights else 0))
+            result['improved'] = (initial_priority, old_quality) > (new_priority, result['objective'])
     return result
 
 
