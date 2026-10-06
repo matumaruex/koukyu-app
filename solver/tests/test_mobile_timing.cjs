@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.c
 const raw={staff:[{id:'local',name:'職員',type:'full',nightShiftType:'all'}],schedules:{}};
 function result(ot,{done=false,stage='overtime',short}={}){return {status:short===undefined?'FEASIBLE':'DRAFT',assignments:{s0:{'1':'off'}},seconds:60,
  ...(short===undefined?{}:{staffingShortfallTotal:short}),
- allocation:{overtimeTotal:ot,nightSpread:0},search:{done,continueRecommended:!done,resume:done?null:{stage,idle:3,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-2'};}
+ allocation:{overtimeTotal:ot,nightSpread:0},search:{done,continueRecommended:!done,resume:done?null:{stage,idle:3,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-3'};}
 const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
 (async()=>{
  // 段階が終わるまで続きを呼び、前回の表と再開位置を渡す。新規と改善、既存の表あり・なし。
@@ -18,7 +18,7 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
    assert.equal(!!h.calls[0].initialAssignments,existing&&mode==='improve');assert.equal(h.calls[0].resume,undefined);
    assert.deepEqual(h.calls[1].initialAssignments,{s0:{'1':'off'}});
    assert.deepEqual(h.calls[1].resume,{stage:'conditions',idle:3,proven:{}});assert.deepEqual(h.calls[2].resume,{stage:'overtime',idle:3,proven:{}});
-   assert(progress.includes('残業を調整中'));assert(progress.includes('A残 4→3回'));
+   assert(progress.includes('残業の合計を調整中'));assert(progress.includes('A残 4→3回'));
    assert.equal(h.calls.reduce((t,c)=>t+c.seconds,0),180);
    assert.equal(h.get('schedule().meta.allocation.overtimeTotal'),2);assert.equal(h.get('schedule().meta.seconds'),180);
    assert.equal(h.get('schedule().meta.workflow.done'),true);assert(!buttons(h).includes('さらに改善する'));

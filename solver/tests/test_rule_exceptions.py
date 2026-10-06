@@ -88,10 +88,10 @@ class RuleExceptionTests(unittest.TestCase):
 class StageProgressTests(unittest.TestCase):
     def test_stalled_stage_moves_on_and_reaches_placement(self):
         raw = fixture(3)
-        with patch.dict('solver.quality_search.IDLE_SECONDS', {'conditions': 0.5, 'overtime': 0.5, 'placement': 0.5}):
+        with patch.dict('solver.quality_search.IDLE_SECONDS', {'conditions': 0.5, 'overtime': 0.5, 'overtime_fairness': 0.5, 'placement': 0.5}):
             r = dispatch(dict(SCREEN, input=raw, seconds=30))
         stages = r['search']['stages']
-        self.assertEqual([s['stage'] for s in stages], ['conditions', 'overtime', 'placement'])
+        self.assertEqual([s['stage'] for s in stages], ['conditions', 'overtime', 'overtime_fairness', 'placement'])
         self.assertTrue(r['search']['done'])
         self.assertIsNone(r['search']['resume'])
         self.assertEqual([e for e in validate(raw, r['assignments']) if e['code'] not in ('coverage', 'sunday_limit')], [])

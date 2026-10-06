@@ -3,10 +3,10 @@
 // 1回の通信は60秒以内。サーバーが「まだ良くなっている段階がある」と返す間は、続きから自動で呼び直す。
 // 各段階は、最少と証明できたか一定時間良くならなかったときに次へ進み、すべて終われば完了。全体の上限は5分。
 const BASE_SECONDS=60,MAX_SECONDS=300;
-function rank(r){const m=r.allocation||{};return [r.exceptionCount||0,r.staffingShortfallTotal||0,r.nightShortfallTotal||0,r.nightRestPreferences?.unmet?.length||0,m.nightSpread||0,m.overtimeTotal||0,m.surplusTotal||0,m.overtimeSpread||0,-(m.commonExtraDaysOff||0),m.minor||0];}
+function rank(r){const m=r.allocation||{};return [r.exceptionCount||0,r.staffingShortfallTotal||0,r.nightShortfallTotal||0,r.nightRestPreferences?.unmet?.length||0,m.nightSpread||0,m.overtimeTotal||0,m.overtimeSpread||0,m.surplusTotal||0,-(m.commonExtraDaysOff||0),m.minor||0];}
 function compare(a,b){const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return x[i]-y[i];
  // 同じ品質なら、既に確認できた最少証明を時間切れの応答で失わない。
- const proof=r=>[r.status==='OPTIMAL',!!r.preferencePriorityProven,!!r.allocation?.minimumOvertimeProven,!!r.shortfallProvenMinimum,!!r.nightFairness?.minimumSpreadProven];
+ const proof=r=>[r.status==='OPTIMAL',!!r.preferencePriorityProven,!!r.allocation?.minimumOvertimeProven,!!r.overtimeFairness?.minimumSpreadProven,!!r.shortfallProvenMinimum,!!r.nightFairness?.minimumSpreadProven];
  const u=proof(a),v=proof(b);for(let i=0;i<u.length;i++)if(u[i]!==v[i])return Number(v[i])-Number(u[i]);return 0;}
 function candidate(r){return r&&r.assignments&&['OPTIMAL','FEASIBLE','DRAFT'].includes(r.status);}
 async function run({input,initialAssignments,request,nextSeed,isCurrent=()=>true,onExtend=()=>{}}){

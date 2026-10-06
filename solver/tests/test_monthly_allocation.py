@@ -120,6 +120,27 @@ class MonthlyAllocationTests(unittest.TestCase):
         self.assertEqual((left['overtimeSpread'],right['overtimeSpread']),(2,0))
         self.assertLess(quality_value(normalized,shared),quality_value(normalized,concentrated))
 
+    def test_fair_overtime_beats_fewer_surplus_staff_at_the_same_total(self):
+        p = deepcopy(self.raw)
+        p['staff'][1]['canOvertime'] = True
+        p['staff'][0]['monthlyDaysOff'] -= 1
+        p['fairnessExcludedStaff'] = ['s0']
+        p['locked']['s0'].pop('12')
+        concentrated = deepcopy(self.before)
+        concentrated['s0']['8'] = 'overtime'
+        shared = deepcopy(self.before)
+        shared['s1']['8'] = 'overtime'
+        # 公平な候補の方が人数超過は多い。超過削減より負担の分散を優先する。
+        shared['s0']['12'] = 'early'
+        self.assertEqual(validate(p, concentrated), [])
+        self.assertEqual(validate(p, shared), [])
+        normalized = normalize(p)
+        left, right = metrics(normalized, concentrated), metrics(normalized, shared)
+        self.assertEqual(left['overtimeTotal'], right['overtimeTotal'])
+        self.assertGreater(right['surplusTotal'], left['surplusTotal'])
+        self.assertEqual((left['overtimeSpread'], right['overtimeSpread']), (2, 0))
+        self.assertLess(quality_value(normalized, shared), quality_value(normalized, concentrated))
+
     def test_required_work_can_exceed_needed_staff_without_becoming_impossible(self):
         p = deepcopy(self.raw)
         p['shiftRequests'] = {'s0':{'8':'early'},'s1':{'8':'late'},'s2':{'8':'early'}}

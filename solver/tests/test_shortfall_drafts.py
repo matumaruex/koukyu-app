@@ -72,7 +72,13 @@ class ShortfallDraftTests(unittest.TestCase):
         r = solve(self.raw, seconds=3, initial_assignments=self.table, allow_staffing_shortfall=True)
         self.assertEqual(r['status'],'DRAFT')
         self.assertLessEqual(r['staffingShortfallTotal'],self.result['staffingShortfallTotal'])
-        self.assertLessEqual(r['objective'],self.result['objective'])
+        # 人数不足→夜勤後希望→夜勤回数差は、残業などの配置評価より上位。
+        # 上位が同じときは配置評価も悪化させず、上位が改善する場合も順位全体で比較する。
+        def rank(result):
+            return (result['staffingShortfallTotal'],
+                    len(result['nightRestPreferences']['unmet']),
+                    result['allocation']['nightSpread'], result['objective'])
+        self.assertLessEqual(rank(r),rank(self.result))
         self.assertGreaterEqual(r['allocation']['commonExtraDaysOff'],self.result['allocation']['commonExtraDaysOff'])
         self.assertTrue(all(e['code']=='coverage' for e in validate(self.raw,r['assignments'])))
 
