@@ -58,7 +58,8 @@ def normalize(raw):
             st.setdefault(field, default)
             if type(st[field]) is not int or not lo <= st[field] <= hi:
                 raise ValueError(f'{sid}: invalid {field}.')
-        for field in ('canOvertime', 'allowConsecutivePlus1'):
+        # dayShiftFlexible：Aのみ・Bのみの人でも、守ると表が作れないときだけ逆の日勤を許す（中間ルール）。
+        for field in ('canOvertime', 'allowConsecutivePlus1', 'dayShiftFlexible'):
             st.setdefault(field, False)
             if type(st[field]) is not bool:
                 raise ValueError(f'{sid}: {field} must be boolean.')
