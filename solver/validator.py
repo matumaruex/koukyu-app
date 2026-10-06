@@ -2,6 +2,23 @@
 from datetime import timedelta
 from .input_data import normalize, SHIFTS
 
+SHORTFALL_CODES = ('coverage', 'sunday_limit')
+
+
+def is_rule_exception(p, error):
+    """中間ルール（守ると表が作れないときだけ破れる）の違反か。p は正規化済みの入力。"""
+    if error['code'] in ('consecutive', 'consecutive_plus_one'):
+        return True
+    if error['code'] == 'day_shift_eligibility':
+        staff = next((st for st in p['staff'] if st['id'] == error['staff']), None)
+        return bool(staff and staff['dayShiftFlexible'])
+    return False
+
+
+def exception_count(p, errors):
+    """計算側と同じ数え方：上限を超えた日数＋＋1の超過回数＋逆の日勤の日数。"""
+    return sum(e.get('count', 1) for e in errors if is_rule_exception(p, e))
+
 
 def validate(raw, assignments):
     p = normalize(raw)
@@ -50,6 +67,7 @@ def validate(raw, assignments):
             if current:
                 if run > limit + (1 if st['allowConsecutivePlus1'] else 0):
                     fail('consecutive', sid, day, f'{run} consecutive days')
+                    errors[-1].update(actual=run, limit=limit, plusOne=st['allowConsecutivePlus1'])
                 if run == limit + 1:
                     extensions += 1
                 if (shift == 'nightOff') != (all_days[i - 1] == 'night'):
@@ -82,8 +100,10 @@ def validate(raw, assignments):
             if st['type'] == 'part' and shift not in ('off', 'nightOff'):
                 monday = dt - timedelta(days=dt.weekday())
                 weeks[monday] = weeks.get(monday, 0) + 1
-        if extensions > (1 if st['allowConsecutivePlus1'] else 0):
+        # ＋1を許可していない人の上限超えは consecutive として日ごとに報告済み。
+        if st['allowConsecutivePlus1'] and extensions > 1:
             fail('consecutive_plus_one', sid, detail=f'{extensions} extensions')
+            errors[-1].update(actual=extensions, allowed=1, count=extensions - 1, limit=limit)
         if values.count('off') < st['monthlyDaysOff']:
             fail('days_off', sid, detail=f"{values.count('off')} < {st['monthlyDaysOff']}")
         if values.count('overtime') > 6:

@@ -8,7 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from ortools.sat.python import cp_model
 from .input_data import normalize, SHIFTS
-from .validator import validate
+from .validator import validate, is_rule_exception, exception_count, SHORTFALL_CODES
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
@@ -54,8 +54,31 @@ def _solve_with_stop_rule(solver, model, min_seconds, after_first, *, tracker=No
     return status, bool(stopped), first
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False):
-    """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。"""
+def _explain(model, dropped, night_missing, violations, violation_cap, seconds, seed):
+    """作れないときだけ使う。夜勤を埋められない日 → 外す希望・固定の件数 → 中間ルールの例外、の順に最小化する。
+    夜勤を埋められない日は、希望・固定をすべて外しても埋まらない日（職員の設定が原因）。"""
+    keep_weight = violation_cap + 1
+    night_weight = (len(dropped) + 1) * keep_weight
+    model.minimize(sum(night_missing) * night_weight
+                   + sum(1 - keep for keep, _ in dropped) * keep_weight
+                   + (sum(violations) if violations else 0))
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = seconds
+    solver.parameters.random_seed = seed
+    solver.parameters.num_search_workers = 4
+    status = solver.solve(model)
+    if status not in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+        return {'status': 'INFEASIBLE' if status == cp_model.INFEASIBLE else 'UNKNOWN', 'seconds': round(solver.wall_time, 3)}
+    return {'status': 'EXPLAINED', 'proven': status == cp_model.OPTIMAL, 'seconds': round(solver.wall_time, 3),
+            'missingNights': [d + 1 for d, v in enumerate(night_missing) if solver.value(v)],
+            'droppedWishes': [item for keep, item in dropped if not solver.value(keep)]}
+
+
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False, allow_rule_exceptions=False, resume=None, relax_wishes=False):
+    """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。
+    allow_rule_exceptions：連勤上限・連勤＋1・日勤の種類（許可した人のみ）を、守ると表が作れないときだけ最小限破る中間ルールにする。
+    resume：quality_first の続きの計算（段階と、最後に良くなってからの経過秒）。
+    relax_wishes：作れないときの理由調べ専用。希望・固定・夜勤を外せる形で解き、外す件数が最小の組合せを返す。"""
     if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
         return {'status': 'INVALID_INPUT', 'errors': ['seconds must be finite and positive']}
     if type(allow_staffing_shortfall) is not bool:
@@ -64,8 +87,24 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         return {'status': 'INVALID_INPUT', 'errors': ['quality_first requires optimized calculation.']}
     if type(allow_night_shortfall) is not bool or (allow_night_shortfall and not allow_staffing_shortfall):
         return {'status': 'INVALID_INPUT', 'errors': ['夜勤未配置は人数不足の下書きでのみ指定できます。']}
+    if type(allow_rule_exceptions) is not bool or (allow_rule_exceptions and not allow_staffing_shortfall):
+        return {'status': 'INVALID_INPUT', 'errors': ['中間ルールの例外は人数不足を許す作成でのみ指定できます。']}
+    if resume is not None and not quality_first:
+        return {'status': 'INVALID_INPUT', 'errors': ['続きの計算は qualityFirst でのみ指定できます。']}
+    try:
+        p = normalize(raw)
+    except (ValueError, TypeError) as exc:
+        return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
+
+    def rule_exception(e):
+        return allow_rule_exceptions and is_rule_exception(p, e)
+
     def permitted_shortfall(e):
-        return e['code'] in ('coverage', 'sunday_limit') or (allow_night_shortfall and e['code'] == 'night_coverage' and e.get('actual') == 0 and e.get('required') == 1)
+        return (e['code'] in SHORTFALL_CODES or rule_exception(e)
+                or (allow_night_shortfall and e['code'] == 'night_coverage' and e.get('actual') == 0 and e.get('required') == 1))
+
+    def exceptions_of(errors):
+        return exception_count(p, errors) if allow_rule_exceptions else 0
     if (min_seconds is None) != (after_first is None):
         return {'status': 'INVALID_INPUT', 'errors': ['min_seconds and after_first must be given together']}
     if min_seconds is not None:
@@ -74,10 +113,6 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 return {'status': 'INVALID_INPUT', 'errors': ['min_seconds and after_first must be finite and non-negative']}
         if min_seconds > seconds:
             return {'status': 'INVALID_INPUT', 'errors': ['min_seconds must not exceed seconds']}
-    try:
-        p = normalize(raw)
-    except (ValueError, TypeError) as exc:
-        return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
     if initial_assignments is not None:
         errors = validate(raw, initial_assignments)
         if errors and (not allow_staffing_shortfall or any(not permitted_shortfall(e) for e in errors)):
@@ -118,6 +153,20 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     def working(sid, d):
         return 1 - value(sid, d, 'off') - value(sid, d, 'nightOff')
 
+    # 中間ルールの違反（連勤上限を超えた日、＋1の超過、許可した人の逆の日勤）。
+    rule_violations = []
+    # 作れないときの理由調べ用：外せる形にした希望・固定。
+    dropped = []
+    night_soft = allow_night_shortfall or relax_wishes
+
+    def wish(expr, key, label, item):
+        if relax_wishes:
+            keep = model.new_bool_var(f'keep_wish_{len(dropped)}')
+            model.add(expr).only_enforce_if(keep)
+            dropped.append((keep, item))
+        else:
+            required(expr, key, label)
+
     preference_misses = []
     quality = []
     extra_off = []
@@ -130,6 +179,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         nt = st['nightShiftType']
         limit = st['maxConsecutive'] or (2 if st['type'] != 'part' and nt != 'none' else 5)
         extensions = []
+        overs = []
+        flexible = (allow_rule_exceptions and st['type'] != 'part' and st['dayShiftFlexible']
+                    and st['dayShiftType'] != 'both')
         for d in range(n):
             dt = p['start'] + timedelta(days=d)
             allowed = {'off', 'part'} if st['type'] == 'part' else {'off', 'early', 'late', 'nightOff'}
@@ -138,6 +190,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     allowed.remove('late')
                 elif st['dayShiftType'] == 'late':
                     allowed.remove('early')
+                if flexible:
+                    # 逆の日勤は入れられるが、1日ごとに中間ルールの違反として数える。
+                    opposite = 'late' if st['dayShiftType'] == 'early' else 'early'
+                    allowed.add(opposite)
+                    rule_violations.append(x[sid, d, opposite])
                 if st['canOvertime']:
                     allowed.add('overtime')
                 if nt == 'all' or (nt == 'weekday' and dt.weekday() < 4):
@@ -148,7 +205,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             required(x[sid, d, 'off'] >= value(sid, d - 1, 'nightOff'), sid + '_night_rest', label + 'の夜勤明け翌日は必ず公休（期間境界を含む）')
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', label + 'のA残は月6回以内・連日不可')
             if d + 1 in p['requests'].get(sid, []):
-                required(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休')
+                wish(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休',
+                     {'kind': 'request', 'staff': sid, 'day': d + 1, 'shift': 'off'})
                 if sid in p['nightRestRequiredStaff'] and d not in p['requests'].get(sid, []):
                     # この逆向きの指定だけは優先希望。実際の夜勤→明け→公休は必須のまま。
                     missed = model.new_bool_var(f'{sid}_preferred_night_rest_{d}')
@@ -159,13 +217,20 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             requested = p['shiftRequests'].get(sid, {}).get(d + 1)
             if requested is not None:
                 shift_label = {'early': 'A（早出）', 'late': 'B（遅出）', 'overtime': 'A残', 'night': '夜勤', 'part': 'P'}[requested]
-                required(x[sid, d, requested] == 1, f'{sid}_shift_request_{d}',
-                         label + f'の{dt}の希望勤務「{shift_label}」')
+                wish(x[sid, d, requested] == 1, f'{sid}_shift_request_{d}',
+                     label + f'の{dt}の希望勤務「{shift_label}」',
+                     {'kind': 'shiftRequest', 'staff': sid, 'day': d + 1, 'shift': requested})
             locked = p['locked'].get(sid, {}).get(d + 1)
             if locked is not None:
-                required(x[sid, d, locked] == 1, sid + '_locked', label + 'の固定済み勤務')
+                wish(x[sid, d, locked] == 1, sid + '_locked', label + 'の固定済み勤務',
+                     {'kind': 'locked', 'staff': sid, 'day': d + 1, 'shift': locked})
             window = sum(working(sid, t) for t in range(d - limit, d + 1))
-            if st['allowConsecutivePlus1']:
+            if allow_rule_exceptions:
+                # 中間ルール：上限を超えて働く日を1件として数える（明けで連勤は途切れる）。
+                over = model.new_bool_var(f'{sid}_over_limit_{d}')
+                model.add(window - limit <= over)
+                overs.append(over)
+            elif st['allowConsecutivePlus1']:
                 extra = model.new_bool_var(f'{sid}_extension_{d}')
                 model.add(window == limit + 1).only_enforce_if(extra)
                 model.add(window <= limit).only_enforce_if(extra.Not())
@@ -175,6 +240,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 required(window <= limit, sid + '_consecutive', label + 'の連勤上限')
         if extensions:
             required(sum(extensions) <= 1, sid + '_consecutive', label + 'の連勤上限（+1は月1回）')
+        if overs:
+            if st['allowConsecutivePlus1']:
+                # ＋1を許可した人は、上限を1日超える分を月1回まで違反に数えない。
+                used = model.new_bool_var(f'{sid}_plus_one_used')
+                model.add(used <= sum(overs))
+                rule_violations.append(sum(overs) - used)
+            else:
+                rule_violations.append(sum(overs))
         off = sum(x[sid, d, 'off'] for d in range(n))
         required(off >= st['monthlyDaysOff'], sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
         ot = sum(x[sid, d, 'overtime'] for d in range(n))
@@ -242,13 +315,18 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     reduced = []
     shortfalls = []
     surpluses = []
+    night_missing = []
+    shortfall_cap = 0
     for d in range(n):
         dt = p['start'] + timedelta(days=d)
         night_count = sum(x[st['id'], d, 'night'] for st in p['staff'])
-        if allow_night_shortfall:
+        if night_soft:
             missing_night = model.new_bool_var(f'missing_night_{d}')
             model.add(night_count + missing_night == 1)
-            shortfalls.append(missing_night)
+            night_missing.append(missing_night)
+            if allow_night_shortfall:
+                shortfalls.append(missing_night)
+                shortfall_cap += 1
         else:
             required(night_count == 1, f'night_{d}', f'{dt}の夜勤1人')
         counts_required = p['dailyRequiredStaff'].get(d + 1, p['requiredStaff'])
@@ -267,6 +345,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 missing = model.new_int_var(0, need, f'shortfall_{d}_{t}')
                 model.add(count + missing >= target)
                 shortfalls.append(missing)
+                shortfall_cap += need
             else:
                 required(count >= target, f'coverage_{d}_{t}', f'{dt} {t // 60:02}:{t % 60:02}の必要人数{need}人')
     required(sum(reduced) <= p['maxReducedSundays'], 'sundays', f'日曜の朝昼を1人減らせる日は月{p["maxReducedSundays"]}日以内')
@@ -279,6 +358,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add(max_extra == 0)
         model.add(min_extra == 0)
     required(max_extra - min_extra <= p['maxExtraOffSpread'], 'fairness', f'余分な公休の差は{p["maxExtraOffSpread"]}日以内')
+    if relax_wishes:
+        return _explain(model, dropped, night_missing, rule_violations, len(p['staff']) * 2 * n, seconds, seed)
     overtime_range = 0
     if overtime_totals:
         high_ot, low_ot = model.new_int_var(0, n, 'ot_high'), model.new_int_var(0, n, 'ot_low')
@@ -289,8 +370,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
                            if e['code'] in ('coverage', 'night_coverage')) if initial_metric is not None else 0
     preserved_night_spread = None
-    if initial_metric is not None:
+    if initial_metric is not None and resume is None:
         # 全員に配れている追加公休を、残業削減のために取り上げない。
+        # 続きの計算では、途中の表の追加公休はたまたまの値なので、ここでは固定しない。
         model.add(min_extra >= initial_metric['commonExtraDaysOff'])
     shortage_weight = weights(p)[1]
     initial_preferences = preference_report(p, initial_assignments) if initial_assignments is not None else None
@@ -311,12 +393,34 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     priority = (sum(shortfalls) * shortage_priority_weight + night_gaps * gap_weight
                 + sum(preference_misses) * preference_weight
                 + (night_spread if balance_nights else 0))
-    has_priority = bool(preference_misses or shortfalls or balance_nights)
-    initial_night_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
+    # 中間ルールの違反は人数不足より上。係数は下位全体の上限より大きく、
+    # 希望休の件数を取り出す計算（gap_weight の倍数）を崩さない値にする。
+    violation_weight = 0
+    if rule_violations:
+        lower_max = (shortfall_cap * shortage_priority_weight + n * gap_weight
+                     + len(preference_misses) * preference_weight + n)
+        violation_weight = (lower_max // gap_weight + 1) * gap_weight
+        priority = sum(rule_violations) * violation_weight + priority
+    has_priority = bool(preference_misses or shortfalls or balance_nights or rule_violations)
+    initial_errors = validate(raw, initial_assignments) if initial_metric is not None else []
+    initial_night_shortage = sum(e['required'] - e['actual'] for e in initial_errors
                                  if e['code'] == 'night_coverage') if initial_metric is not None else 0
-    initial_priority = (initial_shortage * shortage_priority_weight + initial_night_shortage * gap_weight
+    initial_priority = (exceptions_of(initial_errors) * violation_weight
+                        + initial_shortage * shortage_priority_weight + initial_night_shortage * gap_weight
                         + len(initial_preferences['unmet']) * preference_weight
                         + (initial_metric['nightSpread'] if balance_nights else 0)) if initial_metric is not None else None
+
+    def decode_bound(bound, assignments):
+        """条件段階の下限から、例外と人数不足の理論上の最少を取り出す（例外が下限に達している場合のみ）。"""
+        if bound is None or not math.isfinite(bound):
+            return None, None
+        b = int(math.floor(bound + 1e-6))
+        errors = validate(raw, assignments)
+        found_exceptions = exceptions_of(errors)
+        exceptions_bound = b // violation_weight if violation_weight else 0
+        if exceptions_bound != found_exceptions:
+            return exceptions_bound, None
+        return exceptions_bound, max(0, (b - found_exceptions * violation_weight) // shortage_priority_weight)
     if has_priority:
         model.minimize(priority)
         if initial_priority is not None:
@@ -354,13 +458,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             errors = validate(raw, a)
             shortage = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
             gaps = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
-            return (shortage * shortage_priority_weight + gaps * gap_weight
+            return (exceptions_of(errors) * violation_weight
+                    + shortage * shortage_priority_weight + gaps * gap_weight
                     + len(preference_report(p, a)['unmet']) * preference_weight
                     + (metrics(p, a)['nightSpread'] if balance_nights else 0))
         quality_result = quality_search(model, p, seconds=seconds, priority=priority if has_priority else None,
                                         objective=objective, overtime=sum(overtime_totals),
                                         new_solver=new_solver, extract=extract, priority_of=priority_of,
-                                        initial_assignments=initial_assignments)
+                                        initial_assignments=initial_assignments, resume=resume)
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:
@@ -473,7 +578,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     hard_errors = [e for e in errors if not permitted_shortfall(e)]
     if errors and (not allow_staffing_shortfall or hard_errors):
         return {'status': 'VALIDATION_FAILED', 'errors': errors, 'seconds': result['seconds']}
-    is_draft = bool(errors)
+    exceptions = [e for e in errors if rule_exception(e)]
+    if exceptions:
+        # 中間ルールの例外は、守ると表が作れない分だけ。人数不足とは別に一覧で返す。
+        result['ruleExceptions'] = exceptions
+        result['exceptionCount'] = exception_count(p, exceptions)
+        result['exceptionsProvenMinimum'] = bool(priority_proven)
+    is_draft = any(not rule_exception(e) for e in errors)
     if is_draft:
         result['solverStatus'] = result['status']
         result['status'] = 'DRAFT'
@@ -482,7 +593,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         result['nightShortfallTotal'] = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
         result['daytimeShortfallTotal'] = result['staffingShortfallTotal'] - result['nightShortfallTotal']
         result['shortfallProvenMinimum'] = priority_proven if has_priority else status == cp_model.OPTIMAL
-        result['explanation'] = '人数不足・夜勤未配置のある下書きです。希望休・希望勤務・勤務資格・連勤・実際の夜勤後公休は守っています。'
+        result['explanation'] = '人数不足のある下書きです。希望休・希望勤務・勤務資格・実際の夜勤後公休は守っています。'
+    if quality_result is not None and not keep_previous and (initial_assignments is None or resume is not None):
+        # 「理論上あと何か所減る可能性があるか」の表示用。追加公休を固定した改善計算では出さない。
+        exceptions_bound, shortfall_bound = decode_bound(quality_result.get('priorityBound'), assignments)
+        if exceptions_bound is not None and allow_rule_exceptions:
+            result['exceptionLowerBound'] = exceptions_bound
+        if shortfall_bound is not None and is_draft:
+            result['shortfallLowerBound'] = min(shortfall_bound, result['staffingShortfallTotal'])
     result['assignments'] = assignments
     result['validationErrors'] = errors
     result['verificationScope'] = ('DRAFT_' if is_draft else '') + ('WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY')
@@ -534,7 +652,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 result['bestBoundScope'] = 'FIXED_STAFFING_AND_NIGHT_BALANCE_PRIORITY'
         if initial_assignments is not None:
             old_quality = quality_value(p, initial_assignments) + initial_shortage * shortage_weight
-            new_priority = (result.get('staffingShortfallTotal', 0) * shortage_priority_weight
+            new_priority = (result.get('exceptionCount', 0) * violation_weight
+                            + result.get('staffingShortfallTotal', 0) * shortage_priority_weight
                             + result.get('nightShortfallTotal', 0) * gap_weight
                             + len(preferences['unmet']) * preference_weight
                             + (result['allocation']['nightSpread'] if balance_nights else 0))
