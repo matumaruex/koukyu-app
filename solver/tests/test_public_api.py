@@ -36,6 +36,7 @@ class PublicApiTests(unittest.TestCase):
         self.assertTrue(json.loads(body)['ready'])
         self.assertEqual(self.request('/user_data.json')[0], 404)
         self.assertEqual(self.request('/roster-storage.js?v=32')[0], 200)
+        self.assertEqual(self.request('/creation-workflow.js?v=34')[0], 200)
 
     def test_cross_origin_and_invalid_json(self):
         self.assertEqual(self.request('/api/schedule', '{}', {'Origin': 'https://example.com', 'Content-Type': 'application/json'})[0], 403)

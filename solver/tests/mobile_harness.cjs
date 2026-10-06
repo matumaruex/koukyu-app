@@ -28,6 +28,7 @@ function harness(raw,options={}){
  vm.createContext(ctx);
  const root=path.join(__dirname,'../../public');
  vm.runInContext(fs.readFileSync(path.join(root,'roster-storage.js'),'utf8'),ctx);
+ vm.runInContext(fs.readFileSync(path.join(root,'creation-workflow.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'mobile.js'),'utf8'),ctx);
  return {ctx,values,nodes,calls,confirmations,timers,eval:s=>vm.runInContext(s,ctx),get:s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',ctx)),click:async(name,where='dialog-body')=>{const button=nodes[where].all('button').find(e=>e.text===name);if(!button)throw Error('Missing button '+name+' in '+nodes[where].text);await button.click();}};
 }

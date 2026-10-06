@@ -29,6 +29,9 @@ def dispatch(payload):
         adaptive = payload.get('adaptive', False)
         if type(adaptive) is not bool:
             raise ValueError('adaptive は true か false で指定してください。')
+        quality_first = payload.get('qualityFirst', False)
+        if type(quality_first) is not bool:
+            raise ValueError('qualityFirst は true か false で指定してください。')
         # seed：時間内に見つからなかったとき、探す順番を変えて再計算するための値。
         seed = payload.get('seed', 1)
         if type(seed) is not int or not 1 <= seed <= 1000:
@@ -42,6 +45,8 @@ def dispatch(payload):
     except (ValueError, TypeError) as exc:
         return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
     # 通常作成は不足許可でも早期終了。追加計算は adaptive=false で上限まで改善する。
-    rule = {'min_seconds': min(ADAPTIVE_MIN_SECONDS, seconds), 'after_first': ADAPTIVE_AFTER_FIRST} if adaptive else {}
+    rule = {'min_seconds': min(ADAPTIVE_MIN_SECONDS, seconds), 'after_first': ADAPTIVE_AFTER_FIRST} if adaptive and not quality_first else {}
+    if quality_first:
+        rule['quality_first'] = True
     return solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), allow_staffing_shortfall=allow_shortfall, allow_night_shortfall=allow_night_shortfall, **rule)
 

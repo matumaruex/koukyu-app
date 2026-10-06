@@ -9,7 +9,7 @@ PUBLIC = Path(__file__).resolve().parents[1] / 'public'
 class AppHandler(handler):
     def do_GET(self):
         path = self.path.split('?')[0]
-        files = {'/': ('index.html', 'text/html'), '/mobile.js': ('mobile.js', 'text/javascript'), '/roster-storage.js': ('roster-storage.js', 'text/javascript'), '/mobile.css': ('mobile.css', 'text/css'), '/example.json': ('example.json', 'application/json')}
+        files = {'/': ('index.html', 'text/html'), '/mobile.js': ('mobile.js', 'text/javascript'), '/roster-storage.js': ('roster-storage.js', 'text/javascript'), '/creation-workflow.js': ('creation-workflow.js', 'text/javascript'), '/mobile.css': ('mobile.css', 'text/css'), '/example.json': ('example.json', 'application/json')}
         if path == '/api/schedule':
             return super().do_GET()
         if path not in files:
