@@ -35,6 +35,7 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)['ready'])
         self.assertEqual(self.request('/user_data.json')[0], 404)
+        self.assertEqual(self.request('/roster-storage.js?v=32')[0], 200)
 
     def test_cross_origin_and_invalid_json(self):
         self.assertEqual(self.request('/api/schedule', '{}', {'Origin': 'https://example.com', 'Content-Type': 'application/json'})[0], 403)
@@ -49,3 +50,4 @@ class PublicApiTests(unittest.TestCase):
         result = dispatch({'action': 'validate', 'input': next(cases())[1], 'assignments': {}})
         self.assertEqual(result['status'], 'INVALID')
         self.assertTrue(result['validationErrors'])
+
