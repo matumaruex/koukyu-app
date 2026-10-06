@@ -17,13 +17,16 @@ class StopRuleTests(unittest.TestCase):
         r = solve(p, seconds=60, min_seconds=3, after_first=1)
         self.assertIn(r['status'], OK)
         self.assertEqual(validate(p, r['assignments']), [])
-        self.assertLess(r['seconds'], 30)
+        self.assertLess(r['seconds'], 60)
         rule = r['stopRule']
         self.assertIsNotNone(rule['firstSolutionSeconds'])
         if r['status'] == 'FEASIBLE':
             self.assertTrue(rule['stoppedEarly'])
             self.assertGreaterEqual(r['seconds'], 3 - 0.3)
             self.assertGreaterEqual(r['seconds'], rule['firstSolutionSeconds'] + 1 - 0.3)
+            # 最初の表が出るまでの時間はPCの速さで変わるため、絶対秒数ではなく
+            # 「最低時間かつ最初の表から1秒」で止まったかを、余裕2秒で確認する。
+            self.assertLessEqual(r['seconds'], max(3, rule['firstSolutionSeconds'] + 1) + 2)
 
     def test_impossible_conditions_are_still_proven(self):
         p = fixture()

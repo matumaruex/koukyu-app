@@ -45,3 +45,5 @@
 
 /* 保存一覧は通常の作成画面から独立させる。 */
 .bottom button{min-width:0;font-size:12px}.saved-table-row{padding:16px 0;border-bottom:1px solid #d7e0d8}.saved-table-row:last-child{border-bottom:0}
+/* 固定した勤務は太枠で示す（作り直しても残るマス）。 */
+.month-table td.locked{box-shadow:inset 0 0 0 2px #276652;font-weight:700}

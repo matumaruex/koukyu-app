@@ -18,6 +18,8 @@ function harness(raw,options={}){
  class Clock extends Date{constructor(...args){super(...(args.length?args:[new Date(2026,9,6,12).getTime()]));}}
  const values=new Map(raw?[['koukyu_v3_data',JSON.stringify(raw)]]:[]),nodes={},all=[],period=new Element(),calls=[],confirmations=[],timers=[];
  if(options.current){values.clear();values.set('koukyu_v4_data',JSON.stringify(options.current));}
+ // 作業中の表など、ほかの保存キーを読み込み前に置く。
+ for(const[k,v]of Object.entries(options.stored||{}))values.set(k,v);
  const nav=['schedule','requests','staff','saved'].map(tab=>{const e=new Element('button');e.dataset.tab=tab;return e;});
  const ctx={console,Date:Clock,Math,JSON,Set,Map,AbortController,File,URL,crypto:require('node:crypto').webcrypto,
   navigator:{storage:{persist:async()=>true}},window:{print(){}},confirm:message=>{confirmations.push(message);return true;},
