@@ -11,6 +11,7 @@ from .input_data import normalize, SHIFTS
 from .validator import validate
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit
 from .night_preferences import report as preference_report
+from .quality_search import search as quality_search
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -53,12 +54,14 @@ def _solve_with_stop_rule(solver, model, min_seconds, after_first, *, tracker=No
     return status, bool(stopped), first
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False):
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False):
     """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。"""
     if not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
         return {'status': 'INVALID_INPUT', 'errors': ['seconds must be finite and positive']}
     if type(allow_staffing_shortfall) is not bool:
         return {'status': 'INVALID_INPUT', 'errors': ['allow_staffing_shortfall must be boolean.']}
+    if type(quality_first) is not bool or (quality_first and not optimize):
+        return {'status': 'INVALID_INPUT', 'errors': ['quality_first requires optimized calculation.']}
     if type(allow_night_shortfall) is not bool or (allow_night_shortfall and not allow_staffing_shortfall):
         return {'status': 'INVALID_INPUT', 'errors': ['夜勤未配置は人数不足の下書きでのみ指定できます。']}
     def permitted_shortfall(e):
@@ -345,7 +348,28 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 時間内に最少を証明できなければ、見つかった表の件数を維持して改善する。
     # 第2段階だけが最適でも全体の最適・希望件数の最少とは説明しない。
     solver = new_solver(seconds)
-    if has_priority:
+    quality_result = None
+    if quality_first:
+        def priority_of(a):
+            errors = validate(raw, a)
+            shortage = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
+            gaps = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
+            return (shortage * shortage_priority_weight + gaps * gap_weight
+                    + len(preference_report(p, a)['unmet']) * preference_weight
+                    + (metrics(p, a)['nightSpread'] if balance_nights else 0))
+        quality_result = quality_search(model, p, seconds=seconds, priority=priority if has_priority else None,
+                                        objective=objective, overtime=sum(overtime_totals),
+                                        new_solver=new_solver, extract=extract, priority_of=priority_of,
+                                        initial_assignments=initial_assignments)
+        solver, status = quality_result['solver'], quality_result['status']
+        phase_candidate = quality_result['candidate']
+        if status == cp_model.INFEASIBLE and phase_candidate is not None:
+            return {'status': 'VALIDATION_FAILED', 'errors': ['配置改善の検査を完了できませんでした。確認済みの表は変更していません。']}
+        priority_proven, priority_value = quality_result['priorityProven'], quality_result['priorityValue']
+        lower_bound, elapsed = quality_result['lowerBound'], quality_result['seconds']
+        if initial_priority is not None and phase_candidate is not None and priority_of(phase_candidate) == initial_priority:
+            preserved_night_spread = initial_metric['nightSpread']
+    elif has_priority:
         if objective is not None:
             # 表が出ない間は全上限まで探す。最初の表が出れば残り時間を配置改善へ回す。
             phase_min, phase_after = min(seconds / 3, 15), min(3, seconds / 4)
@@ -423,8 +447,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     reason = ('early_return' if stopped_early else 'optimal' if status == cp_model.OPTIMAL
               else 'infeasible' if status == cp_model.INFEASIBLE
               else 'time_limit' if elapsed >= seconds - 0.1 else 'completed')
-    result['timing'] = {'mode': 'adaptive' if stop_rule else 'full', 'maxSeconds': seconds, 'reason': reason}
-    if stop_rule:
+    result['timing'] = {'mode': 'quality' if quality_first else 'adaptive' if stop_rule else 'full', 'maxSeconds': seconds, 'reason': reason}
+    if quality_result is not None:
+        result['search'] = quality_result['info']
+    if stop_rule and not quality_first:
         result['stopRule'] = {'minSeconds': min_seconds, 'afterFirst': after_first, 'stoppedEarly': stopped_early, 'firstSolutionSeconds': first_seconds}
     keep_previous = status == cp_model.UNKNOWN and initial_assignments is not None
     if keep_previous:
@@ -467,7 +493,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': p['fairnessExcludedStaff'], 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0, 'provenOptimal': optimize and status == cp_model.OPTIMAL}
     result['optimizationPolicy'] = POLICY
     result['allocation'] = metrics(p, assignments)
-    result['allocation']['minimumOvertimeProven'] = bool((optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
+    result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None
+                                                       else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
     if has_priority:
         result['allocation']['minimumOvertimeScope'] = 'WITH_FIXED_STAFFING_NIGHT_REST_AND_NIGHT_BALANCE'
     result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
