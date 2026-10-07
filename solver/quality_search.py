@@ -71,7 +71,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     def hints():
         model.clear_hints()
         if candidate is None:
-            return
+            return 0
         variables = {v.name: model.get_int_var_from_proto_index(i)
                      for i, v in enumerate(model.proto.variables)}
         for sid, row in candidate.items():
@@ -79,11 +79,28 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
                 shift = row[str(d + 1)]
                 for k in ('off', 'early', 'late', 'overtime', 'night', 'nightOff', 'part'):
                     model.add_hint(variables[f'{sid}_{d}_{k}'], int(k == shift))
+        if remaining() < .25:
+            return 0
+        # 勤務だけのヒントでは、回数・人数・A/B比率などの補助変数を
+        # 再構築できず、検査済みの表にさえ戻れないことがある。
+        # 勤務を固定した小さな計算で全変数のヒントを補う。証明には使わない。
+        hint_start = time.monotonic()
+        completion_model = model.clone()
+        completion = new_solver(min(1.0, remaining() / 4))
+        completion.parameters.num_search_workers = 1
+        completion.parameters.fix_variables_to_their_hinted_value = True
+        completed = completion.solve(completion_model)
+        if completed in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+            model.clear_hints()
+            for i in range(len(model.proto.variables)):
+                model.add_hint(model.get_int_var_from_proto_index(i),
+                               completion.value(completion_model.get_int_var_from_proto_index(i)))
+        return time.monotonic() - hint_start
 
     def run(name, expression, idle):
         nonlocal solver, status, candidate, actual_candidate
         model.minimize(expression)
-        hints()
+        hint_seconds = hints()
         solver = new_solver(max(0.000001, remaining()))
         progress = Progress(expression, value_of(name, candidate) if candidate is not None else None,
                             time.monotonic() - idle)
@@ -111,7 +128,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
                 candidate = found
             actual_candidate = True
         stages.append({'stage': name, 'seconds': round(solver.wall_time, 3), 'status': solver.status_name(status),
-                       'improvements': progress.improvements, 'stalled': bool(stalled)})
+                       'improvements': progress.improvements, 'stalled': bool(stalled),
+                       'hintSeconds': round(hint_seconds, 3)})
         return progress, bool(stalled)
 
     if stage not in STAGES:
@@ -128,12 +146,16 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             pending = name
             break
         if candidate is not None and name != 'conditions':
-            model.add(objective <= quality_value(p, candidate))
+            # 合計や回数差だけを探す段階に、配置の大きな重みを持ち込まない。
+            # 候補の採用時には rank で上位条件と総合評価を検査する。
+            if name == 'placement':
+                model.add(objective <= quality_value(p, candidate))
             # 公平化や配置のために残業合計を増やさない。通信をまたいでも維持する。
             current = metrics(p, candidate)
             model.add(overtime <= current['overtimeTotal'])
-            if proven.get('overtime'):
-                # 最少合計が証明済みなら固定し、算術的な回数差の下限もモデルへ伝える。
+            if proven.get('overtime') or name in ('overtime_fairness', 'placement'):
+                # 公平化では、ここまでに得た合計を固定して配分だけを探す。
+                # 合計の最少証明とは別。未証明の合計削減は残業段階で扱う。
                 model.add(overtime == current['overtimeTotal'])
                 if name == 'overtime_fairness' and overtime_spread is not None:
                     model.add(overtime_spread >= current['overtimeIdealBalance'])
@@ -161,7 +183,16 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
         idle = time.monotonic() - progress.last_improvement
         break
 
+    # 公平化を未確認で打ち切っても、残った全体時間で別の探索を試せるようにする。
+    # 算術理想に達した通常配分や、この合計で差を証明できた配分は再試行しない。
+    if pending is None and candidate is not None and status != cp_model.INFEASIBLE:
+        current = metrics(p, candidate)
+        arithmetic = (not current['overtimeProportional']
+                      and current['overtimeBalance'] == current['overtimeIdealBalance'])
+        if overtime_spread is not None and not arithmetic and not proven.get('overtime_fairness'):
+            pending, idle = 'overtime_fairness', 0
     done = pending is None and status != cp_model.INFEASIBLE
+    all_proven = False
     if candidate is not None and status != cp_model.INFEASIBLE:
         all_proven = all(proven.get(k) for k in STAGES if exprs[k] is not None)
         status = cp_model.OPTIMAL if all_proven else cp_model.FEASIBLE if actual_candidate else cp_model.UNKNOWN
@@ -169,7 +200,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
         solver = cp_model.CpSolver()
     priority_proven = priority is None or bool(proven.get('conditions'))
     overtime_proven = priority_proven and bool(proven.get('overtime'))
-    overtime_spread_proven = overtime_proven and bool(proven.get('overtime_fairness'))
+    # 固定した合計での回数差の証明。合計自体が最少との証明は要求しない。
+    overtime_spread_proven = bool(proven.get('overtime_fairness'))
     major_ready = False
     if candidate is not None:
         m = metrics(p, candidate)
@@ -177,7 +209,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
                     else overtime_spread_proven)
         major_ready = (priority_proven and overtime_proven and balanced and m['extraOffSpread'] == 0)
     keep_going = not done and status != cp_model.INFEASIBLE
-    reason = ('confirmed' if done else 'infeasible' if status == cp_model.INFEASIBLE
+    reason = ('confirmed' if done and all_proven else 'stalled' if done
+              else 'infeasible' if status == cp_model.INFEASIBLE
               else f'{pending}_unconfirmed')
     return {'solver': solver, 'status': status, 'candidate': candidate,
             'priorityProven': priority_proven,

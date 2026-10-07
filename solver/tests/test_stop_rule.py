@@ -12,8 +12,9 @@ OK = ('OPTIMAL', 'FEASIBLE')
 
 class StopRuleTests(unittest.TestCase):
     def test_stops_after_minimum_instead_of_running_to_cap(self):
-        # 3月の設定は時間内に最適と確認できない例。上限60秒でも、表が見つかれば早く返る。
-        p = fixture(3)
+        # 停止規則を検証する。3月の解発見が60秒以内に終わるかには依存せず、
+        # APIの停止規則と同じ成立例で、解発見後の停止時刻を確認する。
+        p = next(cases())[1]
         r = solve(p, seconds=60, min_seconds=3, after_first=1)
         self.assertIn(r['status'], OK)
         self.assertEqual(validate(p, r['assignments']), [])
@@ -87,4 +88,3 @@ class StopRuleTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

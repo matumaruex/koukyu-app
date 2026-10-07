@@ -1,7 +1,7 @@
 """月全体の残業・配置を評価する。完成表の独立検査とは別の計算。"""
 from .input_data import overtime_profile
 
-POLICY = 'quality-first-4'
+POLICY = 'quality-first-5'
 CHECKPOINTS = (420, 600, 1065)
 
 

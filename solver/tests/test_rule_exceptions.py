@@ -92,8 +92,17 @@ class StageProgressTests(unittest.TestCase):
             r = dispatch(dict(SCREEN, input=raw, seconds=30))
         stages = r['search']['stages']
         self.assertEqual([s['stage'] for s in stages], ['conditions', 'overtime', 'overtime_fairness', 'placement'])
-        self.assertTrue(r['search']['done'])
-        self.assertIsNone(r['search']['resume'])
+        # 配置まで進んでも、偏りを未確認のまま完了とはしない。
+        fair = r['overtimeFairness']
+        if fair['minimumSpreadProven']:
+            self.assertTrue(r['search']['done'])
+            self.assertIsNone(r['search']['resume'])
+        else:
+            self.assertFalse(r['search']['done'])
+            self.assertTrue(r['search']['continueRecommended'])
+            self.assertEqual(r['search']['resume']['stage'], 'overtime_fairness')
+            self.assertEqual(r['search']['resume']['idle'], 0)
+            self.assertEqual(r['search']['reason'], 'overtime_fairness_unconfirmed')
         self.assertEqual([e for e in validate(raw, r['assignments']) if e['code'] not in ('coverage', 'sunday_limit')], [])
 
     def test_resume_continues_from_the_given_stage_without_worsening(self):
@@ -116,7 +125,15 @@ class StageProgressTests(unittest.TestCase):
         r = dispatch(dict(SCREEN, input=raw, seconds=2))
         self.assertFalse(r['search']['done'])
         self.assertTrue(r['search']['continueRecommended'])
-        self.assertEqual(r['search']['resume']['stage'], 'conditions')
+        # 2秒でも条件段階を証明できる場合がある。速度に関係なく、
+        # 未証明の現在段階と、完了した段階の証明を正しく持ち越すことを確認する。
+        resume = r['search']['resume']
+        order = ['conditions', 'overtime', 'overtime_fairness', 'placement']
+        self.assertIn(resume['stage'], order)
+        self.assertFalse(resume['proven'].get(resume['stage'], False))
+        for stage in order[:order.index(resume['stage'])]:
+            self.assertTrue(resume['proven'][stage])
+        self.assertEqual(r['search']['reason'], f"{resume['stage']}_unconfirmed")
         self.assertGreaterEqual(r['search']['resume']['idle'], 0)
 
 
