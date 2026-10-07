@@ -20,8 +20,8 @@ def fixture(staff_count=16):
     return p
 
 class RequestedNightRestTests(unittest.TestCase):
-    def checked(self, p, draft=False, optimize=False):
-        r = solve(p, seconds=3, optimize=optimize, allow_staffing_shortfall=draft)
+    def checked(self, p, draft=False, optimize=False, seconds=3):
+        r = solve(p, seconds=seconds, optimize=optimize, allow_staffing_shortfall=draft)
         self.assertIn(r['status'], ('OPTIMAL', 'FEASIBLE', 'DRAFT'), r)
         errors=validate(p,r['assignments'])
         self.assertTrue(all(e['code'] in ('coverage','sunday_limit') for e in errors))
@@ -37,10 +37,11 @@ class RequestedNightRestTests(unittest.TestCase):
         self.assertEqual([r['assignments']['s0'][str(d)] for d in (4,5,6,7,8)],['night','nightOff','off','off','off'])
 
     def test_two_staff_same_block_have_exactly_one_exception(self):
-        # 希望の衝突を検証する。16人の夜勤公平性の証明が3秒で終わるかには依存しない。
-        p=fixture(6);p['requests']['s1']=[6]
+        # 希望の衝突を検証する。28日の夜勤を4人へ均等にできる成立例を使い、
+        # 別項目の夜勤回数差の証明に左右されず、衝突件数の最少証明を確認する。
+        p=fixture(4);p['requests']['s1']=[6]
         for draft in (False,True):
-            r=self.checked(p,draft);self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
+            r=self.checked(p,draft,seconds=5);self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
             self.assertEqual(r['nightRestPreferences']['unmet'][0]['day'],6)
             self.assertTrue(r['nightRestPreferences']['minimumUnmetProven'])
 

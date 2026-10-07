@@ -24,6 +24,22 @@ const reopen=(from,extra={})=>harness(null,{current:{...JSON.parse(from.values.g
  assert(reopened.nodes.view.text.includes('ページを開き直しても残ります'));
  assert.equal(reopened.calls.length,0);
 
+ // 3.26からの更新は入力全体が同じなら作業表を保持し、旧方式の証明は区別する。
+ const legacy=JSON.parse(JSON.stringify(work));
+ legacy.schedules['2026-10'].workSignature=legacy.schedules['2026-10'].workSignature.replace('rules-3.27:','rules-3.26:');
+ legacy.schedules['2026-10'].meta.signature=legacy.schedules['2026-10'].workSignature;
+ legacy.schedules['2026-10'].meta.optimizationPolicy='quality-first-4';
+ const current=JSON.parse(h.values.get('koukyu_v4_data'));
+ const upgraded=harness(null,{current,stored:{koukyu_v4_work:JSON.stringify(legacy)}});
+ assert.deepEqual(upgraded.get('schedule().assignments'),h.get('schedule().assignments'));
+ assert.equal(upgraded.get('schedule().workSignature'),upgraded.get('inputData().signature'));
+ assert.equal(upgraded.get('metadata().signature'),upgraded.get('inputData().signature'));
+ assert.equal(upgraded.get('metadata().optimizationPolicy'),'quality-first-4');
+ assert.deepEqual(upgraded.get('data.savedTables'),h.get('data.savedTables'));
+ assert.deepEqual(upgraded.get('schedule().locked'),h.get('schedule().locked'));
+ const changed=harness(null,{current:{...current,staff:staff.map(s=>({...s,monthlyDaysOff:10}))},stored:{koukyu_v4_work:JSON.stringify(legacy)}});
+ assert.equal(changed.get('hasTable()'),false);
+
  // 「新しく作る」の結果も、計算が終わった時点で残る。
  const made=harness(raw,{response:async p=>p.action==='validate'?{status:'VALID',validationErrors:[],boundaryComplete:true}:{status:'FEASIBLE',assignments:{s0:{'1':'early'},s1:{'1':'off'}},boundaryComplete:true,seconds:1}});
  await made.ctx.generate('new');

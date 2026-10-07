@@ -14,6 +14,6 @@ h.eval("schedule().assignments.a['1']='off'");
 assert(h.eval('allocationSummary()').text.includes('夜勤：4〜6回 ／ 差2回'));
 h.eval("schedule().excludedStaff=['b']");
 assert(h.eval('allocationSummary()').text.includes('夜勤：4〜4回 ／ 差0回'));
-assert.equal(h.get('inputData().signature').startsWith('rules-3.26:'),true);
-assert.equal(h.get('OPTIMIZATION_POLICY'),'quality-first-4');
+assert.equal(h.get('inputData().signature').startsWith('rules-3.27:'),true);
+assert.equal(h.get('OPTIMIZATION_POLICY'),'quality-first-5');
 console.log('PASS: 夜勤の回数差を実際の表から集計し、編集と対象職員に追従');

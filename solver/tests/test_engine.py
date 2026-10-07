@@ -21,7 +21,9 @@ class SolverTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.raw = fixture()
-        cls.result = solve(cls.raw, seconds=15)
+        # この旧方式の成立例は15秒付近で最初の解が出るため、環境速度で
+        # 独立検査の全試験を飛ばさないよう、成立確認に30秒を確保する。
+        cls.result = solve(cls.raw, seconds=30)
         assert cls.result['status'] in ('OPTIMAL', 'FEASIBLE'), cls.result
         cls.table = cls.result['assignments']
 
@@ -37,7 +39,7 @@ class SolverTests(unittest.TestCase):
         p = fixture()
         sid = p['staff'][0]['id']
         p['requests'] = {sid: [1, 2, 3]}
-        r = solve(p, seconds=15)
+        r = solve(p, seconds=30)
         self.assertIn(r['status'], ('OPTIMAL', 'FEASIBLE'))
         self.assertEqual([r['assignments'][sid][str(d)] for d in (1, 2, 3)], ['off'] * 3)
         self.assertEqual(validate(p, r['assignments']), [])

@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.c
 const raw={staff:[{id:'local',name:'職員',type:'full',nightShiftType:'all'}],schedules:{}};
 function result(ot,{done=false,stage='overtime',short}={}){return {status:short===undefined?'FEASIBLE':'DRAFT',assignments:{s0:{'1':'off'}},seconds:60,
  ...(short===undefined?{}:{staffingShortfallTotal:short}),
- allocation:{overtimeTotal:ot,nightSpread:0},search:{done,continueRecommended:!done,resume:done?null:{stage,idle:3,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-4'};}
+ allocation:{overtimeTotal:ot,nightSpread:0},search:{done,continueRecommended:!done,resume:done?null:{stage,idle:3,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-5'};}
 const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
 (async()=>{
  // 段階が終わるまで続きを呼び、前回の表と再開位置を渡す。新規と改善、既存の表あり・なし。
@@ -33,6 +33,9 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  let k=0;const bound=harness(raw,{response:async()=>({...result(3,{done:++k===2,short:5}),shortfallLowerBound:k===1?2:undefined})});await bound.ctx.generate();
  assert.equal(bound.get('schedule().meta.shortfallLowerBound'),2);assert(bound.nodes.view.text.includes('あと最大3か所減る可能性'));
  const stable=harness(raw,{response:async()=>result(3,{done:true})});await stable.ctx.generate();assert.equal(stable.calls.length,1);
+ // 全段階を終えた応答でも、未確認の残業差が残れば手動の改善を隠さない。
+ const unconfirmed=harness(raw,{response:async()=>({...result(3,{done:true}),overtimeFairness:{minimumSpreadProven:false}})});
+ await unconfirmed.ctx.generate();assert.equal(unconfirmed.calls.length,1);assert(buttons(unconfirmed).includes('さらに改善する'));
  // 作れないときは、理由調べの結果（外す希望）を名前と日付で出す。
  const impossible=harness(raw,{response:async()=>({status:'INFEASIBLE',seconds:.1,diagnosis:{status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:[{kind:'request',staff:'s0',day:3,shift:'off'}]}})});
  await impossible.ctx.generate();assert.equal(impossible.calls.length,1);assert.equal(impossible.get('hasTable()'),false);

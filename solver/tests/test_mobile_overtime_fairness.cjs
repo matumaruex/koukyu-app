@@ -17,8 +17,10 @@ assert(text.includes('残業（A残できる人）：3〜6回 ／ 差3回'));
 assert(text.includes('避けられないかは、まだ確認できていません'));
 h.eval("schedule().meta={status:'FEASIBLE',optimizationPolicy:OPTIMIZATION_POLICY,overtimeFairness:{total:13,spread:3,minimumSpreadProven:true}};");
 assert(h.eval('allocationSummary()').text.includes('上位条件と残業合計を維持する範囲で、この回数差が最少'));
-h.eval("schedule().meta.optimizationPolicy='quality-first-2'");
-assert(h.eval('allocationSummary()').text.includes('まだ確認できていません'));
+for(const policy of ['quality-first-2','quality-first-4']){
+ h.eval('schedule().meta.optimizationPolicy='+JSON.stringify(policy));
+ assert(h.eval('allocationSummary()').text.includes('まだ確認できていません'));
+}
 h.eval("schedule().assignments.a['1']='off';schedule().assignments.c['4']='overtime';schedule().meta=null;");
 assert(h.eval('allocationSummary()').text.includes('4〜5回 ／ 差1回'));
 assert(h.eval('allocationSummary()').text.includes('同じ残業合計では、これ以上均等にできない配分'));
