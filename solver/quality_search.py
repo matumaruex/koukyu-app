@@ -64,7 +64,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
         if name == 'overtime':
             return metrics(p, a)['overtimeTotal']
         if name == 'overtime_fairness':
-            return metrics(p, a)['overtimeSpread']
+            # 出勤できる日数で換算した回数の差（計算の式 overtime_spread と同じ値）。
+            return metrics(p, a)['overtimeBalance']
         return quality_value(p, a)
 
     def hints():
@@ -135,8 +136,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
                 # 最少合計が証明済みなら固定し、算術的な回数差の下限もモデルへ伝える。
                 model.add(overtime == current['overtimeTotal'])
                 if name == 'overtime_fairness' and overtime_spread is not None:
-                    count = len(current['overtimeByStaff'])
-                    model.add(overtime_spread >= int(bool(count) and current['overtimeTotal'] % count != 0))
+                    model.add(overtime_spread >= current['overtimeIdealBalance'])
         progress, stalled = run(name, expression, idle)
         if name == 'conditions' and status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
             priority_bound = solver.best_objective_bound
@@ -173,10 +173,9 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     major_ready = False
     if candidate is not None:
         m = metrics(p, candidate)
-        ot_count = len(m['overtimeByStaff'])
-        ideal_ot_spread = int(ot_count > 0 and m['overtimeTotal'] % ot_count != 0)
-        major_ready = (priority_proven and overtime_proven
-                       and m['overtimeSpread'] == ideal_ot_spread and m['extraOffSpread'] == 0)
+        balanced = (m['overtimeBalance'] == m['overtimeIdealBalance'] if not m['overtimeProportional']
+                    else overtime_spread_proven)
+        major_ready = (priority_proven and overtime_proven and balanced and m['extraOffSpread'] == 0)
     keep_going = not done and status != cp_model.INFEASIBLE
     reason = ('confirmed' if done else 'infeasible' if status == cp_model.INFEASIBLE
               else f'{pending}_unconfirmed')

@@ -7,9 +7,9 @@ import time
 from datetime import timedelta
 from pathlib import Path
 from ortools.sat.python import cp_model
-from .input_data import normalize, SHIFTS
+from .input_data import normalize, SHIFTS, overtime_profile
 from .validator import validate, is_rule_exception, exception_count, SHORTFALL_CODES
-from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit
+from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales, overtime_balance_bound
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
 
@@ -173,9 +173,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     compared_extra_off = []
     night_totals, ab_totals = [], []
     overtime_totals, overtime_squares = [], []
+    # 残業回数を比べる値（出勤できる日数で換算した回数）。
+    overtime_scaled = []
+    ot_scales = overtime_scales(p)
     for i, st in enumerate(p['staff']):
         sid = st['id']
         label = f'職員{i + 1}'
+        ot_profile = overtime_profile(p, st)
+        ot_label = label + f'のA残は月{ot_profile["cap"]}回以内・連日不可'
         nt = st['nightShiftType']
         limit = st['maxConsecutive'] or (2 if st['type'] != 'part' and nt != 'none' else 5)
         extensions = []
@@ -203,7 +208,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 required(x[sid, d, k] == 0, sid + '_eligibility', label + 'の勤務可能時間・A/Bの可否・夜勤資格')
             required(x[sid, d, 'nightOff'] == value(sid, d - 1, 'night'), sid + '_night_link', label + 'の夜勤翌日は明け（期間境界を含む）')
             required(x[sid, d, 'off'] >= value(sid, d - 1, 'nightOff'), sid + '_night_rest', label + 'の夜勤明け翌日は必ず公休（期間境界を含む）')
-            required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', label + 'のA残は月6回以内・連日不可')
+            required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', ot_label)
             if d + 1 in p['requests'].get(sid, []):
                 wish(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休',
                      {'kind': 'request', 'staff': sid, 'day': d + 1, 'shift': 'off'})
@@ -251,7 +256,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         off = sum(x[sid, d, 'off'] for d in range(n))
         required(off >= st['monthlyDaysOff'], sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
         ot = sum(x[sid, d, 'overtime'] for d in range(n))
-        required(ot <= 6, sid + '_ot', label + 'のA残は月6回以内・連日不可')
+        # 月6回まで。希望休が公休の最低日数を超える人は、出勤できる日数の比率で縮めた回数まで。
+        required(ot <= ot_profile['cap'], sid + '_ot', ot_label)
         extra = model.new_int_var(-n, n, sid + '_extra_off')
         model.add(extra == off - st['monthlyDaysOff'])
         extra_off.append(extra)
@@ -263,6 +269,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             square = model.new_int_var(0, min(6, n) ** 2, sid + '_ot_square')
             model.add_multiplication_equality(square, [total_ot, total_ot])
             overtime_totals.append(total_ot)
+            if sid in ot_scales:
+                scaled = model.new_int_var(0, min(ot_profile['cap'], n) * ot_scales[sid], sid + '_ot_scaled')
+                model.add(scaled == ot_scales[sid] * total_ot)
+                overtime_scaled.append(scaled)
             overtime_squares.append(square)
         if st['type'] == 'part':
             mondays = {d - (p['start'] + timedelta(days=d)).weekday() for d in range(n)}
@@ -361,10 +371,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if relax_wishes:
         return _explain(model, dropped, night_missing, rule_violations, len(p['staff']) * 2 * n, seconds, seed)
     overtime_range = 0
-    if overtime_totals:
-        high_ot, low_ot = model.new_int_var(0, n, 'ot_high'), model.new_int_var(0, n, 'ot_low')
-        model.add_max_equality(high_ot, overtime_totals)
-        model.add_min_equality(low_ot, overtime_totals)
+    if overtime_scaled:
+        # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
+        top = overtime_balance_bound(p)
+        high_ot, low_ot = model.new_int_var(0, top, 'ot_high'), model.new_int_var(0, top, 'ot_low')
+        model.add_max_equality(high_ot, overtime_scaled)
+        model.add_min_equality(low_ot, overtime_scaled)
         overtime_range = high_ot - low_ot
     initial_metric = metrics(p, initial_assignments) if initial_assignments is not None else None
     initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
@@ -464,7 +476,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     + (metrics(p, a)['nightSpread'] if balance_nights else 0))
         quality_result = quality_search(model, p, seconds=seconds, priority=priority if has_priority else None,
                                         objective=objective, overtime=sum(overtime_totals),
-                                        overtime_spread=overtime_range if overtime_totals else None,
+                                        overtime_spread=overtime_range if overtime_scaled else None,
                                         new_solver=new_solver, extract=extract, priority_of=priority_of,
                                         initial_assignments=initial_assignments, resume=resume)
         solver, status = quality_result['solver'], quality_result['status']
@@ -614,18 +626,27 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['allocation'] = metrics(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None
                                                        else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
-    ot_counts = result['allocation']['overtimeByStaff']
-    ot_total = result['allocation']['overtimeTotal']
-    ot_spread = result['allocation']['overtimeSpread']
-    ideal_ot_spread = int(bool(ot_counts) and ot_total % len(ot_counts) != 0)
-    spread_proven = bool(ot_spread == ideal_ot_spread or
+    allocation = result['allocation']
+    ot_counts = allocation['overtimeByStaff']
+    ot_total = allocation['overtimeTotal']
+    ot_spread = allocation['overtimeSpread']
+    proportional = allocation['overtimeProportional']
+    # 比率で比べる人がいなければ、合計を人数で割り切れないときの差1回が算術上の最少。
+    arithmetic = not proportional and allocation['overtimeBalance'] == allocation['overtimeIdealBalance']
+    spread_proven = bool(arithmetic or
                          (quality_result['overtimeSpreadProven'] if quality_result is not None
                           else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL))
+    profiles = {st['id']: overtime_profile(p, st) for st in p['staff'] if st['id'] in ot_counts}
     result['overtimeFairness'] = {
         'byStaff': ot_counts, 'total': ot_total, 'spread': ot_spread,
-        'idealSpread': ideal_ot_spread, 'minimumSpreadProven': spread_proven,
+        'balance': allocation['overtimeBalance'],
+        'idealSpread': None if proportional else allocation['overtimeIdealBalance'],
+        'minimumSpreadProven': spread_proven,
+        # 出勤できる日数が少なく、比率で比べた人（出勤できる日数・普通の日数・A残の上限）。
+        'proportionalStaff': {sid: {'availableDays': v['available'], 'normalDays': v['normal'], 'cap': v['cap']}
+                              for sid, v in profiles.items() if v['proportional']},
         'scope': 'FIXED_STAFFING_NIGHT_REST_NIGHT_BALANCE_AND_OVERTIME_TOTAL',
-        'reason': 'balanced' if ot_spread == ideal_ot_spread else 'constraints' if spread_proven else 'not_proven',
+        'reason': 'balanced' if arithmetic else 'constraints' if spread_proven else 'not_proven',
     }
     if has_priority:
         result['allocation']['minimumOvertimeScope'] = 'WITH_FIXED_STAFFING_NIGHT_REST_AND_NIGHT_BALANCE'

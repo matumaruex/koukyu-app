@@ -4,6 +4,24 @@ from copy import deepcopy
 from datetime import date, timedelta
 
 SHIFTS = ('off', 'early', 'late', 'overtime', 'night', 'nightOff', 'part')
+OVERTIME_MONTHLY_LIMIT = 6
+
+
+def overtime_profile(p, st):
+    """出勤できる日数から、A残の上限を決める。
+    出勤できる日数＝期間日数−max(公休の最低日数, 希望休の日数)。作る前に決まる値なので計算が重くならない。
+    希望休が最低日数以内の人は普通の人と同じ（上限6回）。長期休暇などで希望休が多い人は、
+    上限6回を「出勤できる日数÷普通の出勤日数」の比率で縮める（切り上げ）。"""
+    n = p['days']
+    normal = n - st['monthlyDaysOff']
+    available = n - max(st['monthlyDaysOff'], len(set(p['requests'].get(st['id'], []))))
+    if normal <= 0 or available >= normal:
+        return {'available': max(available, 0), 'normal': max(normal, 0), 'proportional': False,
+                'cap': OVERTIME_MONTHLY_LIMIT}
+    if available <= 0:
+        return {'available': 0, 'normal': normal, 'proportional': True, 'cap': 0}
+    cap = min(OVERTIME_MONTHLY_LIMIT, (OVERTIME_MONTHLY_LIMIT * available + normal - 1) // normal)
+    return {'available': available, 'normal': normal, 'proportional': True, 'cap': cap}
 
 
 def normalize(raw):
