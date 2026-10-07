@@ -1,6 +1,7 @@
 """月全体の残業・配置を評価する。完成表の独立検査とは別の計算。"""
+from .input_data import overtime_profile
 
-POLICY = 'quality-first-3'
+POLICY = 'quality-first-4'
 CHECKPOINTS = (420, 600, 1065)
 
 
@@ -14,6 +15,30 @@ def covers(st, shift, checkpoint):
     return shift in {420: ('early', 'overtime', 'nightOff'),
                      600: ('early', 'late', 'overtime'),
                      1065: ('late', 'overtime', 'night')}[checkpoint]
+
+
+# 比率で比べる人がいる月の目盛り。普通の人の1回＝100。出勤できる日数がとても少ない人の係数は6倍で頭打ち。
+OVERTIME_SCALE = 100
+
+
+def overtime_scales(p):
+    """残業回数を比べるときの換算係数（A残できるフルタイムで、出勤できる日がある人）。
+    出勤できる日数が少ない人がいなければ全員1（3.25と同じ「回数の差」）。いれば普通の人100、
+    少ない人は 100×普通の出勤日数÷出勤できる日数（四捨五入、600まで）。"""
+    eligible = [(st, overtime_profile(p, st)) for st in p['staff']
+                if st.get('type') != 'part' and st.get('canOvertime')]
+    eligible = [(st, v) for st, v in eligible if v['available'] > 0]
+    if not any(v['proportional'] for _, v in eligible):
+        return {st['id']: 1 for st, _ in eligible}
+    return {st['id']: (min(6 * OVERTIME_SCALE, (2 * OVERTIME_SCALE * v['normal'] + v['available']) // (2 * v['available']))
+                       if v['proportional'] else OVERTIME_SCALE) for st, v in eligible}
+
+
+def overtime_balance_bound(p):
+    """換算した回数の最大値（＝差の上限）。"""
+    scales = overtime_scales(p)
+    return max([scales[st['id']] * min(overtime_profile(p, st)['cap'], p['days']) for st in p['staff']
+                if st.get('id') in scales] or [0])
 
 
 def minor_unit(p):
@@ -45,8 +70,11 @@ def weights(p):
     # 全項が非負。1つ上の項1単位を下位の改善で逆転できない係数。
     # 40人・31日・不足3720人分でもCP-SATの64bit整数範囲に収まる。
     minor_bound = (n + 1) * (minor_unit(p) - 1) + n
+    # 残業回数差は、出勤できる日数で換算した回数の差。普通の月は3.25と同じく上限6。
+    # 比率で比べる人がいる月は最大でおよそ1200（上限回数×係数）になるが、40人・31日でも約1.4e17で64bit整数に収まる。
+    balance_bound = overtime_balance_bound(p) if 'days' in p and all('id' in st for st in p['staff']) else 6
     # 残業合計 → 残業回数差 → 人数超過 → 追加公休 → 細部。
-    bounds = (6 * k, 6, 3 * k * n, n, minor_bound)
+    bounds = (6 * k, balance_bound, 3 * k * n, n, minor_bound)
     result, lower = [], 0
     for bound in reversed(bounds):
         result.append(lower + 1)
@@ -59,11 +87,20 @@ def weights(p):
 def metrics(p, assignments):
     n = p['days']
     ot, extras, nights = {}, [], []
+    plain, scaled, proportional = [], [], False
+    scales = overtime_scales(p)
     for st in p['staff']:
         row = assignments[st['id']]
         values = [row[str(d)] for d in range(1, n + 1)]
         if st['type'] != 'part' and st['canOvertime']:
             ot[st['id']] = values.count('overtime')
+            profile = overtime_profile(p, st)
+            if st['id'] in scales:
+                scaled.append(ot[st['id']] * scales[st['id']])
+            if profile['proportional']:
+                proportional = True
+            else:
+                plain.append(ot[st['id']])
         if st['id'] not in p['fairnessExcludedStaff']:
             extras.append(values.count('off') - st['monthlyDaysOff'])
         if st['type'] != 'part':
@@ -79,20 +116,27 @@ def metrics(p, assignments):
             surplus += max(0, count - needs[j])
     spread = max(extras) - min(extras) if extras else 0
     common = min(extras) if extras else 0
-    ot_range = max(ot.values()) - min(ot.values()) if ot else 0
+    # 画面に出す「差」は、出勤できる日数が普通の人どうしの回数差。
+    ot_range = max(plain) - min(plain) if plain else 0
+    # 計算で比べる値：出勤できる日数で換算した回数の差（普通の人だけの月は回数の差そのもの）。
+    ot_balance = max(scaled) - min(scaled) if scaled else 0
+    # 全員が普通の人なら、合計を人数で割り切れないときの差1回が算術上の最少。比率を含む場合は決めない。
+    ideal_balance = int(sum(scaled) % len(scaled) != 0) if scaled and not proportional else 0
     ab = ab_ratio_report(p, assignments)
     night_spread = max(nights) - min(nights) if nights else 0
     balance = ab['deviationTotal'] + (100 * len(p['staff']) + 1) * night_spread
     minor = spread * minor_unit(p)
     minor += sum(v * v for v in ot.values()) + balance
     return {'overtimeTotal': sum(ot.values()), 'overtimeByStaff': ot,
-            'overtimeSpread': ot_range, 'surplusTotal': surplus,
+            'overtimeSpread': ot_range, 'overtimeBalance': ot_balance,
+            'overtimeIdealBalance': ideal_balance, 'overtimeProportional': proportional,
+            'surplusTotal': surplus,
             'commonExtraDaysOff': common, 'extraOffSpread': spread,
             'nightSpread': night_spread, 'abRatioBalance': ab, 'minor': minor}
 
 
 def quality_value(p, assignments):
     m = metrics(p, assignments)
-    terms = (m['overtimeTotal'], m['surplusTotal'], m['overtimeSpread'],
+    terms = (m['overtimeTotal'], m['surplusTotal'], m['overtimeBalance'],
              p['days'] - m['commonExtraDaysOff'], m['minor'])
     return sum(v * w for v, w in zip(terms, weights(p)[0]))

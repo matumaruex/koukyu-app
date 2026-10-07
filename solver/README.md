@@ -172,3 +172,14 @@ koukyu_v4_data は入力と保存一覧だけを永続化し、作業結果や�
 方式`quality-first-3`、画面署名`rules-3.25`、UI/API3.25、アセットv37。未保存作業表は署名更新で無効になり、明示保存表と入力・前期履歴は保持する。現在は作業環境の変更で、本番未反映。
 
 3.25の最終検証：Python全161件合格（229.276秒）、画面ロジック7ファイルすべて合格。残業公平化の再配分・必要な差の証明・未証明と時間切れ・継続・候補と証明の保護を含む。既存テストの小さい時間上限への依存と優先順位の比較修正は`検証結果.md`に記録。
+
+## 3.26 出勤できる日数が少ない人の残業
+
+希望休が公休の最低日数を超える人（長期休暇など）について、出勤できる日数＝期間日数−max(公休の最低日数, 希望休の日数) を、普通の出勤日数＝期間日数−公休の最低日数 と比べる（`input_data.overtime_profile`）。
+
+- A残の上限：min(6, ⌈6×出勤できる日数÷普通の出勤日数⌉)。必須条件で、独立検査の `overtime_limit` も同じ上限を使い `actual`・`limit` を返す。
+- 残業回数の比較：比率で比べる人がいる月は、普通の人の係数100、少ない人は100×普通÷出勤できる日数（四捨五入、600まで）で換算した回数の最大−最小を `overtime_fairness` 段階で最小化する（`allocation.overtime_scales`）。いない月は係数1で、3.25と同じ回数差・同じ重み。重みの上限は40人・31日の最悪でも約1.4e17。
+- `metrics` の `overtimeSpread` は普通の人どうしの回数差（画面表示用）、`overtimeBalance` は換算後の差（計算・候補比較用）、`overtimeIdealBalance` は全員が普通の人のときの算術上の最少、`overtimeProportional` は比率の人の有無。
+- 結果の `overtimeFairness.proportionalStaff` に、比率で比べた人の出勤できる日数・普通の日数・上限を返す。比率の人がいる場合 `idealSpread` は null で、最少は計算で証明できたときだけ表示する。
+
+方式 `quality-first-4`、画面署名 `rules-3.26`。検証：`test_proportional_overtime.py`、`test_mobile_proportional_overtime.cjs`。
