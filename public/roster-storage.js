@@ -1,6 +1,7 @@
 'use strict';
 // 入力条件・作業中の結果・明示的に保存した表の寿命を分ける。
 const RosterStorage=(()=>{
+  const HolidayPolicy=typeof AutoHolidayPolicy!=='undefined'?AutoHolidayPolicy:require('./auto-holiday-policy.js');
   const copy=value=>JSON.parse(JSON.stringify(value));
   const hasTable=s=>Object.values(s.assignments||{}).some(row=>Object.keys(row||{}).length);
   function periodParts(period){
@@ -14,15 +15,17 @@ const RosterStorage=(()=>{
   }
   function clearResult(schedule){
     schedule.assignments={};
-    for(const field of ['meta','previous','workSignature','retryLong'])delete schedule[field];
+    for(const field of ['meta','previous','workSignature','retryLong','selectedQuota','autoDetails','autoReason','autoReferenceActualOff','creationMode'])delete schedule[field];
   }
   function persisted(data){
     const out=copy(data);out.schemaVersion=4;out.savedTables??=[];
     for(const schedule of Object.values(out.schedules))clearResult(schedule);
+    delete out.autoSchedules;
     return out;
   }
   function prepare(raw,validate){
     const data=validate(copy(raw));
+    const policy=HolidayPolicy.check(raw.autoHolidayPolicy,data.staff);if(policy)data.autoHolidayPolicy=policy;
     if(raw.schemaVersion!==undefined&&raw.schemaVersion!==4)throw Error('このバックアップの形式には対応していません。');
     if(raw.schemaVersion===4){
       if(!Array.isArray(raw.savedTables))throw Error('保存した表の一覧を確認してください。');
@@ -30,6 +33,12 @@ const RosterStorage=(()=>{
       data.savedTables=raw.savedTables.map(record=>{
         if(!record||typeof record.id!=='string'||!record.id||ids.has(record.id)||typeof record.name!=='string'||!record.name.trim()||record.name.length>80||typeof record.createdAt!=='string'||Number.isNaN(Date.parse(record.createdAt)))throw Error('保存した表の情報を確認してください。');
         ids.add(record.id);periodParts(record.period);
+        if(record.creationMode!==undefined&&!['normal','auto'].includes(record.creationMode))throw Error('保存した表の作成方式を確認してください。');
+        if(record.creationMode==='auto'){
+          HolidayPolicy.check(record.autoHolidayPolicy,record.staff);
+          const quotas=record.schedule?.selectedQuota;if(!quotas||typeof quotas!=='object'||Array.isArray(quotas)||Object.entries(quotas).some(([sid,q])=>!record.staff.some(st=>st.id===sid&&st.monthlyDaysOff===q)||!Number.isInteger(q)||q<0||q>31))throw Error('保存した表の採用公休日数を確認してください。');
+          if(record.normalMinimums!==undefined&&(!record.normalMinimums||typeof record.normalMinimums!=='object'||Array.isArray(record.normalMinimums)||Object.values(record.normalMinimums).some(q=>!Number.isInteger(q)||q<0||q>31)))throw Error('保存した表の通常公休日数を確認してください。');
+        }
         const checked=validate(copy({staff:record.staff,preferences:record.preferences,schedules:{[record.period]:record.schedule}}));
         if(!hasTable(checked.schedules[record.period]))throw Error('保存した表の勤務を確認してください。');
         return {...copy(record),staff:checked.staff,preferences:checked.preferences,schedule:checked.schedules[record.period]};

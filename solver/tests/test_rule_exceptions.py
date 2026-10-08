@@ -1,10 +1,13 @@
 """中間ルール（連勤上限・連勤＋1・日勤の種類）、作れないときの理由、段階の止め方と続きの計算を確認する。"""
 import unittest
+import time
 from unittest.mock import patch
+from ortools.sat.python import cp_model
 from solver.service import dispatch
 from solver.validator import validate
 from solver.tests.test_night_fairness import six_staff
 from solver.tests.test_engine import fixture
+from solver.tests.test_overtime_fairness import overtime_fixture
 
 SCREEN = {'qualityFirst': True, 'allowStaffingShortfall': True, 'allowRuleExceptions': True, 'seconds': 10}
 
@@ -87,11 +90,22 @@ class RuleExceptionTests(unittest.TestCase):
 
 class StageProgressTests(unittest.TestCase):
     def test_stalled_stage_moves_on_and_reaches_placement(self):
-        raw = fixture(3)
-        with patch.dict('solver.quality_search.IDLE_SECONDS', {'conditions': 0.5, 'overtime': 0.5, 'overtime_fairness': 0.5, 'placement': 0.5}):
-            r = dispatch(dict(SCREEN, input=raw, seconds=30))
+        raw, initial = overtime_fixture()
+        real_solve = cp_model.CpSolver.solve
+        def stop_after_checked_candidate(solver, model, *args, **kwargs):
+            status = real_solve(solver, model, *args, **kwargs)
+            if args and status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                # 実際の成立候補を使い、証明前に停滞監視が止めた場合を再現する。
+                # ヒント補完の最適性は、この段階の証明には流用しない。
+                time.sleep(.8)
+                return cp_model.FEASIBLE
+            return status
+        with patch.dict('solver.quality_search.IDLE_SECONDS', dict.fromkeys(('conditions', 'overtime', 'overtime_fairness', 'placement'), .5)), \
+                patch.object(cp_model.CpSolver, 'solve', stop_after_checked_candidate):
+            r = dispatch(dict(SCREEN, input=raw, initialAssignments=initial, seconds=30))
         stages = r['search']['stages']
         self.assertEqual([s['stage'] for s in stages], ['conditions', 'overtime', 'overtime_fairness', 'placement'])
+        self.assertTrue(all(s['stalled'] for s in stages))
         # 配置まで進んでも、偏りを未確認のまま完了とはしない。
         fair = r['overtimeFairness']
         if fair['minimumSpreadProven']:

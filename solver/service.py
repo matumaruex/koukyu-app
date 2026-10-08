@@ -10,7 +10,7 @@ ADAPTIVE_AFTER_FIRST = 10
 DIAGNOSIS_SECONDS = 20
 
 
-def dispatch(payload):
+def dispatch(payload, *, _deadline=None):
     if not isinstance(payload, dict) or not isinstance(payload.get('input'), dict):
         return {'status': 'INVALID_INPUT', 'errors': ['職員と対象期間を確認してください。']}
     raw = payload['input']
@@ -18,6 +18,11 @@ def dispatch(payload):
         p = normalize(raw)
         if len(p['staff']) > 40:
             raise ValueError('40人以内で指定してください。')
+        if payload.get('mode') == 'auto' and payload.get('action') != 'validate':
+            from .auto_schedule import dispatch_auto
+            return dispatch_auto(payload)
+        if payload.get('mode') not in (None, 'normal', 'auto'):
+            raise ValueError('作成方式を確認してください。')
         if payload.get('action') == 'validate':
             errors = validate(raw, payload.get('assignments'))
             result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete']}
@@ -57,11 +62,16 @@ def dispatch(payload):
         rule['quality_first'] = True
     if resume is not None:
         rule['resume'] = resume
+    if _deadline is not None:
+        rule['_deadline'] = _deadline
     result = solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), allow_staffing_shortfall=allow_shortfall, allow_night_shortfall=allow_night_shortfall, allow_rule_exceptions=allow_exceptions, **rule)
     if result.get('status') == 'INFEASIBLE' and allow_shortfall:
         # 作れないときだけ、どの希望・固定を外せば作れるか、夜勤を埋められない日はどこかを調べる。
-        result['diagnosis'] = solve(raw, seconds=min(DIAGNOSIS_SECONDS, seconds), seed=seed, allow_staffing_shortfall=True,
-                                    allow_rule_exceptions=allow_exceptions, relax_wishes=True)
+        import time
+        diagnostic_seconds = min(DIAGNOSIS_SECONDS, seconds, max(0, _deadline - time.monotonic()) if _deadline is not None else DIAGNOSIS_SECONDS)
+        if diagnostic_seconds > .01:
+            result['diagnosis'] = solve(raw, seconds=diagnostic_seconds, seed=seed, allow_staffing_shortfall=True,
+                                        allow_rule_exceptions=allow_exceptions, relax_wishes=True, _deadline=_deadline)
     return result
 
 

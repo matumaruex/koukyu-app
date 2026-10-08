@@ -74,7 +74,7 @@ def _explain(model, dropped, night_missing, violations, violation_cap, seconds, 
             'droppedWishes': [item for keep, item in dropped if not solver.value(keep)]}
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False, allow_rule_exceptions=False, resume=None, relax_wishes=False):
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False, allow_rule_exceptions=False, resume=None, relax_wishes=False, _holiday_plan=None, _holiday_actual_off=None, _deadline=None):
     """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。
     allow_rule_exceptions：連勤上限・連勤＋1・日勤の種類（許可した人のみ）を、守ると表が作れないときだけ最小限破る中間ルールにする。
     resume：quality_first の続きの計算（段階と、最後に良くなってからの経過秒）。
@@ -119,6 +119,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             return {'status': 'INVALID_INPUT', 'errors': ['比較する元の表が現在の条件に合いません。'], 'validationErrors': errors}
         initial_assignments = {sid: {str(d): k for d, k in row.items()} for sid, row in initial_assignments.items()}
     model = cp_model.CpModel()
+    # おまかせ経路だけで使う。通常の計算・署名・優先順位は従来どおり。
+    holiday_plan = _holiday_plan.bind(model, p) if _holiday_plan is not None else None
     n = p['days']
     x = {}
     assumptions = {}
@@ -254,12 +256,15 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             else:
                 rule_violations.append(sum(overs))
         off = sum(x[sid, d, 'off'] for d in range(n))
-        required(off >= st['monthlyDaysOff'], sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
+        minimum_off = holiday_plan.minimum(sid) if holiday_plan is not None else st['monthlyDaysOff']
+        required(off >= minimum_off, sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
+        if _holiday_actual_off is not None:
+            model.add(off >= _holiday_actual_off[sid])
         ot = sum(x[sid, d, 'overtime'] for d in range(n))
         # 月6回まで。希望休が公休の最低日数を超える人は、出勤できる日数の比率で縮めた回数まで。
-        required(ot <= ot_profile['cap'], sid + '_ot', ot_label)
+        required(ot <= (holiday_plan.cap(sid) if holiday_plan is not None else ot_profile['cap']), sid + '_ot', ot_label)
         extra = model.new_int_var(-n, n, sid + '_extra_off')
-        model.add(extra == off - st['monthlyDaysOff'])
+        model.add(extra == off - minimum_off)
         extra_off.append(extra)
         if sid not in p['fairnessExcludedStaff']:
             compared_extra_off.append(extra)
@@ -270,8 +275,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             model.add_multiplication_equality(square, [total_ot, total_ot])
             overtime_totals.append(total_ot)
             if sid in ot_scales:
-                scaled = model.new_int_var(0, min(ot_profile['cap'], n) * ot_scales[sid], sid + '_ot_scaled')
-                model.add(scaled == ot_scales[sid] * total_ot)
+                scaled = model.new_int_var(0, holiday_plan.balance_bound if holiday_plan is not None else min(ot_profile['cap'], n) * ot_scales[sid], sid + '_ot_scaled')
+                if holiday_plan is not None:
+                    model.add_multiplication_equality(scaled, [holiday_plan.scale(sid), total_ot])
+                else:
+                    model.add(scaled == ot_scales[sid] * total_ot)
                 overtime_scaled.append(scaled)
             overtime_squares.append(square)
         if st['type'] == 'part':
@@ -369,11 +377,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add(min_extra == 0)
     required(max_extra - min_extra <= p['maxExtraOffSpread'], 'fairness', f'余分な公休の差は{p["maxExtraOffSpread"]}日以内')
     if relax_wishes:
+        if _deadline is not None:
+            seconds = max(.000001, min(seconds, _deadline - time.monotonic() - .15))
         return _explain(model, dropped, night_missing, rule_violations, len(p['staff']) * 2 * n, seconds, seed)
     overtime_range = 0
     if overtime_scaled:
         # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
-        top = overtime_balance_bound(p)
+        top = holiday_plan.balance_bound if holiday_plan is not None else overtime_balance_bound(p)
         high_ot, low_ot = model.new_int_var(0, top, 'ot_high'), model.new_int_var(0, top, 'ot_low')
         model.add_max_equality(high_ot, overtime_scaled)
         model.add_min_equality(low_ot, overtime_scaled)
@@ -446,13 +456,23 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
     def new_solver(limit):
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = limit
+        solver.parameters.max_time_in_seconds = max(.000001, min(limit, _deadline - time.monotonic() - .1)) if _deadline is not None else limit
         solver.parameters.random_seed = seed
         solver.parameters.num_search_workers = 4 if allow_staffing_shortfall else 1
         return solver
     def extract(solver):
         return {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k]))
                            for d in range(n)} for st in p['staff']}
+    if holiday_plan is not None:
+        return holiday_plan.run(model, p, new_solver, extract, priority=priority,
+                                exceptions=sum(rule_violations), shortage=sum(shortfalls),
+                                overtime=sum(overtime_totals), balance=overtime_range,
+                                surplus=sum(surpluses), minor=minor,
+                                extra_spread=max_extra - min_extra, common_extra=min_extra,
+                                preference=sum(preference_misses), night_spread=night_spread if balance_nights else 0)
+    if _deadline is not None:
+        # おまかせだけはモデル準備を含む通信の累計予算から、探索時間を決める。
+        seconds = max(.000001, min(seconds, _deadline - time.monotonic() - .15))
     stop_rule = min_seconds is not None
     search_start, tracker = time.monotonic(), _FirstSolution()
     if stop_rule and initial_assignments is not None:
