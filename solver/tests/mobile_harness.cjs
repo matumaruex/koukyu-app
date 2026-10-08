@@ -20,7 +20,7 @@ function harness(raw,options={}){
  if(options.current){values.clear();values.set('koukyu_v4_data',JSON.stringify(options.current));}
  // 作業中の表など、ほかの保存キーを読み込み前に置く。
  for(const[k,v]of Object.entries(options.stored||{}))values.set(k,v);
- const nav=['schedule','requests','staff','saved'].map(tab=>{const e=new Element('button');e.dataset.tab=tab;return e;});
+ const nav=['schedule','auto','requests','staff','saved'].map(tab=>{const e=new Element('button');e.dataset.tab=tab;return e;});
  const ctx={console,Date:Clock,Math,JSON,Set,Map,AbortController,File,URL,crypto:require('node:crypto').webcrypto,
   navigator:{storage:{persist:async()=>true}},window:{print(){}},confirm:message=>{confirmations.push(message);return true;},
   document:{getElementById:id=>nodes[id]??=new Element(),createElement:tag=>{const e=new Element(tag);all.push(e);return e;},querySelector:()=>period,querySelectorAll:selector=>selector==='[data-tab]'?nav:all.filter(e=>['BUTTON','INPUT','SELECT'].includes(e.tagName))},
@@ -29,8 +29,11 @@ function harness(raw,options={}){
   fetch:async(url,opts)=>{const body=JSON.parse(opts.body);calls.push(body);const response=options.response?await options.response(body):{status:'UNKNOWN'};return {ok:true,json:async()=>response};}};
  vm.createContext(ctx);
  const root=path.join(__dirname,'../../public');
+ vm.runInContext(fs.readFileSync(path.join(root,'auto-holiday-policy.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'roster-storage.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'creation-workflow.js'),'utf8'),ctx);
+ vm.runInContext(fs.readFileSync(path.join(root,'auto-creation-workflow.js'),'utf8'),ctx);
+ vm.runInContext(fs.readFileSync(path.join(root,'auto-roster-ui.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'mobile.js'),'utf8'),ctx);
  return {ctx,values,nodes,calls,confirmations,timers,eval:s=>vm.runInContext(s,ctx),get:s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',ctx)),click:async(name,where='dialog-body')=>{const button=nodes[where].all('button').find(e=>e.text===name);if(!button)throw Error('Missing button '+name+' in '+nodes[where].text);await button.click();}};
 }

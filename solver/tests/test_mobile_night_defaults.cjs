@@ -5,14 +5,14 @@ const source=fs.readFileSync(path.join(__dirname,'../../public/mobile.js'),'utf8
 assert(!source.includes('function nightRestRequestControl'));
 assert(!source.includes('function setNightRestRequired'));
 assert(!source.includes('この職員の希望休は、できるだけ夜勤後にする'));
-const functions=['inputData','metadata','renderRequests'].map(name=>source.split('\n').find(line=>line.startsWith(`function ${name}(`))).join('\n');
+const functions=['baseInputData','inputData','metadata','renderRequests'].map(name=>source.split('\n').find(line=>line.startsWith(`function ${name}(`))).join('\n');
 const staff=[{id:'a',name:'職員A',type:'full',nightShiftType:'all',monthlyDaysOff:9},
  {id:'b',name:'職員B',type:'full',nightShiftType:'none',monthlyDaysOff:9},
  {id:'c',name:'職員C',type:'part',nightShiftType:'none',monthlyDaysOff:9},
  {id:'d',name:'職員D',type:'full',nightShiftType:'all',monthlyDaysOff:9}];
 const saved={assignments:{a:{'6':'off'}},requests:{a:[6],b:[6],c:[6],d:[6]},nightRestRequiredStaff:[],excludedStaff:['d']};
 let rendered=[];
-const ctx={state:{year:2026,month:3,reqStaff:'a',requestType:'off'},data:{staff,preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[4,4,4],maxReducedSundays:3}}},
+const ctx={AutoRosterUI:{inputData:base=>base},state:{year:2026,month:3,reqStaff:'a',requestType:'off'},data:{staff,preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[4,4,4],maxReducedSundays:3}}},
  schedule:()=>saved,history:()=>({}),activeStaff:()=>staff.filter(s=>s.id!=='d'),clone:x=>JSON.parse(JSON.stringify(x)),normalizeStaffing:x=>x,
  card:()=>({append:(...nodes)=>rendered.push(...nodes)}),select:()=>({}),field:(name)=>({field:name}),el:(tag,text)=>({tag,text}),
  requestChoices:()=>[['off','希望休']],staffIncluded:id=>id!=='d',requestStatus:()=>'',requestCount:()=>1,
