@@ -1,6 +1,7 @@
 """ソルバーの制約や変数を使わず、完成した表を再集計して検査する。"""
 from datetime import timedelta
 from .input_data import normalize, SHIFTS, overtime_profile
+from .rest_blocks import ranges as rest_ranges
 
 SHORTFALL_CODES = ('coverage', 'sunday_limit')
 
@@ -106,6 +107,11 @@ def validate(raw, assignments):
             errors[-1].update(actual=extensions, allowed=1, count=extensions - 1, limit=limit)
         if values.count('off') < st['monthlyDaysOff']:
             fail('days_off', sid, detail=f"{values.count('off')} < {st['monthlyDaysOff']}")
+        if st['minConsecutiveRest']:
+            blocks = rest_ranges(assignments[sid], p['days'])
+            if len(blocks) < st['minConsecutiveRest']:
+                fail('rest_blocks', sid, detail='連休の必須回数に届いていません。')
+                errors[-1].update(actual=len(blocks), required=st['minConsecutiveRest'], ranges=blocks)
         cap = overtime_profile(p, st)['cap']
         if values.count('overtime') > cap:
             fail('overtime_limit', sid, detail=f"{values.count('overtime')} > {cap}")

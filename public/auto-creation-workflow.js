@@ -5,7 +5,7 @@ const candidate=r=>r?.assignments&&['OPTIMAL','FEASIBLE','DRAFT'].includes(r.sta
 const quality=r=>{const m=r.allocation||{};return [r.exceptionCount||0,r.staffingShortfallTotal||0,r.nightRestPreferences?.unmet?.length||0,m.nightSpread||0,m.overtimeTotal||0,(m.overtimeBalance||0)*(m.overtimeProportional?1:100),m.surplusTotal||0,-(m.commonExtraDaysOff||0),m.minor||0];};
 function compare(a,b){const x=quality(a),y=quality(b);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return x[i]-y[i];return 0;}
 async function run({input,holidayPolicy,request,nextSeed,isCurrent=()=>true,onExtend=()=>{}}){
- let spent=0,error=null,rounds=[],best=null,last=null,resume=null,baseDone=false,adjustDone=false,necessity=false,details=null,pending=null;
+ let spent=0,error=null,failure=null,rounds=[],best=null,last=null,resume=null,baseDone=false,adjustDone=false,necessity=false,details=null,pending=null;
  const target=Object.fromEntries(Object.entries(holidayPolicy).map(([sid,q])=>[sid,q.target]));
  let quota={...target},phaseSpent=0;
  async function call(phase,budget,extra={}){if(!isCurrent())return null;const r=await request({mode:'auto',autoPhase:phase,input,holidayPolicy,seconds:Math.min(60,budget,MAX_SECONDS-spent),seed:nextSeed(),...extra});if(!isCurrent())return null;const elapsed=Number.isFinite(r.seconds)&&r.seconds>=0?Math.max(.01,r.seconds):Math.min(60,budget);spent+=elapsed;phaseSpent+=elapsed;rounds.push({phase,seconds:elapsed,status:r.status});last=r;return r;}
@@ -15,7 +15,7 @@ async function run({input,holidayPolicy,request,nextSeed,isCurrent=()=>true,onEx
    onExtend('表の品質を整えています。',best);
    const r=await call('base',BASE_SECONDS-phaseSpent,{...(best?{initialAssignments:best.assignments}:{}),...(resume?{resume}:{})});if(!r)return {stale:true};
    const take=candidate(r)&&(!best||compare(r,best)<=0);if(take)best=r;
-   if(r.status==='INFEASIBLE'){necessity=true;break;}
+   if(r.status==='INFEASIBLE'){failure=r;necessity=true;break;}
    if(['INVALID_INPUT','VALIDATION_FAILED'].includes(r.status))break;
    if(r.status==='OPTIMAL'||r.search?.done){baseDone=true;break;}
    if(!(r.status==='UNKNOWN'||r.search?.continueRecommended))break;
@@ -71,7 +71,7 @@ async function run({input,holidayPolicy,request,nextSeed,isCurrent=()=>true,onEx
  }catch(e){if(!isCurrent())return {stale:true};error=e;}
  if(!isCurrent())return {stale:true};
  if(best)best={...best,selectedQuota:quota,autoDetails:{...(best.autoDetails||details||{}),daysProven:adjustDone},autoReason:best.autoReason||(adjustDone?'quality_preserved':'days_unconfirmed')};
- return {best,last,seconds:spent,rounds,error,done:baseDone&&adjustDone,stale:false};
+ return {best,last,seconds:spent,rounds,error,failure,done:baseDone&&adjustDone,stale:false};
 }
 return {MAX_SECONDS,BASE_SECONDS,ADJUST_SECONDS,FINISH_SECONDS,quality,compare,run};
 });

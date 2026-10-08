@@ -12,6 +12,7 @@ from .validator import validate, is_rule_exception, exception_count, SHORTFALL_C
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales, overtime_balance_bound
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
+from .rest_blocks import report as rest_report
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -54,13 +55,15 @@ def _solve_with_stop_rule(solver, model, min_seconds, after_first, *, tracker=No
     return status, bool(stopped), first
 
 
-def _explain(model, dropped, night_missing, violations, violation_cap, seconds, seed):
-    """作れないときだけ使う。夜勤を埋められない日 → 外す希望・固定の件数 → 中間ルールの例外、の順に最小化する。
+def _explain(model, dropped, night_missing, violations, violation_cap, seconds, seed, rest_shortfalls=()):
+    """作れないときだけ使う。夜勤を埋められない日 → 外す希望・固定 → 連休の不足 → 中間ルールの例外、の順に最小化する。
     夜勤を埋められない日は、希望・固定をすべて外しても埋まらない日（職員の設定が原因）。"""
-    keep_weight = violation_cap + 1
+    rest_weight = violation_cap + 1
+    keep_weight = (sum(target for _, target, _, _ in rest_shortfalls) + 1) * rest_weight
     night_weight = (len(dropped) + 1) * keep_weight
     model.minimize(sum(night_missing) * night_weight
                    + sum(1 - keep for keep, _ in dropped) * keep_weight
+                   + sum(missing for _, _, missing, _ in rest_shortfalls) * rest_weight
                    + (sum(violations) if violations else 0))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = seconds
@@ -69,9 +72,15 @@ def _explain(model, dropped, night_missing, violations, violation_cap, seconds, 
     status = solver.solve(model)
     if status not in (cp_model.FEASIBLE, cp_model.OPTIMAL):
         return {'status': 'INFEASIBLE' if status == cp_model.INFEASIBLE else 'UNKNOWN', 'seconds': round(solver.wall_time, 3)}
-    return {'status': 'EXPLAINED', 'proven': status == cp_model.OPTIMAL, 'seconds': round(solver.wall_time, 3),
+    result = {'status': 'EXPLAINED', 'proven': status == cp_model.OPTIMAL, 'seconds': round(solver.wall_time, 3),
             'missingNights': [d + 1 for d, v in enumerate(night_missing) if solver.value(v)],
             'droppedWishes': [item for keep, item in dropped if not solver.value(keep)]}
+    if rest_shortfalls:
+        result['restShortfalls'] = [{'staff': sid, 'required': target,
+                                    'actual': sum(solver.value(v) for v in blocks),
+                                    'missing': solver.value(missing)}
+                                   for sid, target, missing, blocks in rest_shortfalls if solver.value(missing)]
+    return result
 
 
 def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False, allow_rule_exceptions=False, resume=None, relax_wishes=False, _holiday_plan=None, _holiday_actual_off=None, _deadline=None):
@@ -159,6 +168,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     rule_violations = []
     # 作れないときの理由調べ用：外せる形にした希望・固定。
     dropped = []
+    rest_shortfalls = []
     night_soft = allow_night_shortfall or relax_wishes
 
     def wish(expr, key, label, item):
@@ -258,6 +268,26 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         off = sum(x[sid, d, 'off'] for d in range(n))
         minimum_off = holiday_plan.minimum(sid) if holiday_plan is not None else st['monthlyDaysOff']
         required(off >= minimum_off, sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
+        if st['minConsecutiveRest']:
+            blocks = []
+            for d in range(n - 1):
+                start = model.new_bool_var(f'{sid}_rest_block_{d}')
+                model.add(start <= x[sid, d, 'off'])
+                model.add(start <= x[sid, d + 1, 'off'])
+                if d:
+                    model.add(start <= 1 - x[sid, d - 1, 'off'])
+                    model.add(start >= x[sid, d, 'off'] + x[sid, d + 1, 'off'] - x[sid, d - 1, 'off'] - 1)
+                else:
+                    model.add(start >= x[sid, d, 'off'] + x[sid, d + 1, 'off'] - 1)
+                blocks.append(start)
+            if relax_wishes:
+                # 理由調べだけで不足を許す。完成表では必須条件として固定する。
+                missing = model.new_int_var(0, st['minConsecutiveRest'], sid + '_rest_missing')
+                model.add(sum(blocks) + missing >= st['minConsecutiveRest'])
+                rest_shortfalls.append((sid, st['minConsecutiveRest'], missing, blocks))
+            else:
+                required(sum(blocks) >= st['minConsecutiveRest'], sid + '_rest_blocks',
+                         label + f'の2日以上の連休を{st["minConsecutiveRest"]}回以上')
         if _holiday_actual_off is not None:
             model.add(off >= _holiday_actual_off[sid])
         ot = sum(x[sid, d, 'overtime'] for d in range(n))
@@ -379,7 +409,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if relax_wishes:
         if _deadline is not None:
             seconds = max(.000001, min(seconds, _deadline - time.monotonic() - .15))
-        return _explain(model, dropped, night_missing, rule_violations, len(p['staff']) * 2 * n, seconds, seed)
+        return _explain(model, dropped, night_missing, rule_violations, len(p['staff']) * 2 * n, seconds, seed, rest_shortfalls)
     overtime_range = 0
     if overtime_scaled:
         # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
@@ -635,6 +665,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if shortfall_bound is not None and is_draft:
             result['shortfallLowerBound'] = min(shortfall_bound, result['staffingShortfallTotal'])
     result['assignments'] = assignments
+    if any(st['minConsecutiveRest'] for st in p['staff']):
+        result['consecutiveRest'] = rest_report(p, assignments)
     result['validationErrors'] = errors
     result['verificationScope'] = ('DRAFT_' if is_draft else '') + ('WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY')
     extras = {st['id']: sum(k == 'off' for k in assignments[st['id']].values()) - st['monthlyDaysOff'] for st in p['staff']}

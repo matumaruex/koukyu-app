@@ -29,6 +29,7 @@ function harness(raw,options={}){
   fetch:async(url,opts)=>{const body=JSON.parse(opts.body);calls.push(body);const response=options.response?await options.response(body):{status:'UNKNOWN'};return {ok:true,json:async()=>response};}};
  vm.createContext(ctx);
  const root=path.join(__dirname,'../../public');
+ vm.runInContext(fs.readFileSync(path.join(root,'consecutive-rest.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'auto-holiday-policy.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'roster-storage.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'creation-workflow.js'),'utf8'),ctx);

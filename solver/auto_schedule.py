@@ -8,6 +8,7 @@ from .holiday_policy import POLICY, checked_policy, checked_quotas, effective_in
 from .input_data import normalize, overtime_profile, SHIFTS
 from .night_preferences import report
 from .validator import validate, is_rule_exception, exception_count
+from .rest_blocks import report as rest_report
 
 
 def inspect(raw, rows):
@@ -47,6 +48,8 @@ def inspect(raw, rows):
                                                         for sid, v in profiles.items() if v['proportional']}}}
     if shortage:
         result['unmetConditions'] = errors
+    if any(st['minConsecutiveRest'] for st in p['staff']):
+        result['consecutiveRest'] = rest_report(p, rows)
     nights = {st['id']: list(rows[st['id']].values()).count('night') for st in p['staff']
               if st['type'] != 'part' and st['nightShiftType'] != 'none'}
     if nights:

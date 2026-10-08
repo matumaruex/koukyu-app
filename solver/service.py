@@ -4,6 +4,7 @@ from .input_data import normalize
 from .validator import validate
 from .night_preferences import report
 from .quality_search import STAGES
+from .rest_blocks import report as rest_report
 
 ADAPTIVE_MIN_SECONDS = 15
 ADAPTIVE_AFTER_FIRST = 10
@@ -28,6 +29,8 @@ def dispatch(payload, *, _deadline=None):
             result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete']}
             if not any(e['code'] == 'structure' for e in errors):
                 result['nightRestPreferences'] = report(p, payload['assignments'])
+                if any(st['minConsecutiveRest'] for st in p['staff']):
+                    result['consecutiveRest'] = rest_report(p, payload['assignments'])
             return result
         seconds = payload.get('seconds', 15)
         if type(seconds) not in (int, float) or not 0 < seconds <= 60:
