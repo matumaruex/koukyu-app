@@ -6,6 +6,7 @@ import threading
 import time
 from ortools.sat.python import cp_model
 from .allocation import metrics, quality_value
+from .overtime_preference import arithmetic_proven
 
 STAGES = ('conditions', 'overtime', 'overtime_fairness', 'placement')
 # 何秒良くならなかったら次の段階へ進むか。2026年10月の実測（偽名11人の設定・5条件）で、
@@ -187,8 +188,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     # 算術理想に達した通常配分や、この合計で差を証明できた配分は再試行しない。
     if pending is None and candidate is not None and status != cp_model.INFEASIBLE:
         current = metrics(p, candidate)
-        arithmetic = (not current['overtimeProportional']
-                      and current['overtimeBalance'] == current['overtimeIdealBalance'])
+        arithmetic = arithmetic_proven(current)
         if overtime_spread is not None and not arithmetic and not proven.get('overtime_fairness'):
             pending, idle = 'overtime_fairness', 0
     done = pending is None and status != cp_model.INFEASIBLE
@@ -205,7 +205,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     major_ready = False
     if candidate is not None:
         m = metrics(p, candidate)
-        balanced = (m['overtimeBalance'] == m['overtimeIdealBalance'] if not m['overtimeProportional']
+        balanced = (arithmetic_proven(m) if not m['overtimeProportional'] or m.get('overtimePreferred')
                     else overtime_spread_proven)
         major_ready = (priority_proven and overtime_proven and balanced and m['extraOffSpread'] == 0)
     keep_going = not done and status != cp_model.INFEASIBLE

@@ -30,6 +30,7 @@ function harness(raw,options={}){
  vm.createContext(ctx);
  const root=path.join(__dirname,'../../public');
  vm.runInContext(fs.readFileSync(path.join(root,'consecutive-rest.js'),'utf8'),ctx);
+ vm.runInContext(fs.readFileSync(path.join(root,'overtime-preference.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'auto-holiday-policy.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'roster-storage.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'creation-workflow.js'),'utf8'),ctx);

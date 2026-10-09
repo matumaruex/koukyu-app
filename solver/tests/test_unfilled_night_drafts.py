@@ -11,10 +11,23 @@ class UnfilledNightDraftTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.raw = roomy_fixture()
+        # この試験は夜勤の穴と希望・資格・夜勤後休を確認するので、同じ競合を6人に絞る。
+        cls.raw['staff'] = cls.raw['staff'][:5] + cls.raw['staff'][-1:]
+        ids = [st['id'] for st in cls.raw['staff']]
+        cls.raw['history'] = {sid: cls.raw['history'][sid] for sid in ids}
         cls.raw['requiredStaff'] = [0, 0, 0]
-        cls.raw['requests'] = {f's{i}': [6] for i in range(1, 16)}
+        cls.raw['requests'] = {sid: [6] for sid in ids if sid != 's0'}
         cls.raw['shiftRequests'] = {'s0': {'8': 'night'}, 's2': {'4': 'early'}}
-        cls.raw['staff'][15].update(dayShiftType='late', nightShiftType='none', canOvertime=False)
+        cls.raw['staff'][-1].update(dayShiftType='late', nightShiftType='none', canOvertime=False)
+        # 6日以外には実現可能な夜勤を固定する。短時間の任意改善で余分な夜勤の穴を
+        # 解消できるかではなく、指定した穴だけを許し、残りの必須条件を守ることを検査。
+        # s2の4日早出を守るため、3日の夜勤はs3へ。s0は5日・8日の夜勤で6日を埋められない。
+        cls.raw['locked'] = {}
+        for day in range(1, 29):
+            if day == 6:
+                continue
+            sid = 's3' if day == 3 else f's{(2 - day) % 3}'
+            cls.raw['locked'].setdefault(sid, {})[str(day)] = 'night'
         cls.result = solve(cls.raw, seconds=4, allow_staffing_shortfall=True, allow_night_shortfall=True)
         assert cls.result['status'] == 'DRAFT', cls.result
 

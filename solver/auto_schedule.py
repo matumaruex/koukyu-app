@@ -9,9 +9,11 @@ from .input_data import normalize, overtime_profile, SHIFTS
 from .night_preferences import report
 from .validator import validate, is_rule_exception, exception_count
 from .rest_blocks import report as rest_report
+from .overtime_preference import without_preferences
 
 
 def inspect(raw, rows):
+    raw = without_preferences(raw)
     p = normalize(raw)
     errors = validate(raw, rows)
     if any(e['code'] not in ('coverage', 'sunday_limit') and not is_rule_exception(p, e) for e in errors):
@@ -120,7 +122,7 @@ def decision_bounds(raw, policy, result):
 
 class HolidayPlan:
     def __init__(self, raw, policy, deadline, reference, *, candidate=None, candidate_quotas=None):
-        self.original, self.policy = deepcopy(raw), policy
+        self.original, self.policy = without_preferences(raw), policy
         self.deadline, self.reference = deadline, reference
         self.candidate_rows, self.candidate_quotas = candidate, candidate_quotas
         self.minimums, self.caps, self.scales, self.groups = {}, {}, {}, {}
@@ -395,7 +397,7 @@ def dispatch_auto(payload):
     from .engine import solve
     from .service import dispatch, check_resume
     started = time.monotonic()
-    raw = payload['input']
+    raw = without_preferences(payload['input'])
     policy = checked_policy(raw, payload.get('holidayPolicy'))
     seconds = payload.get('seconds', 60)
     seed = payload.get('seed', 1)
