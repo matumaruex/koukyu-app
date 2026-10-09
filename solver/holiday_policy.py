@@ -2,7 +2,7 @@
 from copy import deepcopy
 from .input_data import normalize
 
-POLICY = 'auto-holidays-1'
+POLICY = 'auto-holidays-2'
 
 
 def checked_policy(raw, value):

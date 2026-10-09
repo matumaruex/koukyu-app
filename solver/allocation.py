@@ -2,7 +2,7 @@
 from .input_data import overtime_profile
 from .overtime_preference import offsets, score_bounds, ideal_balance as ideal_balance_fn, active
 
-POLICY = 'quality-first-5'
+POLICY = 'quality-first-7'
 CHECKPOINTS = (420, 600, 1065)
 
 
