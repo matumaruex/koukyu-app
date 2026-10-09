@@ -37,8 +37,8 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  v.eval("setTab('auto');schedule().assignments=clone(testRows);schedule().selectedQuota={a:9,p:11};schedule().workSignature=inputData().signature;saveTableDialog()");await v.click('保存する');
  const autoSaved=v.get('data.savedTables.at(-1)');assert.equal(autoSaved.staff[0].minConsecutiveRest,2);
  // 共有設定を変えると両方式が古い条件になる。保存表と手入力の前期は残る。
- const history=v.get('history()');v.eval("data.staff[0].minConsecutiveRest=1;setTab('schedule')");assert.equal(v.get('hasTable()'),false);
- v.eval("setTab('auto')");assert.equal(v.get('hasTable()'),false);
+ const history=v.get('history()');v.eval("data.staff[0].minConsecutiveRest=1;setTab('schedule')");assert.equal(v.get('hasTable()'),true);assert(v.get('workChanged()'));
+ v.eval("setTab('auto')");assert.equal(v.get('hasTable()'),true);assert(v.get('workChanged()'));
  assert.deepEqual(v.get('data.savedTables[0]'),saved);assert.deepEqual(v.get('history()'),history);
  v.eval("setTab('saved');state.archiveId=data.savedTables[0].id;render()");assert(v.nodes.view.text.includes('連休2回／必要2回'));
  v.eval('copySavedTableDialog(data.savedTables[0])');await v.click('編集用のコピーを作る');

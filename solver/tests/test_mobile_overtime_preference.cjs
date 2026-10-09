@@ -49,7 +49,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  const reload=harness(null,{current:persisted});assert.equal(reload.get('state.loadError'),false);
  assert.equal(reload.get('data.staff[0].overtimePreference'),2);
  assert.equal(reload.get('data.savedTables[0].staff[0].overtimePreference'),2);
- h.eval("data.staff[0].overtimePreference=0;render()");assert(!h.get('hasTable()'));
+ h.eval("data.staff[0].overtimePreference=0;render()");assert(h.get('hasTable()'));assert(h.get('workChanged()'));
  assert.equal(h.get('inputData().signature'),originalSignature);assert.deepEqual(h.get('history()'),history);
  h.eval("setTab('saved');state.archiveId=data.savedTables[0].id;render()");
  assert(h.nodes.view.text.includes('職員Aさん：5回 ／ 多め'));

@@ -10,12 +10,12 @@ const RosterStorage=(()=>{
   }
   function capture(data,period,name,id,createdAt=new Date().toISOString()){
     const schedule=copy(data.schedules[period]);
-    for(const field of ['previous','workSignature','retryLong'])delete schedule[field];
+    for(const field of ['previous','workSignature','retryLong','workSnapshot'])delete schedule[field];
     return {id,name,period,createdAt,staff:copy(data.staff),preferences:copy(data.preferences),schedule};
   }
   function clearResult(schedule){
     schedule.assignments={};
-    for(const field of ['meta','previous','workSignature','retryLong','selectedQuota','autoDetails','autoReason','autoReferenceActualOff','creationMode'])delete schedule[field];
+    for(const field of ['workSnapshot','meta','previous','workSignature','retryLong','selectedQuota','autoDetails','autoReason','autoReferenceActualOff','creationMode'])delete schedule[field];
   }
   function persisted(data){
     const out=copy(data);out.schemaVersion=4;out.savedTables??=[];
