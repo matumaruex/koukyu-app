@@ -58,3 +58,6 @@
 
 /* 入力欄の短い補足は見出しの横に置く。 */
 .field-heading{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.field-heading small{font-size:14px}
+
+/* 職員画面の文字を小さくする。押す領域と入力値の読みやすさは保つ。 */
+.staff-card,.staff-edit-dialog{font-size:12px;line-height:1.5}.staff-card h2,.staff-edit-dialog h2{font-size:16px}.staff-card .staff-row strong{font-size:13px}.staff-card .muted,.staff-card .participation-toggle,.staff-edit-dialog .muted{font-size:11px}.staff-edit-dialog .field{font-size:12px;gap:4px;margin:12px 0}.staff-edit-dialog .check{font-size:12px;gap:8px;margin:12px 0;min-height:44px}.staff-edit-dialog .field-heading small{font-size:11px}.staff-edit-dialog .field input,.staff-edit-dialog .field select{font-size:16px;min-height:44px;padding:8px 10px}
