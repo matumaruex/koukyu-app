@@ -55,3 +55,6 @@
 /* 職員一覧は名前と操作の2段にまとめる。 */
 .staff-row{display:block;padding:10px 0}.staff-row strong{display:block;overflow-wrap:anywhere}.staff-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}.staff-controls .participation-toggle{margin:0;gap:6px;flex-wrap:nowrap;white-space:nowrap}.staff-card .staff-tools button{padding:8px 12px}.staff-card .staff-tools .move{padding:8px 0}
 @media(max-width:359px){.staff-controls .participation-status{display:none}}
+
+/* 入力欄の短い補足は見出しの横に置く。 */
+.field-heading{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.field-heading small{font-size:14px}

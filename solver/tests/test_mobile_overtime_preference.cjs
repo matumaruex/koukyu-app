@@ -15,7 +15,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert.equal(preference.check(undefined),0);
  const h=harness(null,{current:raw,response:async()=>({status:'VALID',boundaryComplete:true})});
  const originalSignature=h.get('inputData().signature'),history=h.get('history()');
- assert(originalSignature.startsWith('rules-3.31:'));
+ assert(originalSignature.startsWith('rules-3.35:'));
  assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'overtimePreference'));
  h.eval("setTab('auto')");const autoSignature=h.get('inputData().signature');
  h.eval("setTab('staff');editStaff(data.staff[0])");
@@ -23,7 +23,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert(selector);assert.equal(selector.value,'0');assert(!selector.disabled);selector.value='2';
  h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});
  assert.equal(h.get('data.staff[0].overtimePreference'),2);
- h.eval("setTab('schedule')");assert(h.get('inputData().signature').startsWith('rules-3.31:'));
+ h.eval("setTab('schedule')");assert(h.get('inputData().signature').startsWith('rules-3.35:'));
  assert.equal(h.get('inputData().p.staff[0].overtimePreference'),2);
  h.eval("setTab('auto')");assert.equal(h.get('inputData().signature'),autoSignature);
  assert(h.get('inputData().sourceInput.staff').every(st=>!Object.hasOwn(st,'overtimePreference')));

@@ -9,7 +9,7 @@ function candidate(payload){return {status:'DRAFT',assignments:rows(),selectedQu
  h.eval("schedule().assignments={a:{'1':'early'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE'};render();");const normalTable=h.get('schedule().assignments');
  assert.deepEqual(h.ctx.document.querySelectorAll('[data-tab]').map(b=>b.dataset.tab),['schedule','requests','staff','saved']);
  h.ctx.settings();await h.click('公休おまかせを開く');assert.equal(h.nodes.dialog.open,false);
- assert(h.nodes.view.text.includes('公休おまかせ'));assert(h.get('inputData().signature').startsWith('auto-rules-3:'));
+ assert(h.nodes.view.text.includes('公休おまかせ'));assert(h.get('inputData().signature').startsWith('auto-rules-4:'));
  assert.equal(h.calls.length,0);await h.click('通常の公休表に戻る','view');
  assert.equal(h.get('state.mode'),'normal');assert.equal(h.get('inputData().signature'),normalSignature);
  assert.deepEqual(h.get('schedule().assignments'),normalTable);
