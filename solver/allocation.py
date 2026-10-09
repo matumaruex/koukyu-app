@@ -1,5 +1,6 @@
 """月全体の残業・配置を評価する。完成表の独立検査とは別の計算。"""
 from .input_data import overtime_profile
+from .overtime_preference import offsets, score_bounds, ideal_balance as ideal_balance_fn, active
 
 POLICY = 'quality-first-5'
 CHECKPOINTS = (420, 600, 1065)
@@ -35,10 +36,10 @@ def overtime_scales(p):
 
 
 def overtime_balance_bound(p):
-    """換算した回数の最大値（＝差の上限）。"""
+    """比率と歓迎を換算した値の差の上限。歓迎の分だけ下限は負になる。"""
     scales = overtime_scales(p)
-    return max([scales[st['id']] * min(overtime_profile(p, st)['cap'], p['days']) for st in p['staff']
-                if st.get('id') in scales] or [0])
+    low, high = score_bounds(p, scales)
+    return high - low
 
 
 def minor_unit(p):
@@ -89,6 +90,8 @@ def metrics(p, assignments):
     ot, extras, nights = {}, [], []
     plain, scaled, proportional = [], [], False
     scales = overtime_scales(p)
+    extra = offsets(p, scales)
+    preferred = active(p)
     for st in p['staff']:
         row = assignments[st['id']]
         values = [row[str(d)] for d in range(1, n + 1)]
@@ -96,7 +99,7 @@ def metrics(p, assignments):
             ot[st['id']] = values.count('overtime')
             profile = overtime_profile(p, st)
             if st['id'] in scales:
-                scaled.append(ot[st['id']] * scales[st['id']])
+                scaled.append(ot[st['id']] * scales[st['id']] - extra[st['id']])
             if profile['proportional']:
                 proportional = True
             else:
@@ -118,10 +121,13 @@ def metrics(p, assignments):
     common = min(extras) if extras else 0
     # 画面に出す「差」は、出勤できる日数が普通の人どうしの回数差。
     ot_range = max(plain) - min(plain) if plain else 0
-    # 計算で比べる値：出勤できる日数で換算した回数の差（普通の人だけの月は回数の差そのもの）。
+    # 計算で比べる値：出勤できる日数で換算し、歓迎の上乗せを引いた値の差。
     ot_balance = max(scaled) - min(scaled) if scaled else 0
     # 全員が普通の人なら、合計を人数で割り切れないときの差1回が算術上の最少。比率を含む場合は決めない。
     ideal_balance = int(sum(scaled) % len(scaled) != 0) if scaled and not proportional else 0
+    if preferred:
+        # 上限・0回・比率を含めた整数配分の下限。日付制約まで含む最少は探索で確認する。
+        ideal_balance = ideal_balance_fn(p, scales, sum(ot[sid] for sid in scales))
     ab = ab_ratio_report(p, assignments)
     night_spread = max(nights) - min(nights) if nights else 0
     balance = ab['deviationTotal'] + (100 * len(p['staff']) + 1) * night_spread
@@ -130,6 +136,7 @@ def metrics(p, assignments):
     return {'overtimeTotal': sum(ot.values()), 'overtimeByStaff': ot,
             'overtimeSpread': ot_range, 'overtimeBalance': ot_balance,
             'overtimeIdealBalance': ideal_balance, 'overtimeProportional': proportional,
+            **({'overtimePreferred': True} if preferred else {}),
             'surplusTotal': surplus,
             'commonExtraDaysOff': common, 'extraOffSpread': spread,
             'nightSpread': night_spread, 'abRatioBalance': ab, 'minor': minor}

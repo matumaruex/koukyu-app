@@ -72,7 +72,7 @@ def normalize(raw):
         st.setdefault('nightShiftType', 'all' if st.get('canNightShift') else 'none')
         if st['nightShiftType'] not in ('none', 'all', 'weekday'):
             raise ValueError(f'{sid}: invalid nightShiftType.')
-        for field, default, lo, hi in [('monthlyDaysOff', 9, 0, p['days']), ('minConsecutiveRest', 0, 0, 2), ('maxConsecutive', 0, 0, 6), ('maxDaysPerWeek', 3, 1, 7)]:
+        for field, default, lo, hi in [('monthlyDaysOff', 9, 0, p['days']), ('minConsecutiveRest', 0, 0, 2), ('overtimePreference', 0, 0, 2), ('maxConsecutive', 0, 0, 6), ('maxDaysPerWeek', 3, 1, 7)]:
             st.setdefault(field, default)
             if type(st[field]) is not int or not lo <= st[field] <= hi:
                 raise ValueError(f'{sid}: invalid {field}.')

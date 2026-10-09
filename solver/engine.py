@@ -9,10 +9,11 @@ from pathlib import Path
 from ortools.sat.python import cp_model
 from .input_data import normalize, SHIFTS, overtime_profile
 from .validator import validate, is_rule_exception, exception_count, SHORTFALL_CODES
-from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales, overtime_balance_bound
+from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
 from .rest_blocks import report as rest_report
+from .overtime_preference import offsets, score_bounds, active as preference_active, arithmetic_proven, POLICY as PREFERENCE_POLICY
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -188,6 +189,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 残業回数を比べる値（出勤できる日数で換算した回数）。
     overtime_scaled = []
     ot_scales = overtime_scales(p)
+    ot_offsets = offsets(p, ot_scales)
     for i, st in enumerate(p['staff']):
         sid = st['id']
         label = f'職員{i + 1}'
@@ -305,11 +307,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             model.add_multiplication_equality(square, [total_ot, total_ot])
             overtime_totals.append(total_ot)
             if sid in ot_scales:
-                scaled = model.new_int_var(0, holiday_plan.balance_bound if holiday_plan is not None else min(ot_profile['cap'], n) * ot_scales[sid], sid + '_ot_scaled')
+                offset = 0 if holiday_plan is not None else ot_offsets[sid]
+                scaled = model.new_int_var(-offset, holiday_plan.balance_bound if holiday_plan is not None else min(ot_profile['cap'], n) * ot_scales[sid] - offset, sid + '_ot_scaled')
                 if holiday_plan is not None:
                     model.add_multiplication_equality(scaled, [holiday_plan.scale(sid), total_ot])
                 else:
-                    model.add(scaled == ot_scales[sid] * total_ot)
+                    model.add(scaled == ot_scales[sid] * total_ot - offset)
                 overtime_scaled.append(scaled)
             overtime_squares.append(square)
         if st['type'] == 'part':
@@ -413,8 +416,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     overtime_range = 0
     if overtime_scaled:
         # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
-        top = holiday_plan.balance_bound if holiday_plan is not None else overtime_balance_bound(p)
-        high_ot, low_ot = model.new_int_var(0, top, 'ot_high'), model.new_int_var(0, top, 'ot_low')
+        bottom, top = (0, holiday_plan.balance_bound) if holiday_plan is not None else score_bounds(p, ot_scales)
+        high_ot, low_ot = model.new_int_var(bottom, top, 'ot_high'), model.new_int_var(bottom, top, 'ot_low')
         model.add_max_equality(high_ot, overtime_scaled)
         model.add_min_equality(low_ot, overtime_scaled)
         overtime_range = high_ot - low_ot
@@ -674,7 +677,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     compared_values = [extras[sid] for sid in compared]
     spread = max(compared_values) - min(compared_values) if compared_values else 0
     result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': p['fairnessExcludedStaff'], 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0, 'provenOptimal': optimize and status == cp_model.OPTIMAL}
-    result['optimizationPolicy'] = POLICY
+    result['optimizationPolicy'] = PREFERENCE_POLICY if preference_active(p) else POLICY
     result['allocation'] = metrics(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None
                                                        else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
@@ -683,8 +686,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     ot_total = allocation['overtimeTotal']
     ot_spread = allocation['overtimeSpread']
     proportional = allocation['overtimeProportional']
-    # 比率で比べる人がいなければ、合計を人数で割り切れないときの差1回が算術上の最少。
-    arithmetic = not proportional and allocation['overtimeBalance'] == allocation['overtimeIdealBalance']
+    # 歓迎設定がある場合は、上限・比率・0回を含めた正確な算術下限と照合する。
+    arithmetic = arithmetic_proven(allocation)
     spread_proven = bool(arithmetic or
                          (quality_result['overtimeSpreadProven'] if quality_result is not None
                           else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL))
@@ -700,6 +703,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         'scope': 'FIXED_STAFFING_NIGHT_REST_NIGHT_BALANCE_AND_OVERTIME_TOTAL',
         'reason': 'balanced' if arithmetic else 'constraints' if spread_proven else 'not_proven',
     }
+    if preference_active(p):
+        result['overtimeFairness'].update(
+            preferenceApplied=True,
+            preferenceByStaff={st['id']: st['overtimePreference'] for st in p['staff'] if st['id'] in ot_counts},
+            idealBalance=allocation['overtimeIdealBalance'])
     if has_priority:
         result['allocation']['minimumOvertimeScope'] = 'WITH_FIXED_STAFFING_NIGHT_REST_AND_NIGHT_BALANCE'
     result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
