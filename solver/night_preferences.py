@@ -1,4 +1,6 @@
-"""希望休の前の夜勤を優先する。希望休自体と実際の夜勤後の休みは別の必須条件。"""
+"""希望休直前の明けと、明け・公休1日を同列に評価する独立集計。"""
+
+RULE = 'night-request-gap-1'
 
 
 def targets(p):
@@ -15,8 +17,12 @@ def report(p, assignments):
         total += 1
         def shift(d):
             return p['history'][sid][d + 6] if d <= 0 else assignments[sid].get(str(d), assignments[sid].get(d))
-        if shift(day - 2) != 'night' or shift(day - 1) != 'nightOff':
+        direct = shift(day - 2) == 'night' and shift(day - 1) == 'nightOff'
+        spaced = (shift(day - 3) == 'night' and shift(day - 2) == 'nightOff'
+                  and shift(day - 1) == 'off')
+        if not (direct or spaced):
             unmet.append({'staff': sid, 'day': day, 'nightDay': day - 2,
+                          'nightDays': [day - 2, day - 3],
                           'actualNightDay': shift(day - 2), 'actualRecoveryDay': shift(day - 1)})
-    return {'requestedCount': total, 'metCount': total - len(unmet), 'unmet': unmet}
+    return {'rule': RULE, 'requestedCount': total, 'metCount': total - len(unmet), 'unmet': unmet}
 

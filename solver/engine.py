@@ -227,11 +227,20 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 wish(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休',
                      {'kind': 'request', 'staff': sid, 'day': d + 1, 'shift': 'off'})
                 if sid in p['nightRestRequiredStaff'] and d not in p['requests'].get(sid, []):
-                    # この逆向きの指定だけは優先希望。実際の夜勤→明け→公休は必須のまま。
+                    # 直結と、公休を1日挟む形を同列に達成扱い。実際の夜勤後の休みは必須。
+                    patterns = []
+                    for gap in (0, 1):
+                        terms = [value(sid, d - 2 - gap, 'night'),
+                                 value(sid, d - 1 - gap, 'nightOff')]
+                        if gap:
+                            terms.append(value(sid, d - 1, 'off'))
+                        met = model.new_bool_var(f'{sid}_preferred_night_rest_{d}_gap_{gap}')
+                        for term in terms:
+                            model.add(met <= term)
+                        model.add(met >= sum(terms) - len(terms) + 1)
+                        patterns.append(met)
                     missed = model.new_bool_var(f'{sid}_preferred_night_rest_{d}')
-                    model.add(missed >= 1 - value(sid, d - 2, 'night'))
-                    model.add(missed >= 1 - value(sid, d - 1, 'nightOff'))
-                    model.add(missed <= 2 - value(sid, d - 2, 'night') - value(sid, d - 1, 'nightOff'))
+                    model.add_max_equality(1 - missed, patterns)
                     preference_misses.append(missed)
             requested = p['shiftRequests'].get(sid, {}).get(d + 1)
             if requested is not None:

@@ -36,10 +36,11 @@ class RequestedNightRestTests(unittest.TestCase):
         self.assertEqual(r['nightRestPreferences']['unmet'],[])
         self.assertEqual([r['assignments']['s0'][str(d)] for d in (4,5,6,7,8)],['night','nightOff','off','off','off'])
 
-    def test_two_staff_same_block_have_exactly_one_exception(self):
-        # 希望の衝突を検証する。28日の夜勤を4人へ均等にできる成立例を使い、
+    def test_three_staff_same_block_have_exactly_one_unmet(self):
+        # 達成できる夜勤日は2日。3人同時の希望なら少なくとも1人は未達。
+        # 夜勤を各4回へ配れる7人で、同日の希望だけを検査する。
         # 別項目の夜勤回数差の証明に左右されず、衝突件数の最少証明を確認する。
-        p=fixture(4);p['requests']['s1']=[6]
+        p=fixture(7);p['requests']={sid:[6] for sid in ('s0','s1','s2')};p['shiftRequests']={}
         for draft in (False,True):
             r=self.checked(p,draft,seconds=5);self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
             self.assertEqual(r['nightRestPreferences']['unmet'][0]['day'],6)
@@ -145,7 +146,67 @@ class RequestedNightRestTests(unittest.TestCase):
             p['nightRestRequiredStaff']=legacy
             r=self.checked(p)
             self.assertEqual(r['nightRestPreferences']['requestedCount'],4)
-            self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
+            self.assertEqual(len(r['nightRestPreferences']['unmet']),0)
+
+    def test_two_staff_same_request_can_both_be_met(self):
+        p=fixture(4);p['requests']['s1']=[6]
+        r=self.checked(p,seconds=5)
+        self.assertEqual(r['nightRestPreferences']['unmet'],[])
+        self.assertEqual({next(d for d in (3,4) if r['assignments'][sid][str(d)]=='night')
+                          for sid in ('s0','s1')},{3,4})
+
+    def test_both_patterns_are_equal_and_preserve_two_required_rest_blocks(self):
+        for night_day in (3,4):
+            p=fixture(6);p['requests']={'s0':[6,15]};p['shiftRequests']={}
+            p['staff'][0]['minConsecutiveRest']=2
+            p['locked']={'s0':{str(night_day):'night','7':'off','8':'early',
+                              '12':'night','16':'off'}}
+            r=self.checked(p,seconds=5)
+            self.assertEqual(r['nightRestPreferences']['metCount'],2)
+            self.assertEqual(r['nightRestPreferences']['rule'],'night-request-gap-1')
+            self.assertGreaterEqual(r['consecutiveRest']['s0']['actual'],2)
+            self.assertTrue(r['nightRestPreferences']['minimumUnmetProven'])
+            # 検査APIでも直結・公休1日を同じ達成として再集計する。
+            checked=dispatch({'input':p,'action':'validate','assignments':r['assignments']})
+            self.assertEqual(checked['status'],'VALID')
+            self.assertEqual(checked['nightRestPreferences']['metCount'],2)
+            from solver.auto_schedule import inspect
+            self.assertEqual(inspect(p,r['assignments'])['nightRestPreferences']['metCount'],2)
+            fixed=deepcopy(p);fixed['locked']=deepcopy(r['assignments'])
+            quota={st['id']:dict(min=9,target=9,max=9,fixed=True) for st in fixed['staff']}
+            auto=dispatch({'mode':'auto','autoPhase':'adjust','input':fixed,'seconds':5,
+                           'holidayPolicy':quota,'referenceAssignments':r['assignments']})
+            self.assertIn(auto['status'],('FEASIBLE','OPTIMAL'),auto)
+            self.assertEqual(auto['nightRestPreferences']['metCount'],2)
+            self.assertEqual(auto['optimizationPolicy'],'auto-holidays-2')
+
+    def test_spaced_pattern_supports_all_three_period_boundaries(self):
+        for day,hist,locks in [
+                (1,['off']*4+['night','nightOff','off'],{}),
+                (2,['off']*5+['night','nightOff'],{'1':'off'}),
+                (3,['off']*6+['night'],{'1':'nightOff','2':'off'})]:
+            p=fixture(6);p['shiftRequests']={};p['requests']={'s0':[day,day+1]}
+            p['history']['s0']=hist;p['locked']={'s0':locks}
+            r=self.checked(p,seconds=5)
+            self.assertEqual(r['nightRestPreferences']['requestedCount'],1)
+            self.assertEqual(r['nightRestPreferences']['metCount'],1)
+            self.assertEqual(p['history']['s0'],hist)
+
+    def test_two_gap_days_are_legal_but_unmet(self):
+        p=fixture(6);p['shiftRequests']={};p['requests']={'s0':[6]}
+        p['locked']={'s0':{'2':'night','5':'off'}}
+        r=self.checked(p,seconds=5)
+        self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
+        self.assertTrue(r['nightRestPreferences']['minimumUnmetProven'])
+        self.assertEqual(r['nightRestPreferences']['unmet'][0]['nightDays'],[4,3])
+
+    def test_report_requires_exact_gap_off_and_recovery(self):
+        from itertools import product
+        p=normalize(fixture());p['requests']={'s0':[6,7]}
+        for shifts in product(('night','nightOff','off','early','late'),repeat=3):
+            rows={'s0':dict(zip(('3','4','5'),shifts))}
+            expected=(shifts[1:]==('night','nightOff') or shifts==('night','nightOff','off'))
+            self.assertEqual(report(p,rows)['metCount'],int(expected),shifts)
 
     def test_part_time_and_no_night_staff_are_not_preference_targets(self):
         p=fixture();p['staff'][0]['nightShiftType']='none'

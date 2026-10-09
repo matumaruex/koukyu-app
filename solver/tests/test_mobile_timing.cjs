@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.c
 const raw={staff:[{id:'local',name:'職員',type:'full',nightShiftType:'all'}],schedules:{}};
 function result(ot,{done=false,stage='overtime',short}={}){return {status:short===undefined?'FEASIBLE':'DRAFT',assignments:{s0:{'1':'off'}},seconds:60,
  ...(short===undefined?{}:{staffingShortfallTotal:short}),
- allocation:{overtimeTotal:ot,nightSpread:0},search:{done,continueRecommended:!done,resume:done?null:{stage,idle:3,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-5'};}
+ allocation:{overtimeTotal:ot,nightSpread:0},search:{done,continueRecommended:!done,resume:done?null:{stage,idle:3,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-7'};}
 const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
 (async()=>{
  // 段階が終わるまで続きを呼び、前回の表と再開位置を渡す。新規と改善、既存の表あり・なし。
