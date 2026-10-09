@@ -20,7 +20,7 @@ function harness(raw,options={}){
  if(options.current){values.clear();values.set('koukyu_v4_data',JSON.stringify(options.current));}
  // 作業中の表など、ほかの保存キーを読み込み前に置く。
  for(const[k,v]of Object.entries(options.stored||{}))values.set(k,v);
- const nav=['schedule','auto','requests','staff','saved'].map(tab=>{const e=new Element('button');e.dataset.tab=tab;return e;});
+ const nav=[...fs.readFileSync(path.join(__dirname,'../../public/index.html'),'utf8').matchAll(/data-tab="([^"]+)"/g)].map(([,tab])=>{const e=new Element('button');e.dataset.tab=tab;return e;});
  const ctx={console,Date:Clock,Math,JSON,Set,Map,AbortController,File,URL,crypto:require('node:crypto').webcrypto,
   navigator:{storage:{persist:async()=>true}},window:{print(){}},confirm:message=>{confirmations.push(message);return true;},
   document:{getElementById:id=>nodes[id]??=new Element(),createElement:tag=>{const e=new Element(tag);all.push(e);return e;},querySelector:()=>period,querySelectorAll:selector=>selector==='[data-tab]'?nav:all.filter(e=>['BUTTON','INPUT','SELECT'].includes(e.tagName))},

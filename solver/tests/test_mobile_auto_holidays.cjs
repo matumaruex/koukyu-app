@@ -7,7 +7,13 @@ function candidate(payload){return {status:'DRAFT',assignments:rows(),selectedQu
  const h=harness(null,{current:raw,response:async p=>p.action==='validate'?{status:'VALID',boundaryComplete:true}:p.autoPhase==='base'?candidate(p):{status:'UNKNOWN',autoDone:true,autoReason:'unchanged',seconds:1}});
  const normalSignature=h.get('inputData().signature'),normalOff=h.get('data.staff.map(st=>st.monthlyDaysOff)'),history=h.get('history()');
  h.eval("schedule().assignments={a:{'1':'early'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE'};render();");const normalTable=h.get('schedule().assignments');
- h.eval("setTab('auto')");assert(h.nodes.view.text.includes('公休おまかせ'));assert(h.get('inputData().signature').startsWith('auto-rules-3:'));
+ assert.deepEqual(h.ctx.document.querySelectorAll('[data-tab]').map(b=>b.dataset.tab),['schedule','requests','staff','saved']);
+ h.ctx.settings();await h.click('公休おまかせを開く');assert.equal(h.nodes.dialog.open,false);
+ assert(h.nodes.view.text.includes('公休おまかせ'));assert(h.get('inputData().signature').startsWith('auto-rules-3:'));
+ assert.equal(h.calls.length,0);await h.click('通常の公休表に戻る','view');
+ assert.equal(h.get('state.mode'),'normal');assert.equal(h.get('inputData().signature'),normalSignature);
+ assert.deepEqual(h.get('schedule().assignments'),normalTable);
+ h.ctx.settings();await h.click('公休おまかせを開く');
  const policy=h.get('inputData().holidayPolicy');assert.equal(policy.s0.target,10);assert.equal(policy.s1.fixed,true);assert.equal(policy.s1.target,12);assert.equal(policy.s2.target,11);
  await h.ctx.generate();assert.equal(h.calls[0].mode,'auto');assert.equal(h.calls[0].autoPhase,'base');assert.deepEqual(h.calls[0].input.history.s0,history.a);assert.deepEqual(h.calls[0].input.locked.s0,{'4':'early'});
  assert.equal(h.get('hasTable()'),true);assert.deepEqual(h.get('data.staff.map(st=>st.monthlyDaysOff)'),normalOff);assert.deepEqual(h.get('history()'),history);
