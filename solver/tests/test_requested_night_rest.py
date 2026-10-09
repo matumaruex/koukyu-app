@@ -38,9 +38,9 @@ class RequestedNightRestTests(unittest.TestCase):
 
     def test_three_staff_same_block_have_exactly_one_unmet(self):
         # 達成できる夜勤日は2日。3人同時の希望なら少なくとも1人は未達。
-        # 夜勤後の必須公休を守っても毎日夜勤を埋められる8人で、
+        # 夜勤を各4回へ配れる7人で、同日の希望だけを検査する。
         # 別項目の夜勤回数差の証明に左右されず、衝突件数の最少証明を確認する。
-        p=fixture(8);p['requests']['s1']=[6];p['requests']['s2']=[6]
+        p=fixture(7);p['requests']={sid:[6] for sid in ('s0','s1','s2')};p['shiftRequests']={}
         for draft in (False,True):
             r=self.checked(p,draft,seconds=5);self.assertEqual(len(r['nightRestPreferences']['unmet']),1)
             self.assertEqual(r['nightRestPreferences']['unmet'][0]['day'],6)
