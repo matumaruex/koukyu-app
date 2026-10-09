@@ -196,7 +196,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         ot_profile = overtime_profile(p, st)
         ot_label = label + f'のA残は月{ot_profile["cap"]}回以内・連日不可'
         nt = st['nightShiftType']
-        limit = st['maxConsecutive'] or (2 if st['type'] != 'part' and nt != 'none' else 5)
+        limit = st['maxConsecutive'] or 3
         extensions = []
         overs = []
         flexible = (allow_rule_exceptions and st['type'] != 'part' and st['dayShiftFlexible']

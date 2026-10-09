@@ -8,10 +8,12 @@ const RosterStorage=(()=>{
     if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))throw Error('保存した表の対象期間を確認してください。');
     return period.split('-').map(Number);
   }
-  function capture(data,period,name,id,createdAt=new Date().toISOString()){
+  // 表には未指定の連勤上限も、作成当時の実際の日数で記録する。
+  function snapshotStaff(staff,legacy=false){return copy(staff).map(st=>({...st,maxConsecutive:st.maxConsecutive||(legacy?(st.type!=='part'&&(st.nightShiftType||'none')!=='none'?2:5):3)}));}
+  function capture(data,period,name,id,createdAt=new Date().toISOString(),legacy=false){
     const schedule=copy(data.schedules[period]);
     for(const field of ['previous','workSignature','retryLong','workSnapshot'])delete schedule[field];
-    return {id,name,period,createdAt,staff:copy(data.staff),preferences:copy(data.preferences),schedule};
+    return {id,name,period,createdAt,staff:snapshotStaff(data.staff,legacy),preferences:copy(data.preferences),schedule};
   }
   function clearResult(schedule){
     schedule.assignments={};
@@ -41,7 +43,7 @@ const RosterStorage=(()=>{
         }
         const checked=validate(copy({staff:record.staff,preferences:record.preferences,schedules:{[record.period]:record.schedule}}));
         if(!hasTable(checked.schedules[record.period]))throw Error('保存した表の勤務を確認してください。');
-        return {...copy(record),staff:checked.staff,preferences:checked.preferences,schedule:checked.schedules[record.period]};
+        return {...copy(record),staff:snapshotStaff(checked.staff,true),preferences:checked.preferences,schedule:checked.schedules[record.period]};
       });
     }else{
       data.savedTables=[];
@@ -57,9 +59,9 @@ const RosterStorage=(()=>{
         }
       }
       for(const [period,s] of Object.entries(data.schedules)){
-        if(hasTable(s))data.savedTables.push(capture(data,period,period+'（移行した表）','legacy-'+period+'-current'));
+        if(hasTable(s))data.savedTables.push(capture(data,period,period+'（移行した表）','legacy-'+period+'-current',undefined,true));
         if(s.previous&&hasTable(s.previous)){
-          const record=capture(data,period,period+'（移行したひとつ前の表）','legacy-'+period+'-previous');
+          const record=capture(data,period,period+'（移行したひとつ前の表）','legacy-'+period+'-previous',undefined,true);
           record.schedule={...record.schedule,...copy(s.previous)};delete record.schedule.previous;
           data.savedTables.push(record);
         }
@@ -82,6 +84,6 @@ const RosterStorage=(()=>{
     }
     return {history:out,added};
   }
-  return {prepare,persisted,capture,clearResult,takeHistory,periodParts};
+  return {prepare,persisted,capture,clearResult,takeHistory,periodParts,snapshotStaff};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=RosterStorage;

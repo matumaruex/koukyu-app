@@ -56,7 +56,7 @@ def validate(raw, assignments):
         hist = p['history'][sid]
         all_days = hist + values
         night_type = st['nightShiftType']
-        limit = st['maxConsecutive'] or (2 if st['type'] != 'part' and night_type != 'none' else 5)
+        limit = st['maxConsecutive'] or 3
         run = 0
         extensions = 0
         weeks = {}
