@@ -21,6 +21,8 @@ from .overtime_preference import offsets, score_bounds, active as preference_act
 REST_PROOF_SECONDS = 20
 # 夜勤の端数：連勤などの例外を0件にした範囲で先に確かめる時間（残りは例外を許した範囲の確認に使う）。
 REMAINDER_STRICT_SECONDS = 5
+# 試作：1回の出勤サイクル（公休・明けで区切る）にA残は1回まで。
+OT_ONE_PER_CYCLE = False
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -233,6 +235,31 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             required(x[sid, d, 'nightOff'] == value(sid, d - 1, 'night'), sid + '_night_link', label + 'の夜勤翌日は明け（期間境界を含む）')
             required(x[sid, d, 'off'] >= value(sid, d - 1, 'nightOff'), sid + '_night_rest', label + 'の夜勤明け翌日は必ず公休（期間境界を含む）')
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', ot_label)
+            if OT_ONE_PER_CYCLE and st['canOvertime'] and st['type'] != 'part':
+                if d == 0:
+                    # 前期の実績（入力された場合だけ）：最後の公休・明けより後にA残があれば、今期1日目からのサイクルに持ち越す。
+                    carry = 0
+                    if sid in p['historyProvided']:
+                        for k in p['history'][sid]:
+                            carry = 1 if k == 'overtime' else (0 if k in ('off', 'nightOff') else carry)
+                    any_prev, free_prev = carry, 0
+                rest = x[sid, d, 'off'] + x[sid, d, 'nightOff']
+                fixed = (p['shiftRequests'].get(sid, {}).get(d + 1) == 'overtime'
+                         or p['locked'].get(sid, {}).get(d + 1) == 'overtime')
+                if fixed:
+                    # 希望・固定のA残どうしは希望どおり。計算が足したA残と同じサイクルにはしない。
+                    if not isinstance(free_prev, int):
+                        required(free_prev == 0, sid + '_ot_cycle', label + 'のA残は1回の出勤サイクルに1回まで')
+                else:
+                    required(x[sid, d, 'overtime'] + any_prev <= 1, sid + '_ot_cycle', label + 'のA残は1回の出勤サイクルに1回まで')
+                any_now = model.new_bool_var(f'{sid}_{d}_ot_cycle_any')
+                model.add(any_now >= x[sid, d, 'overtime'])
+                model.add(any_now >= any_prev - rest)
+                free_now = model.new_bool_var(f'{sid}_{d}_ot_cycle_free')
+                if not fixed:
+                    model.add(free_now >= x[sid, d, 'overtime'])
+                model.add(free_now >= free_prev - rest)
+                any_prev, free_prev = any_now, free_now
             if d + 1 in p['requests'].get(sid, []):
                 wish(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休',
                      {'kind': 'request', 'staff': sid, 'day': d + 1, 'shift': 'off'})
