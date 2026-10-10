@@ -13,11 +13,14 @@ from .allocation import POLICY, covers, metrics, weights, quality_value, minor_u
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
 from .rest_blocks import report as rest_report, user_fixed_off
+from .night_remainder import plan as night_remainder_plan, report as night_remainder_report, max_nights
 from .overtime_preference import offsets, score_bounds, active as preference_active, arithmetic_proven, POLICY as PREFERENCE_POLICY
 
 
 # 連休なしの最少回数を確かめる計算の上限（1回の通信ごと）。確かめられなければ例外のある表は出さない。
 REST_PROOF_SECONDS = 20
+# 夜勤の端数：連勤などの例外を0件にした範囲で先に確かめる時間（残りは例外を許した範囲の確認に使う）。
+REMAINDER_STRICT_SECONDS = 5
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -191,6 +194,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     extra_off = []
     compared_extra_off = []
     night_totals, ab_totals = [], []
+    night_total_by_sid = {}
     overtime_totals, overtime_squares = [], []
     # 残業回数を比べる値（出勤できる日数で換算した回数）。
     overtime_scaled = []
@@ -360,6 +364,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 total = model.new_int_var(0, n, sid + '_night_total')
                 model.add(total == sum(x[sid, d, 'night'] for d in range(n)))
                 night_totals.append(total)
+                night_total_by_sid[sid] = total
 
     night_spread = 0
     if night_totals:
@@ -368,6 +373,20 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add_min_equality(low, night_totals)
         night_spread = high - low
         quality.append((100 * len(p['staff']) + 1) * night_spread)
+    # 夜勤の端数優先（中間ルール）：目安（優先する人は基準＋1、ほかは基準）を超えた夜勤の数。
+    # 夜勤未配置を許す旧来の下書きと、おまかせ（入口で設定を除去）では使わない。
+    night_excess = []
+    remainder_plan = night_remainder_plan(p) if not allow_night_shortfall and holiday_plan is None else None
+    if remainder_plan:
+        staff_by_id = {st['id']: st for st in p['staff']}
+        for sid, fair in remainder_plan['fair'].items():
+            over = model.new_int_var(0, n, sid + '_night_over')
+            model.add(over >= night_total_by_sid[sid] - fair)
+            night_excess.append(over)
+            # 1人ずつの夜勤の最大回数を、表を狭めない補助の上限として加える（最少の証明を速くするため）。
+            most = max_nights(p, staff_by_id[sid])
+            if most < n:
+                model.add(night_total_by_sid[sid] <= most)
 
     if ab_totals:
         def percentage(a, b, maximum, name):
@@ -442,11 +461,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if rest_forbidden and not relax_wishes and (not allow_rule_exceptions or holiday_plan is not None):
         # 厳密な作成とおまかせでは、連休なしは必ず守る条件。
         required(sum(rest_forbidden) == 0, 'no_consecutive_rest', '連休なしの職員に連休を作らない')
+    if night_excess and not relax_wishes and not allow_rule_exceptions:
+        # 厳密な作成では、夜勤の端数は必ず優先する人へ（避けられない分を除く）。
+        required(sum(night_excess) <= remainder_plan['allowance'], 'night_remainder', '夜勤の端数は優先する人へ')
     if relax_wishes:
         if _deadline is not None:
             seconds = max(.000001, min(seconds, _deadline - time.monotonic() - .15))
         # 理由調べでは、連休なしの例外も中間ルールと同じく最後に許す。
-        return _explain(model, dropped, night_missing, rule_violations + rest_forbidden, len(p['staff']) * 3 * n, seconds, seed, rest_shortfalls)
+        return _explain(model, dropped, night_missing, rule_violations + rest_forbidden + night_excess, len(p['staff']) * 4 * n, seconds, seed, rest_shortfalls)
     overtime_range = 0
     if overtime_scaled:
         # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
@@ -536,6 +558,48 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_unconfirmed'},
                     'explanation': '連休なしの設定を守れるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
         seconds = max(.000001, seconds - rest_proof_seconds)
+    night_minimum = night_proof_seconds = None
+    if night_excess and allow_rule_exceptions:
+        # 夜勤の端数優先も「見つけられなかった」では破らない。優先順位は 連休なし（固定済み）→ 連勤・日勤の種類 → 端数。
+        # まず連勤・日勤の種類の例外を0件にした範囲で端数の超過の最少を証明する（普通の月はこれですぐ確定する）。
+        # その範囲で表がない・確かめられない月だけ、連勤などの例外を許した範囲で最少を証明する。
+        # 連勤の例外そのものの最少証明は求めない（従来どおり）。証明した最少を上限として固定する。
+        total_over = sum(night_excess)
+        strict = model.new_bool_var('night_remainder_without_exceptions')
+        if rule_violations:
+            model.add(sum(rule_violations) == 0).only_enforce_if(strict)
+        night_proof_seconds, proof_status = 0, cp_model.UNKNOWN
+        attempts = ([True] if rule_violations else []) + [False]
+        for index, without_exceptions in enumerate(attempts):
+            budget = min(REMAINDER_STRICT_SECONDS if without_exceptions and len(attempts) > 1 else REST_PROOF_SECONDS,
+                         REST_PROOF_SECONDS - night_proof_seconds, seconds - night_proof_seconds)
+            if budget <= 0.01:
+                break
+            model.minimize(total_over)
+            model.clear_assumptions()
+            if without_exceptions:
+                model.add_assumptions([strict])
+            if initial_assignments is not None:
+                for (sid, d, shift), variable in x.items():
+                    model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
+            proof = cp_model.CpSolver()
+            proof.parameters.max_time_in_seconds = budget
+            proof.parameters.random_seed = seed
+            proof.parameters.num_search_workers = 4
+            proof_status = proof.solve(model)
+            model.clear_hints()
+            model.clear_assumptions()
+            night_proof_seconds += proof.wall_time
+            if proof_status == cp_model.OPTIMAL:
+                night_minimum = int(round(proof.objective_value))
+                model.add(total_over <= night_minimum)
+                break
+        if night_minimum is None and proof_status != cp_model.INFEASIBLE:
+            return {'status': 'UNKNOWN', 'seconds': round(night_proof_seconds + (rest_proof_seconds or 0), 3), 'boundaryComplete': p['boundaryComplete'],
+                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': seconds, 'reason': 'night_remainder_unconfirmed'},
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'night_remainder_unconfirmed'},
+                    'explanation': '夜勤の端数を優先する人へ回せるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
+        seconds = max(.000001, seconds - night_proof_seconds)
     if has_priority:
         model.minimize(priority)
         if initial_priority is not None:
@@ -712,6 +776,20 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 'explanation': '連休なしの例外が最少と確認できない表は採用しません。'}
     if rest_minimum is not None:
         result['noConsecutiveRest'] = {'minimum': rest_minimum, 'proven': True, 'seconds': round(rest_proof_seconds, 3)}
+    remainder = night_remainder_report(p, assignments) if remainder_plan else None
+    if remainder is not None:
+        if night_minimum is not None and remainder['excess'] > night_minimum:
+            # 証明した最少を超える端数の表は採用しない（元の表を保持した場合も含む）。
+            return {'status': 'UNKNOWN', 'seconds': result['seconds'], 'boundaryComplete': p['boundaryComplete'],
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'night_remainder_unconfirmed'},
+                    'explanation': '夜勤の端数が最少と確認できない表は採用しません。'}
+        result['nightRemainder'] = {'priorityStaff': remainder['priority'], 'base': remainder['base'],
+                                    'extras': remainder['extras'], 'counts': remainder['counts'],
+                                    'excess': remainder['excess'], 'allowance': remainder['allowance'],
+                                    'exceptions': remainder['exceptions'], 'proven': night_minimum is not None,
+                                    'seconds': round(night_proof_seconds, 3) if night_proof_seconds is not None else None}
+        if remainder['exceptions']:
+            result['nightRemainderExceptions'] = remainder['exceptions']
     exceptions = [e for e in errors if rule_exception(e)]
     if exceptions:
         # 中間ルールの例外は、守ると表が作れない分だけ。人数不足とは別に一覧で返す。
