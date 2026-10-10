@@ -1,14 +1,14 @@
 """ソルバーの制約や変数を使わず、完成した表を再集計して検査する。"""
 from datetime import timedelta
 from .input_data import normalize, SHIFTS, overtime_profile
-from .rest_blocks import ranges as rest_ranges
+from .rest_blocks import ranges as rest_ranges, forbidden_ranges
 
 SHORTFALL_CODES = ('coverage', 'sunday_limit')
 
 
 def is_rule_exception(p, error):
     """中間ルール（守ると表が作れないときだけ破れる）の違反か。p は正規化済みの入力。"""
-    if error['code'] in ('consecutive', 'consecutive_plus_one'):
+    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest'):
         return True
     if error['code'] == 'day_shift_eligibility':
         staff = next((st for st in p['staff'] if st['id'] == error['staff']), None)
@@ -17,8 +17,14 @@ def is_rule_exception(p, error):
 
 
 def exception_count(p, errors):
-    """計算側と同じ数え方：上限を超えた日数＋＋1の超過回数＋逆の日勤の日数。"""
-    return sum(e.get('count', 1) for e in errors if is_rule_exception(p, e))
+    """計算側と同じ数え方：上限を超えた日数＋＋1の超過回数＋逆の日勤の日数。
+    連休なしの例外は、最初に最少回数を証明して固定する別扱いなので、ここには数えない（rest_exception_count）。"""
+    return sum(e.get('count', 1) for e in errors if is_rule_exception(p, e) and e['code'] != 'no_consecutive_rest')
+
+
+def rest_exception_count(errors):
+    """連休なしの例外の数（連続した公休の組の数）。"""
+    return sum(e.get('count', 1) for e in errors if e['code'] == 'no_consecutive_rest')
 
 
 def validate(raw, assignments):
@@ -112,6 +118,9 @@ def validate(raw, assignments):
             if len(blocks) < st['minConsecutiveRest']:
                 fail('rest_blocks', sid, detail='連休の必須回数に届いていません。')
                 errors[-1].update(actual=len(blocks), required=st['minConsecutiveRest'], ranges=blocks)
+        for block in forbidden_ranges(p, st, assignments[sid]):
+            fail('no_consecutive_rest', sid, block['end'], '連休なしの職員に連休があります。')
+            errors[-1].update(start=block['start'], end=block['end'], count=block['count'])
         cap = overtime_profile(p, st)['cap']
         if values.count('overtime') > cap:
             fail('overtime_limit', sid, detail=f"{values.count('overtime')} > {cap}")

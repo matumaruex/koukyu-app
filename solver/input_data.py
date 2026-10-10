@@ -77,10 +77,13 @@ def normalize(raw):
             if type(st[field]) is not int or not lo <= st[field] <= hi:
                 raise ValueError(f'{sid}: invalid {field}.')
         # dayShiftFlexible：Aのみ・Bのみの人でも、守ると表が作れないときだけ逆の日勤を許す（中間ルール）。
-        for field in ('canOvertime', 'allowConsecutivePlus1', 'dayShiftFlexible'):
+        # noConsecutiveRest：この人には連休（2日以上続く公休）を作らない。連休の必須回数とは同時に指定できない。
+        for field in ('canOvertime', 'allowConsecutivePlus1', 'dayShiftFlexible', 'noConsecutiveRest'):
             st.setdefault(field, False)
             if type(st[field]) is not bool:
                 raise ValueError(f'{sid}: {field} must be boolean.')
+        if st['noConsecutiveRest'] and st['minConsecutiveRest']:
+            raise ValueError(f'{sid}: noConsecutiveRest cannot be combined with minConsecutiveRest.')
         if st['type'] == 'part':
             try:
                 times = []
@@ -142,6 +145,8 @@ def normalize(raw):
         if not isinstance(history, list) or len(history) != 7 or any(v not in SHIFTS for v in history):
             raise ValueError(f'{sid}: history must contain exactly seven preceding days, oldest first.')
     p['boundaryComplete'] = set(p['history']) == ids
+    # 実際に前期の勤務が入力された職員。仮定の休み（下の補完）とは区別する。
+    p['historyProvided'] = set(p['history'])
     # 履歴がない職員の前期7日は試験上のみ休みと仮定する。実運用合格にはしない。
     for sid in ids:
         p['history'].setdefault(sid, ['off'] * 7)
