@@ -23,9 +23,9 @@ assert(h.eval('allocationSummary()').text.includes('出勤できる日数の比�
 h.eval("schedule().meta.overtimeFairness.byStaff={s0:4,s1:5,s2:2};");
 assert(h.eval('allocationSummary()').text.includes('まだ確認できていません'));
 // 希望入力で、出勤できる日数と上限を案内する。普通の人には出さない。
-h.eval("state.tab='requests';state.reqStaff='c';render();");
-assert(h.nodes.view.text.includes('今期の出勤できる日数は13日です。A残は月4回まで'));
-h.eval("state.reqStaff='a';render();");assert(!h.nodes.view.text.includes('出勤できる日数は'));
+h.eval("state.tab='requests';editRequests('c');");
+assert(h.nodes['dialog-body'].text.includes('今期の出勤できる日数は13日です。A残は月4回まで'));
+h.eval("editRequests('a');");assert(!h.nodes['dialog-body'].text.includes('出勤できる日数は'));
 // 上限を超えた手直しは、上限の回数を示す。
 assert.equal(h.ctx.errorsText([{code:'overtime_limit',staff:'s2',actual:5,limit:4}],{s2:'c'}),'職員Cさん：A残が5回（今期の上限4回）');
 // 希望休を減らすと普通の人に戻る。
