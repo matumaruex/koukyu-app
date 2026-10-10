@@ -36,6 +36,10 @@ def normalize(raw):
     if type(p['maxExtraOffSpread']) is not int or not 0 <= p['maxExtraOffSpread'] <= p['days']:
         raise ValueError('maxExtraOffSpread must be an integer from 0 to period length.')
     p['start'] = date(year, month, 16)
+    # A残は1回の出勤サイクルに1回まで（3.40、通常版の画面が送る。人数不足を減らすためだけに2回目を許す）。
+    p.setdefault('overtimeCycleLimit', False)
+    if type(p['overtimeCycleLimit']) is not bool:
+        raise ValueError('overtimeCycleLimit must be boolean.')
     p.setdefault('requiredStaff', [4, 4, 4])
     p.setdefault('maxReducedSundays', 3)
     def valid_counts(values):

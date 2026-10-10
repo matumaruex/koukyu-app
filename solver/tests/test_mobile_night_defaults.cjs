@@ -12,7 +12,7 @@ const staff=[{id:'a',name:'職員A',type:'full',nightShiftType:'all',monthlyDays
  {id:'d',name:'職員D',type:'full',nightShiftType:'all',monthlyDaysOff:9}];
 const saved={assignments:{a:{'6':'off'}},requests:{a:[6],b:[6],c:[6],d:[6]},nightRestRequiredStaff:[],excludedStaff:['d']};
 let rendered=[];
-const ctx={AutoRosterUI:{inputData:base=>base},state:{year:2026,month:3,reqStaff:'a',requestType:'off'},data:{staff,preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[4,4,4],maxReducedSundays:3}}},
+const ctx={AutoRosterUI:{inputData:base=>base,active:()=>false},state:{year:2026,month:3,reqStaff:'a',requestType:'off'},data:{staff,preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[4,4,4],maxReducedSundays:3}}},
  schedule:()=>saved,history:()=>({}),activeStaff:()=>staff.filter(s=>s.id!=='d'),clone:x=>JSON.parse(JSON.stringify(x)),normalizeStaffing:x=>x,
  card:()=>({append:(...nodes)=>rendered.push(...nodes)}),select:()=>({}),field:(name)=>({field:name}),el:(tag,text)=>({tag,text}),
  requestChoices:()=>[['off','希望休']],staffIncluded:id=>id!=='d',requestStatus:()=>'',requestCount:()=>1,
@@ -20,6 +20,7 @@ const ctx={AutoRosterUI:{inputData:base=>base},state:{year:2026,month:3,reqStaff
 vm.createContext(ctx);vm.runInContext(functions,ctx);
 const first=JSON.parse(JSON.stringify(ctx.inputData()));
 assert(!Object.hasOwn(first.p,'nightRestRequiredStaff'));
+assert.equal(first.p.overtimeCycleLimit,true);
 assert.equal(first.p.staff.length,3);
 assert.deepEqual(Object.values(first.map),['a','b','c']);
 assert.deepEqual(first.p.requests.s0,[6]);

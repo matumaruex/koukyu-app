@@ -35,7 +35,7 @@ const select=h=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>
  // 作成結果の例外：一覧・最少確認済み・表の印（連休の両日）。
  const none={...raw,staff:[{...raw.staff[0],noConsecutiveRest:true},raw.staff[1]]};
  const restError={code:'no_consecutive_rest',staff:'s0',day:5,start:4,end:5,count:1};
- const made=harness(none,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'4':'off','5':'off','10':'off','11':'off'},s1:{'1':'off'}},seconds:3,ruleExceptions:[restError],exceptionCount:0,exceptionsProvenMinimum:true,restExceptionCount:1,restExceptionsProvenMinimum:true,noConsecutiveRest:{minimum:1,proven:true},validationErrors:[restError],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-7'})});
+ const made=harness(none,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'4':'off','5':'off','10':'off','11':'off'},s1:{'1':'off'}},seconds:3,ruleExceptions:[restError],exceptionCount:0,exceptionsProvenMinimum:true,restExceptionCount:1,restExceptionsProvenMinimum:true,noConsecutiveRest:{minimum:1,proven:true},validationErrors:[restError],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-8'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.staff[0].noConsecutiveRest,true);
  const text=made.nodes.view.text;
