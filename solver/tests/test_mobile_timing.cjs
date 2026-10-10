@@ -1,5 +1,5 @@
 'use strict';
-// 実画面で、続きの自動計算（段階が終わるまで・上限5分）、送信する条件、失敗・悪化・古い応答の保護を確認する。
+// 実画面で、続きの自動計算（段階が終わるまで・上限8分）、送信する条件、失敗・悪化・古い応答の保護を確認する。
 const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
 const raw={staff:[{id:'local',name:'職員',type:'full',nightShiftType:'all'}],schedules:{}};
 function result(ot,{done=false,stage='overtime',short}={}){return {status:short===undefined?'FEASIBLE':'DRAFT',assignments:{s0:{'1':'off'}},seconds:60,
@@ -21,7 +21,7 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
    assert(progress.includes('残業の合計を調整中'));assert(progress.includes('A残 4→3回'));
    assert.equal(h.calls.reduce((t,c)=>t+c.seconds,0),180);
    assert.equal(h.get('schedule().meta.allocation.overtimeTotal'),2);assert.equal(h.get('schedule().meta.seconds'),180);
-   assert.equal(h.get('schedule().meta.workflow.done'),true);assert(!buttons(h).includes('さらに改善する'));
+   assert.equal(h.get('schedule().meta.workflow.done'),true);assert(buttons(h).includes('さらに改善する'));
    assert.deepEqual(h.get('data.savedTables'),archives);assert.equal(h.confirmations.length,0);
   }
  }
@@ -36,6 +36,27 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  // 全段階を終えた応答でも、未確認の残業差が残れば手動の改善を隠さない。
  const unconfirmed=harness(raw,{response:async()=>({...result(3,{done:true}),overtimeFairness:{minimumSpreadProven:false}})});
  await unconfirmed.ctx.generate();assert.equal(unconfirmed.calls.length,1);assert(buttons(unconfirmed).includes('さらに改善する'));
+ // 停滞終了や公平性の証明だけを理由に、ほかの最少が未確認の表の改善を隠さない。
+ for(const missing of ['overtime','placement','metadata']){
+  const h=harness(raw,{response:async()=>({...result(3,{done:true}),preferencePriorityProven:true,
+   allocation:{overtimeTotal:3,minimumOvertimeProven:missing!=='overtime'},
+   overtimeFairness:missing==='metadata'?undefined:{minimumSpreadProven:true}})});
+  await h.ctx.generate();assert.equal(h.get('schedule().meta.workflow.done'),true);assert(buttons(h).includes('さらに改善する'));
+  assert(h.nodes.view.text.includes('最少の確認が未完了です。'));
+  const oldRows=h.get('schedule().assignments');await h.click('さらに改善する','view');
+  assert.deepEqual(h.calls[1].initialAssignments,{s0:oldRows.local});assert.equal(h.calls[1].resume,undefined);
+  // 条件を編集した古い表、条件違反の表は改善しない。
+  h.eval("schedule().requests.local=[2];render()");assert(!buttons(h).includes('さらに改善する'));
+ }
+ // 全体の最少を確認した通常・人数不足ありの表では非表示。証明が旧方式なら隠さない。
+ for(const draft of [false,true]){
+  const h=harness(raw,{response:async()=>({...result(3,{done:true,...(draft?{short:1}:{})}),
+   ...(draft?{solverStatus:'OPTIMAL'}:{status:'OPTIMAL'})})});
+  await h.ctx.generate();assert(!buttons(h).includes('さらに改善する'));
+  h.eval("schedule().meta.optimizationPolicy='quality-first-7';render()");assert(buttons(h).includes('さらに改善する'));
+ }
+ const invalid=harness(raw);invalid.eval("schedule().assignments={local:{1:'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'INVALID',workflow:{done:true}};render()");assert(!buttons(invalid).includes('さらに改善する'));
+ invalid.eval("schedule().meta.status='VALID';render()");assert(buttons(invalid).includes('さらに改善する'));
  // 作れないときは、理由調べの結果（外す希望）を名前と日付で出す。
  const impossible=harness(raw,{response:async()=>({status:'INFEASIBLE',seconds:.1,diagnosis:{status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:[{kind:'request',staff:'s0',day:3,shift:'off'}]}})});
  await impossible.ctx.generate();assert.equal(impossible.calls.length,1);assert.equal(impossible.get('hasTable()'),false);
