@@ -1,9 +1,9 @@
 """A残は1回の出勤サイクルに1回まで（3.40）。
 出勤サイクル＝公休・明けで区切った出勤のひと続き（夜勤を含む）。人数不足を減らすためだけに2回目以降を許す（できるだけ守る目標）。
-希望勤務・固定のA残どうしは希望どおりで数えない。計算が入れたA残と同じサイクルになった分を数える。
+希望勤務・固定のA残も、計算が入れたA残と同じく数える（オーナーの指定）。希望・固定どうしが同じサイクルなら、
+計算は間に公休を入れてサイクルを分けようとし、分けられなければ2回目として表示する。
 前期の実績が入力されていれば、境目のサイクルもつなげる（前期未入力の仮定の休みでは区切りもつなげもしない）。
-計算側（engine の状態変数）と同じ順で数える：日ごとに、計算が入れたA残はそのサイクルに既にA残があれば1、
-希望・固定のA残はそのサイクルに計算が入れたA残が既にあれば1。"""
+計算側（engine の状態変数）と同じ数え方：日ごとに、A残の日はそのサイクルに既にA残があれば1。"""
 
 
 def eligible(st):
@@ -26,7 +26,8 @@ def carry_in(p, sid):
 
 
 def report(p, assignments):
-    """1サイクルに2回目以降となったA残の数（excess）と、そのサイクル。指定がない入力では None。"""
+    """1サイクルに2回目以降となったA残の数（excess）と、そのサイクル。指定がない入力では None。
+    wishOnly：そのサイクルの今期のA残がすべて希望・固定（計算が入れたA残がない）。"""
     if not p.get('overtimeCycleLimit'):
         return None
     items = []
@@ -35,22 +36,21 @@ def report(p, assignments):
             continue
         sid = st['id']
         row = assignments[sid]
-        seen, free = carry_in(p, sid), 0
-        start, count, extra = None, 0, 0
+        seen = carry_in(p, sid)
+        start, count, extra, computed = None, 0, 0, 0
         for day in range(1, p['days'] + 2):
             shift = row.get(str(day), row.get(day)) if day <= p['days'] else 'off'
             if shift in ('off', 'nightOff'):
                 if extra:
-                    items.append({'staff': sid, 'start': start, 'end': day - 1, 'overtime': count, 'count': extra})
-                seen, free, start, count, extra = 0, 0, None, 0, 0
+                    items.append({'staff': sid, 'start': start, 'end': day - 1, 'overtime': count,
+                                  'count': extra, 'wishOnly': not computed})
+                seen, start, count, extra, computed = 0, None, 0, 0, 0
                 continue
             if start is None:
                 start = day
             if shift != 'overtime':
                 continue
-            fixed = fixed_overtime(p, sid, day)
-            extra += free if fixed else seen
+            extra += seen
             seen, count = 1, count + 1
-            if not fixed:
-                free = 1
+            computed += not fixed_overtime(p, sid, day)
     return {'excess': sum(item['count'] for item in items), 'items': items}

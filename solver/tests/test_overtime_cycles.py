@@ -1,4 +1,4 @@
-"""A残は1回の出勤サイクルに1回まで（3.40）：人数不足を減らすためだけに2回目を許す。"""
+"""A残は1回の出勤サイクルに1回まで（3.40）：人数不足を減らすためだけに2回目を許す。希望・固定のA残も数える。"""
 import copy
 import unittest
 from solver.service import dispatch
@@ -45,22 +45,21 @@ class ReportTests(unittest.TestCase):
     def test_cycles_are_split_by_off_and_night_recovery(self):
         # 公休・明けで区切る。夜勤は同じサイクルに含む。
         self.assertEqual(self.counts({1: 'overtime', 3: 'overtime', 4: 'off'})['items'],
-                         [{'staff': 's0', 'start': 1, 'end': 3, 'overtime': 2, 'count': 1}])
+                         [{'staff': 's0', 'start': 1, 'end': 3, 'overtime': 2, 'count': 1, 'wishOnly': False}])
         self.assertEqual(self.counts({1: 'overtime', 2: 'off', 3: 'overtime'})['excess'], 0)
         self.assertEqual(self.counts({1: 'overtime', 2: 'night', 3: 'nightOff', 4: 'off', 5: 'overtime'})['excess'], 0)
         self.assertEqual(self.counts({1: 'overtime', 3: 'night', 4: 'nightOff', 5: 'off'})['excess'], 0)
         self.assertEqual(self.counts({1: 'overtime', 3: 'overtime', 5: 'overtime', 6: 'off'})['excess'], 2)
 
-    def test_requested_and_locked_overtime(self):
+    def test_requested_and_locked_overtime_are_counted(self):
         raw = copy.deepcopy(self.raw)
         raw['shiftRequests'] = {'s0': {'1': 'overtime'}}
         raw['locked'] = {'s0': {'3': 'overtime'}}
-        # 希望・固定のA残どうしは希望どおり。
-        self.assertEqual(self.counts({1: 'overtime', 3: 'overtime', 4: 'off'}, raw)['excess'], 0)
-        # 計算が足したA残と同じサイクルなら数える（前後どちらでも）。
-        self.assertEqual(self.counts({1: 'overtime', 3: 'overtime', 5: 'overtime', 6: 'off'}, raw)['excess'], 1)
-        raw['locked'] = {}
-        self.assertEqual(self.counts({1: 'overtime', 3: 'overtime', 4: 'off'}, raw)['excess'], 1)
+        # 希望・固定のA残も数える。計算が入れたA残がないサイクルは wishOnly。
+        self.assertEqual(self.counts({1: 'overtime', 3: 'overtime', 4: 'off'}, raw)['items'],
+                         [{'staff': 's0', 'start': 1, 'end': 3, 'overtime': 2, 'count': 1, 'wishOnly': True}])
+        found = self.counts({1: 'overtime', 3: 'overtime', 5: 'overtime', 6: 'off'}, raw)
+        self.assertEqual((found['excess'], found['items'][0]['wishOnly']), (2, False))
 
     def test_history_is_connected_only_when_entered(self):
         raw = copy.deepcopy(self.raw)
@@ -105,13 +104,20 @@ class CalculationTests(unittest.TestCase):
         self.assertEqual(on['assignments']['s3']['3'], 'overtime')
         self.assertEqual(on['allocation']['overtimeTotal'], off['allocation']['overtimeTotal'])
 
-    def test_requested_pair_is_kept(self):
+    def test_requested_pair(self):
         raw = fixture()
         raw['locked']['s3']['3'] = 'off'
         raw['shiftRequests'] = {'s0': {'1': 'overtime', '3': 'overtime'}}
+        # 間の日が早出で固定されていて分けられない：希望どおり入れて、2回目として数える。
+        r = dispatch(dict(SCREEN, input=raw))
+        self.assertEqual((r['assignments']['s0']['1'], r['assignments']['s0']['3']), ('overtime', 'overtime'))
+        self.assertEqual(r['overtimeCycleExcess'], 1)
+        self.assertTrue(r['overtimeCycles']['items'][0]['wishOnly'])
+        # 間の日が空いていれば、公休を入れてサイクルを分ける。
+        del raw['locked']['s0']
         r = dispatch(dict(SCREEN, input=raw))
         self.assertEqual(r['overtimeCycleExcess'], 0)
-        self.assertEqual((r['assignments']['s0']['1'], r['assignments']['s0']['3']), ('overtime', 'overtime'))
+        self.assertIn(r['assignments']['s0']['2'], ('off', 'nightOff'))
 
     def test_unset_is_unchanged(self):
         r = dispatch(dict(SCREEN, input=fixture(False)))

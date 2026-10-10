@@ -13,7 +13,7 @@ from .allocation import POLICY, covers, metrics, weights, quality_value, minor_u
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
 from .rest_blocks import report as rest_report, user_fixed_off
-from .overtime_cycles import eligible as cycle_eligible, fixed_overtime, carry_in, report as overtime_cycle_report
+from .overtime_cycles import eligible as cycle_eligible, carry_in, report as overtime_cycle_report
 from .night_remainder import plan as night_remainder_plan, report as night_remainder_report, max_nights
 from .overtime_preference import offsets, score_bounds, active as preference_active, arithmetic_proven, POLICY as PREFERENCE_POLICY
 
@@ -238,32 +238,27 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', ot_label)
             if p['overtimeCycleLimit'] and cycle_eligible(st):
                 if d == 0:
-                    # seen：このサイクルに既にA残がある。free：計算が入れたA残が既にある。前期の実績は希望・固定と同じ扱い。
-                    seen, free = carry_in(p, sid), 0
+                    # seen：このサイクルに既にA残がある（希望・固定・前期の実績も数える）。
+                    seen = carry_in(p, sid)
                     cycle_cap += ot_profile['cap']
                 ot_d = x[sid, d, 'overtime']
                 rest = x[sid, d, 'off'] + x[sid, d, 'nightOff']
-                fixed = fixed_overtime(p, sid, d + 1)
+                # 2回目 ＝ 今日A残 かつ このサイクルに既にA残がある。
                 excess = model.new_bool_var(f'{sid}_{d}_ot_cycle_excess')
-                before = free if fixed else seen
-                # excess ＝ 今日A残 かつ（このサイクルに既に数える相手がいる）。
                 model.add(excess <= ot_d)
-                model.add(excess <= before)
-                model.add(excess >= ot_d + before - 1)
+                model.add(excess <= seen)
+                model.add(excess >= ot_d + seen - 1)
                 cycle_excess.append(excess)
-                states = []
-                for previous, today in ((seen, ot_d), (free, 0 if fixed else ot_d)):
-                    # 次の日へ持ち越す状態 ＝ 今日のA残 または（前日までの状態 かつ 今日が公休・明けでない）。
-                    kept = model.new_bool_var(f'{sid}_{d}_ot_cycle_keep_{len(states)}')
-                    model.add(kept <= previous)
-                    model.add(kept <= 1 - rest)
-                    model.add(kept >= previous - rest)
-                    state = model.new_bool_var(f'{sid}_{d}_ot_cycle_state_{len(states)}')
-                    model.add(state >= today)
-                    model.add(state >= kept)
-                    model.add(state <= today + kept)
-                    states.append(state)
-                seen, free = states
+                # 次の日へ持ち越す状態 ＝ 今日のA残 または（前日までの状態 かつ 今日が公休・明けでない）。
+                kept = model.new_bool_var(f'{sid}_{d}_ot_cycle_keep')
+                model.add(kept <= seen)
+                model.add(kept <= 1 - rest)
+                model.add(kept >= seen - rest)
+                state = model.new_bool_var(f'{sid}_{d}_ot_cycle_seen')
+                model.add(state >= ot_d)
+                model.add(state >= kept)
+                model.add(state <= ot_d + kept)
+                seen = state
             if d + 1 in p['requests'].get(sid, []):
                 wish(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休',
                      {'kind': 'request', 'staff': sid, 'day': d + 1, 'shift': 'off'})
