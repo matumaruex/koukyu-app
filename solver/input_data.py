@@ -78,7 +78,8 @@ def normalize(raw):
                 raise ValueError(f'{sid}: invalid {field}.')
         # dayShiftFlexible：Aのみ・Bのみの人でも、守ると表が作れないときだけ逆の日勤を許す（中間ルール）。
         # noConsecutiveRest：この人には連休（2日以上続く公休）を作らない。連休の必須回数とは同時に指定できない。
-        for field in ('canOvertime', 'allowConsecutivePlus1', 'dayShiftFlexible', 'noConsecutiveRest'):
+        # nightRemainderPriority：夜勤が割り切れないとき、多いほうの回数を優先して受け持つ（夜勤できるフルタイムだけ有効）。
+        for field in ('canOvertime', 'allowConsecutivePlus1', 'dayShiftFlexible', 'noConsecutiveRest', 'nightRemainderPriority'):
             st.setdefault(field, False)
             if type(st[field]) is not bool:
                 raise ValueError(f'{sid}: {field} must be boolean.')

@@ -2,13 +2,14 @@
 from datetime import timedelta
 from .input_data import normalize, SHIFTS, overtime_profile
 from .rest_blocks import ranges as rest_ranges, forbidden_ranges
+from .night_remainder import report as night_remainder_report
 
 SHORTFALL_CODES = ('coverage', 'sunday_limit')
 
 
 def is_rule_exception(p, error):
     """中間ルール（守ると表が作れないときだけ破れる）の違反か。p は正規化済みの入力。"""
-    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest'):
+    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest', 'night_remainder'):
         return True
     if error['code'] == 'day_shift_eligibility':
         staff = next((st for st in p['staff'] if st['id'] == error['staff']), None)
@@ -19,7 +20,8 @@ def is_rule_exception(p, error):
 def exception_count(p, errors):
     """計算側と同じ数え方：上限を超えた日数＋＋1の超過回数＋逆の日勤の日数。
     連休なしの例外は、最初に最少回数を証明して固定する別扱いなので、ここには数えない（rest_exception_count）。"""
-    return sum(e.get('count', 1) for e in errors if is_rule_exception(p, e) and e['code'] != 'no_consecutive_rest')
+    return sum(e.get('count', 1) for e in errors
+               if is_rule_exception(p, e) and e['code'] not in ('no_consecutive_rest', 'night_remainder'))
 
 
 def rest_exception_count(errors):
@@ -129,6 +131,14 @@ def validate(raw, assignments):
         for monday, count in weeks.items():
             if monday >= first_monday and count > st['maxDaysPerWeek']:
                 fail('weekly', sid, detail=f'{monday}: {count} > {st["maxDaysPerWeek"]}')
+
+    # 夜勤の端数優先：目安を超えた夜勤が許容量を超えたときだけ、目安を超えた人を例外として報告する。
+    remainder = night_remainder_report(p, {sid: dict(zip(map(str, range(1, p['days'] + 1)), rows[sid])) for sid in rows})
+    if remainder and remainder['exceptions']:
+        for sid, over in remainder['over'].items():
+            fail('night_remainder', sid, detail='夜勤の端数を優先する人以外に、目安を超える夜勤があります。')
+            errors[-1].update(actual=remainder['counts'][sid], fair=remainder['fair'][sid], count=over,
+                              priority=sid in remainder['priority'], exceptions=remainder['exceptions'])
 
     coverage_days = []
     for d in range(1, p['days'] + 1):

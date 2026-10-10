@@ -22,6 +22,8 @@ def without_preferences(raw):
     result = deepcopy(raw)
     for st in result.get('staff', []):
         st.pop('overtimePreference', None)
+        # 夜勤の端数優先（3.39）も通常版だけ。おまかせは全機能をまとめて見直すまで適用しない。
+        st.pop('nightRemainderPriority', None)
     return result
 
 

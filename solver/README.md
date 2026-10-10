@@ -267,3 +267,11 @@ UI/API3.32、アセットv44。計算の方式・署名・時間設定は3.31の
 - 独立検査：連続ごとに `no_consecutive_rest`（`start`・`end`・`count`）。中間ルールの例外として扱うが、`exception_count` には含めず `rest_exception_count` で別に数える。
 - 画面からの作成（`allowRuleExceptions: true`）：通信ごとに最初に連休の数だけを最小化し（最大20秒）、最適が証明できたらその値を上限に固定してから通常の段階探索に進む。証明できなければ `UNKNOWN`（表なし・継続推奨）。最少を超える例外の表も `UNKNOWN`。結果に `noConsecutiveRest`（minimum・proven・seconds）、例外があれば `restExceptionCount`・`restExceptionsProvenMinimum`。
 - 厳密な作成・おまかせ：連休0件を必須条件にする。理由調べ：中間ルールと同じ最下位で許す。
+
+## 3.39 夜勤の端数優先
+
+職員の `nightRemainderPriority`（真偽値、既定 false、夜勤できるフルタイムだけ有効）。基準＝期間日数÷夜勤できる人数、端数＝余り、目安＝優先の人は基準＋1・ほかは基準。目安を超えた夜勤の合計（超過）から、許容量 max(0, 端数−優先人数) を引いた分が例外（`night_remainder.report`）。
+
+- 独立検査：例外があるときだけ、目安を超えた人ごとに `night_remainder`（actual・fair・count・priority・exceptions）。中間ルールの例外だが `exception_count` には含めない。
+- 画面からの作成：連休なしの証明の後、通信ごとに超過の最少を証明して上限に固定（連勤などの例外0件の範囲で最大5秒→だめなら例外を許して合計最大20秒）。証明できなければ `UNKNOWN`。最少を超える表も `UNKNOWN`。補助として1人ずつの夜勤の最大回数（`max_nights`）を上限に加える。
+- 結果：`nightRemainder`、例外があれば `nightRemainderExceptions`。厳密な作成では超過≤許容量を必須、理由調べでは最下位で許容。おまかせでは `without_preferences` で除去。

@@ -39,7 +39,7 @@ const select=h=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>
  await made.ctx.generate();
  assert.equal(made.calls[0].input.staff[0].noConsecutiveRest,true);
  const text=made.nodes.view.text;
- assert(text.includes('連勤・連休・日勤の種類の例外：1件'));assert(text.includes('最少を確認済み'));
+ assert(text.includes('連勤・連休・夜勤の端数・日勤の種類の例外：1件'));assert(text.includes('最少を確認済み'));
  assert(text.includes('職員Aさん 10月19日（月）〜10月20日（火）：連休（連休なしの設定）'));
  assert(text.includes('職員A：連休なし ・ 例外1件（10/19〜10/20）'));
  const marked=made.nodes.view.all('td').filter(td=>(td.attributes['aria-label']||'').includes('（例外）')).map(td=>td.attributes['aria-label'].split(' ').slice(0,2).join(' '));
