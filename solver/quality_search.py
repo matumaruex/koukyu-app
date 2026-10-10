@@ -14,7 +14,9 @@ STAGES = ('conditions', 'overtime', 'overtime_fairness', 'placement')
 # 30秒以上空いてから不足が減った例があった。人数不足は最優先なので条件段階は長めにとる。
 # 夜勤を必須にすると、不足のない月の条件段階は数秒で証明できるため、長くしても待ち時間は増えない。
 # 残業回数差の30秒は配置段階に合わせた初期設定。公平化段階の実測に基づく値ではない。
-IDLE_SECONDS = {'conditions': 60, 'overtime': 40, 'overtime_fairness': 30, 'placement': 30}
+# 3.41：条件と残業を90秒に延ばした。並行8でも、CPU1つでは残業が29→28回に下がるまで最大44秒、
+# 人数不足の月の条件段階は改善の間が30秒以上空くことがあり、40秒・60秒では最少に届く前に次へ進む回があったため。
+IDLE_SECONDS = {'conditions': 90, 'overtime': 90, 'overtime_fairness': 30, 'placement': 30}
 
 
 class Progress(cp_model.CpSolverSolutionCallback):

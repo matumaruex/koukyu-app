@@ -25,9 +25,9 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
    assert.deepEqual(h.get('data.savedTables'),archives);assert.equal(h.confirmations.length,0);
   }
  }
- // 良くなり続ける場合も合計5分で止め、「さらに改善する」を残す。
+ // 良くなり続ける場合も合計8分で止め、「さらに改善する」を残す。
  const capped=harness(raw,{response:async()=>result(3)});await capped.ctx.generate();
- assert.equal(capped.calls.length,5);assert.equal(capped.calls.reduce((t,c)=>t+c.seconds,0),300);
+ assert.equal(capped.calls.length,8);assert.equal(capped.calls.reduce((t,c)=>t+c.seconds,0),480);
  assert.equal(capped.get('schedule().meta.workflow.done'),false);assert(buttons(capped).includes('さらに改善する'));
  // 人数不足の理論上の下限は回をまたいで高い方を使う。
  let k=0;const bound=harness(raw,{response:async()=>({...result(3,{done:++k===2,short:5}),shortfallLowerBound:k===1?2:undefined})});await bound.ctx.generate();
@@ -42,7 +42,7 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  assert(impossible.nodes.view.text.includes('次の1件を外すと作れます'));assert(impossible.nodes.view.text.includes('職員さん 10月18日（日）の希望休'));
  const nights=harness(raw,{response:async()=>({status:'INFEASIBLE',seconds:.1,diagnosis:{status:'EXPLAINED',proven:true,missingNights:[3,4,5,10],droppedWishes:[]}})});
  await nights.ctx.generate();assert(nights.nodes.view.text.includes('夜勤に入れる人がいない日：10月18日（日）〜10月20日（火）、10月25日（日）'));
- const unknown=harness(raw);await unknown.ctx.generate();assert.equal(unknown.calls.length,5);assert(unknown.nodes.notice.textContent.includes('不可能と判定したわけではありません'));
+ const unknown=harness(raw);await unknown.ctx.generate();assert.equal(unknown.calls.length,8);assert(unknown.nodes.notice.textContent.includes('不可能と判定したわけではありません'));
  let n=0;const failure=harness(raw,{response:async()=>{if(n++)throw Error('offline');return result(3);}});await failure.ctx.generate();assert.equal(failure.get('hasTable()'),true);assert.equal(failure.get('schedule().meta.allocation.overtimeTotal'),3);assert(failure.nodes.notice.textContent.includes('確認済み'));
  // 悪化した応答は採用せず、その段階情報も使わない（いちばん良い表から最初の段階をやり直す）。
  n=0;const worse=harness(raw,{response:async()=>result(n++?5:3,{done:n>2})});await worse.ctx.generate();
@@ -50,5 +50,5 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  n=0;const proof=harness(raw,{response:async()=>({...result(3,{done:n>0}),preferencePriorityProven:n++===0})});await proof.ctx.generate();assert.equal(proof.get('schedule().meta.preferencePriorityProven'),true);
  const previous=harness(raw,{response:async()=>{throw Error('offline');}});previous.eval("schedule().assignments={local:{'1':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',allocation:{overtimeTotal:2}};");await previous.ctx.generate('improve');assert.equal(previous.get('hasTable()'),true);assert.equal(previous.get('schedule().meta.allocation.overtimeTotal'),2);
  let finish;const stale=harness(raw,{response:()=>new Promise(r=>{finish=r;})});const pending=stale.ctx.generate();stale.eval("schedule().requests.local=[2]");finish(result(3));await pending;assert.equal(stale.get('hasTable()'),false);assert.equal(stale.calls.length,1);
- console.log('PASS: 段階が終わるまで続きを自動計算（再開位置・最良の表を渡す）、上限5分、途中経過、下限の表示、作れない理由、失敗/悪化/古い応答の保護');
+ console.log('PASS: 段階が終わるまで続きを自動計算（再開位置・最良の表を渡す）、上限8分、途中経過、下限の表示、作れない理由、失敗/悪化/古い応答の保護');
 })().catch(e=>{console.error(e);process.exitCode=1;});
