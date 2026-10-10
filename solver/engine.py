@@ -22,6 +22,9 @@ from .overtime_preference import offsets, score_bounds, active as preference_act
 REST_PROOF_SECONDS = 20
 # 夜勤の端数：連勤などの例外を0件にした範囲で先に確かめる時間（残りは例外を許した範囲の確認に使う）。
 REMAINDER_STRICT_SECONDS = 5
+# 通常版の作成で並行して探す数（3.41）。2026年10月の測定で、4から8にすると残業の段階が最少に届く速さと確実さが上がった
+# （偽名データの3月・12月、CPU1つで最少28回に届いたのは 4：3回中1回 → 8：3回中3回、67〜81秒）。おまかせは従来の4のまま。
+SEARCH_WORKERS = 8
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -579,7 +582,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         proof = cp_model.CpSolver()
         proof.parameters.max_time_in_seconds = min(REST_PROOF_SECONDS, seconds)
         proof.parameters.random_seed = seed
-        proof.parameters.num_search_workers = 4
+        proof.parameters.num_search_workers = SEARCH_WORKERS
         proof_status = proof.solve(model)
         model.clear_hints()
         rest_proof_seconds = proof.wall_time
@@ -620,7 +623,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             proof = cp_model.CpSolver()
             proof.parameters.max_time_in_seconds = budget
             proof.parameters.random_seed = seed
-            proof.parameters.num_search_workers = 4
+            proof.parameters.num_search_workers = SEARCH_WORKERS
             proof_status = proof.solve(model)
             model.clear_hints()
             model.clear_assumptions()
@@ -650,7 +653,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = max(.000001, min(limit, _deadline - time.monotonic() - .1)) if _deadline is not None else limit
         solver.parameters.random_seed = seed
-        solver.parameters.num_search_workers = 4 if allow_staffing_shortfall else 1
+        solver.parameters.num_search_workers = ((SEARCH_WORKERS if holiday_plan is None and _deadline is None else 4)
+                                                if allow_staffing_shortfall else 1)
         return solver
     def extract(solver):
         return {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k]))
