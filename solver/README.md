@@ -259,3 +259,11 @@ UI/API3.32、アセットv44。計算の方式・署名・時間設定は3.31の
 ### 3.37 職員画面全体のコンパクト化（2026年10月10日）
 
 文字に合わせて職員一覧・追加・変更の余白と部品も縮小。操作32px、入力34px、一覧余白12px、ダイアログ余白16px。3.36の文字サイズを維持し、他画面には適用しない。UI/API3.37、アセットv49。計算と保存の仕様は維持。
+
+## 3.38 連休なし
+
+職員の `noConsecutiveRest`（真偽値、既定 false、`minConsecutiveRest` と同時指定不可）。前日・当日がともに公休の組を1件と数える（`rest_blocks.forbidden_pairs`）。明けは休みに数えない。両日とも希望休・固定の公休・前期の実績なら数えない。前期最終日は、実際に入力された前期の勤務（`p['historyProvided']`）が公休のときだけつなげる。
+
+- 独立検査：連続ごとに `no_consecutive_rest`（`start`・`end`・`count`）。中間ルールの例外として扱うが、`exception_count` には含めず `rest_exception_count` で別に数える。
+- 画面からの作成（`allowRuleExceptions: true`）：通信ごとに最初に連休の数だけを最小化し（最大20秒）、最適が証明できたらその値を上限に固定してから通常の段階探索に進む。証明できなければ `UNKNOWN`（表なし・継続推奨）。最少を超える例外の表も `UNKNOWN`。結果に `noConsecutiveRest`（minimum・proven・seconds）、例外があれば `restExceptionCount`・`restExceptionsProvenMinimum`。
+- 厳密な作成・おまかせ：連休0件を必須条件にする。理由調べ：中間ルールと同じ最下位で許す。

@@ -8,12 +8,16 @@ from datetime import timedelta
 from pathlib import Path
 from ortools.sat.python import cp_model
 from .input_data import normalize, SHIFTS, overtime_profile
-from .validator import validate, is_rule_exception, exception_count, SHORTFALL_CODES
+from .validator import validate, is_rule_exception, exception_count, rest_exception_count, SHORTFALL_CODES
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
-from .rest_blocks import report as rest_report
+from .rest_blocks import report as rest_report, user_fixed_off
 from .overtime_preference import offsets, score_bounds, active as preference_active, arithmetic_proven, POLICY as PREFERENCE_POLICY
+
+
+# 連休なしの最少回数を確かめる計算の上限（1回の通信ごと）。確かめられなければ例外のある表は出さない。
+REST_PROOF_SECONDS = 20
 
 
 class _FirstSolution(cp_model.CpSolverSolutionCallback):
@@ -170,6 +174,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 作れないときの理由調べ用：外せる形にした希望・固定。
     dropped = []
     rest_shortfalls = []
+    # 連休なしの人の、計算が作った連続した公休の組（前日・当日がともに公休）。
+    rest_forbidden = []
     night_soft = allow_night_shortfall or relax_wishes
 
     def wish(expr, key, label, item):
@@ -299,6 +305,21 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             else:
                 required(sum(blocks) >= st['minConsecutiveRest'], sid + '_rest_blocks',
                          label + f'の2日以上の連休を{st["minConsecutiveRest"]}回以上')
+        if st['noConsecutiveRest']:
+            # 連休なし：前日と当日がともに公休なら1件。明けは休みに数えない。希望休・固定の公休・前期の実績どうしは数えない。
+            # 前期の最終日は、実際に入力された前期の勤務が公休のときだけつなげる（仮定の休みではつなげない）。
+            for d in range(n):
+                if user_fixed_off(p, sid, d) and user_fixed_off(p, sid, d + 1):
+                    continue
+                if d == 0:
+                    if sid not in p['historyProvided'] or p['history'][sid][6] != 'off':
+                        continue
+                    previous = 1
+                else:
+                    previous = x[sid, d - 1, 'off']
+                pair = model.new_bool_var(f'{sid}_rest_pair_{d}')
+                model.add(pair >= previous + x[sid, d, 'off'] - 1)
+                rest_forbidden.append(pair)
         if _holiday_actual_off is not None:
             model.add(off >= _holiday_actual_off[sid])
         ot = sum(x[sid, d, 'overtime'] for d in range(n))
@@ -418,10 +439,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add(max_extra == 0)
         model.add(min_extra == 0)
     required(max_extra - min_extra <= p['maxExtraOffSpread'], 'fairness', f'余分な公休の差は{p["maxExtraOffSpread"]}日以内')
+    if rest_forbidden and not relax_wishes and (not allow_rule_exceptions or holiday_plan is not None):
+        # 厳密な作成とおまかせでは、連休なしは必ず守る条件。
+        required(sum(rest_forbidden) == 0, 'no_consecutive_rest', '連休なしの職員に連休を作らない')
     if relax_wishes:
         if _deadline is not None:
             seconds = max(.000001, min(seconds, _deadline - time.monotonic() - .15))
-        return _explain(model, dropped, night_missing, rule_violations, len(p['staff']) * 2 * n, seconds, seed, rest_shortfalls)
+        # 理由調べでは、連休なしの例外も中間ルールと同じく最後に許す。
+        return _explain(model, dropped, night_missing, rule_violations + rest_forbidden, len(p['staff']) * 3 * n, seconds, seed, rest_shortfalls)
     overtime_range = 0
     if overtime_scaled:
         # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
@@ -485,6 +510,32 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if exceptions_bound != found_exceptions:
             return exceptions_bound, None
         return exceptions_bound, max(0, (b - found_exceptions * violation_weight) // shortage_priority_weight)
+    rest_minimum = rest_proof_seconds = None
+    if rest_forbidden and allow_rule_exceptions and holiday_plan is None:
+        # 連休なしは「見つけられなかった」では破らない。まず連休の数だけを最小化し、最少回数を証明してから上限として固定する。
+        # 普通は0回の表がすぐ見つかり、その場で0回が最少と確定する（以後は連休を作らない）。
+        total_rest = sum(rest_forbidden)
+        model.minimize(total_rest)
+        if initial_assignments is not None:
+            for (sid, d, shift), variable in x.items():
+                model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
+        proof = cp_model.CpSolver()
+        proof.parameters.max_time_in_seconds = min(REST_PROOF_SECONDS, seconds)
+        proof.parameters.random_seed = seed
+        proof.parameters.num_search_workers = 4
+        proof_status = proof.solve(model)
+        model.clear_hints()
+        rest_proof_seconds = proof.wall_time
+        if proof_status == cp_model.OPTIMAL:
+            rest_minimum = int(round(proof.objective_value))
+            model.add(total_rest <= rest_minimum)
+        elif proof_status != cp_model.INFEASIBLE:
+            # 最少回数を確かめられないまま例外を入れた表は出さない。画面は別の探し方で続きを計算する。
+            return {'status': 'UNKNOWN', 'seconds': round(rest_proof_seconds, 3), 'boundaryComplete': p['boundaryComplete'],
+                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': seconds, 'reason': 'rest_unconfirmed'},
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_unconfirmed'},
+                    'explanation': '連休なしの設定を守れるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
+        seconds = max(.000001, seconds - rest_proof_seconds)
     if has_priority:
         model.minimize(priority)
         if initial_priority is not None:
@@ -653,12 +704,24 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     hard_errors = [e for e in errors if not permitted_shortfall(e)]
     if errors and (not allow_staffing_shortfall or hard_errors):
         return {'status': 'VALIDATION_FAILED', 'errors': errors, 'seconds': result['seconds']}
+    rest_count = rest_exception_count(errors)
+    if rest_count and (rest_minimum is None or rest_count > rest_minimum):
+        # 連休なしの例外は、証明した最少回数を超えては採用しない（元の表を保持した場合も含む）。
+        return {'status': 'UNKNOWN', 'seconds': result['seconds'], 'boundaryComplete': p['boundaryComplete'],
+                'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_unconfirmed'},
+                'explanation': '連休なしの例外が最少と確認できない表は採用しません。'}
+    if rest_minimum is not None:
+        result['noConsecutiveRest'] = {'minimum': rest_minimum, 'proven': True, 'seconds': round(rest_proof_seconds, 3)}
     exceptions = [e for e in errors if rule_exception(e)]
     if exceptions:
         # 中間ルールの例外は、守ると表が作れない分だけ。人数不足とは別に一覧で返す。
+        # 連休なしの例外も一覧に入れるが、回数は restExceptionCount に分けて数える（最初に最少を証明済み）。
         result['ruleExceptions'] = exceptions
         result['exceptionCount'] = exception_count(p, exceptions)
-        result['exceptionsProvenMinimum'] = bool(priority_proven)
+        result['exceptionsProvenMinimum'] = bool(priority_proven or not result['exceptionCount'])
+        if rest_count:
+            result['restExceptionCount'] = rest_count
+            result['restExceptionsProvenMinimum'] = True
     is_draft = any(not rule_exception(e) for e in errors)
     if is_draft:
         result['solverStatus'] = result['status']
