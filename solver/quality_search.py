@@ -48,6 +48,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
     stages = []
     solver, status = None, cp_model.UNKNOWN
     proven = {k: bool(v) for k, v in (resume.get('proven') or {}).items() if k in STAGES}
+    proof_values = dict(resume.get('proofValues') or {})
     stage = resume.get('stage', 'conditions')
     idle = float(resume.get('idle', 0))
     pending = None
@@ -70,6 +71,20 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             # 出勤できる日数で換算した回数の差（計算の式 overtime_spread と同じ値）。
             return metrics(p, a)['overtimeBalance']
         return quality_value(p, a)
+
+    def proof_scope(name, a):
+        # 証明は「この上位条件・合計で、この値が最少」という記録。
+        return [value_of(k, a) if exprs[k] is not None else None
+                for k in STAGES[:STAGES.index(name) + 1]]
+
+    def check_proofs():
+        # 別の候補や旧版の数値なしの証明を、今の表へ付け替えない。
+        for name in list(proven):
+            if candidate is None or proof_values.get(name) != proof_scope(name, candidate):
+                proven.pop(name, None)
+                proof_values.pop(name, None)
+
+    check_proofs()
 
     def hints():
         model.clear_hints()
@@ -129,7 +144,8 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             found = extract(solver)
             if candidate is None or rank(found) <= rank(candidate):
                 candidate = found
-            actual_candidate = True
+                actual_candidate = True
+            check_proofs()
         stages.append({'stage': name, 'seconds': round(solver.wall_time, 3), 'status': solver.status_name(status),
                        'improvements': progress.improvements, 'stalled': bool(stalled),
                        'hintSeconds': round(hint_seconds, 3)})
@@ -137,9 +153,6 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
 
     if stage not in STAGES:
         stage = 'conditions'
-    # 続きの計算でも、前の段階までに得た値より悪くしない。
-    if candidate is not None and priority is not None:
-        model.add(priority <= priority_of(candidate))
     for name in STAGES[STAGES.index(stage):]:
         expression = exprs[name]
         if expression is None:
@@ -148,6 +161,14 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
         if remaining() <= 0.001:
             pending = name
             break
+        if candidate is not None:
+            # 途中で上位条件が良くなった場合も、最新候補の値で次を探す。
+            # 古い上限で探して上位条件が悪い最適解を捨てる食い違いを防ぐ。
+            for higher in STAGES[:STAGES.index(name)]:
+                if exprs[higher] is not None:
+                    model.add(exprs[higher] <= value_of(higher, candidate))
+            if name == 'conditions' and priority is not None:
+                model.add(priority <= priority_of(candidate))
         if candidate is not None and name != 'conditions':
             # 合計や回数差だけを探す段階に、配置の大きな重みを持ち込まない。
             # 候補の採用時には rank で上位条件と総合評価を検査する。
@@ -174,9 +195,12 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             pending = None if status == cp_model.INFEASIBLE else name
             idle = 0
             break
-        if status == cp_model.OPTIMAL:
+        certified = (status == cp_model.OPTIMAL
+                     and value_of(name, candidate) == int(solver.value(expression)))
+        if certified:
             proven[name] = True
-        if status == cp_model.OPTIMAL or stalled:
+            proof_values[name] = proof_scope(name, candidate)
+        if certified or stalled:
             # この段階の値を固定して次へ。証明済みなら最少、未証明なら「今より悪くしない」。
             model.add(expression <= value_of(name, candidate))
             idle = 0
@@ -222,6 +246,7 @@ def search(model, p, *, seconds, priority, objective, overtime, new_solver,
             'seconds': time.monotonic() - start,
             'info': {'stages': stages, 'done': done, 'majorQualityReady': bool(major_ready),
                      'continueRecommended': bool(keep_going),
-                     'resume': {'stage': pending, 'idle': round(idle, 2), 'proven': proven} if keep_going else None,
+                     'resume': {'stage': pending, 'idle': round(idle, 2), 'proven': proven,
+                                'proofValues': {k: proof_values[k] for k in proven}} if keep_going else None,
                      'idleSeconds': limits, 'reason': reason,
                      'lastQualityImprovementSeconds': last_quality_improvement}}

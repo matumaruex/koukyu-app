@@ -3,7 +3,7 @@ from copy import deepcopy
 from functools import lru_cache
 from .input_data import overtime_profile
 
-POLICY = 'quality-first-8'
+POLICY = 'quality-first-9'
 
 
 def offsets(p, scales):

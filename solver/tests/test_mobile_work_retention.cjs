@@ -80,6 +80,20 @@ function response(p){return {status:'FEASIBLE',seconds:.1,boundaryComplete:true,
  // 前の月にも作成時の条件を残し、共通の職員条件を編集しても保持する。
  undo.eval("state.month=9;render();schedule().assignments=clone(rows);schedule().workSignature=inputData().signature;render();state.month=10;data.staff[0].monthlyDaysOff=10;save(true);render()");
  const both=reopen(undo);both.eval('state.month=9;render()');assert(both.get('workChanged()'));assert.deepEqual(both.get('schedule().assignments'),rows);
+ // 判定方式の更新後も旧署名の表を保持し、旧証明を新しい計算へ流用しない。
+ for(const mode of ['normal','auto'])for(const snapshot of [true,false]){
+  const old=harness(null,{current:raw});table(old,mode);
+  const storage=mode==='normal'?'koukyu_v4_work':'koukyu_v4_auto_work',work=JSON.parse(old.values.get(storage)),w=work.schedules['2026-10'];
+  w.workSignature=w.workSignature.replace('rules-3.44:','rules-3.35:').replace('auto-rules-5:','auto-rules-4:');
+  w.meta={...w.meta,status:'OPTIMAL',optimizationPolicy:mode==='normal'?'quality-first-8':'auto-holidays-2',overtimeFairness:{minimumSpreadProven:true}};
+  if(!snapshot)delete w.workSnapshot;
+  const updated=harness(null,{current:JSON.parse(old.values.get('koukyu_v4_data')),stored:{[storage]:JSON.stringify(work)}});
+  if(mode==='auto')updated.eval("setTab('auto')");
+  assert(updated.get('hasTable()'));assert(updated.get('workChanged()'));assert.equal(updated.get('metadata()'),null);
+  assert.deepEqual(updated.get('schedule().assignments'),rows);assert(updated.get('schedule().workSnapshot'));
+  assert(updated.nodes.view.text.includes(notice));assert.equal(updated.calls.length,0);
+  assert.deepEqual(updated.get('history().a'),Array(7).fill('off'));
+ }
  // 壊れた条件スナップショットは表示せず、正常な入力データを保護する。
  const corrupt=JSON.parse(undo.values.get('koukyu_v4_work'));corrupt.schedules['2026-10'].workSnapshot.staff[0].type='wrong';
  const bad=harness(null,{current:JSON.parse(undo.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:JSON.stringify(corrupt)}});

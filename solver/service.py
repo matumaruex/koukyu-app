@@ -81,7 +81,7 @@ def dispatch(payload, *, _deadline=None):
 def check_resume(value, quality_first):
     if value is None:
         return None
-    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven'}:
+    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues'}:
         raise ValueError('resume の形式を確認してください。')
     if value.get('stage') not in STAGES:
         raise ValueError('resume.stage を確認してください。')
@@ -91,5 +91,12 @@ def check_resume(value, quality_first):
     proven = value.get('proven', {})
     if not isinstance(proven, dict) or set(proven) - set(STAGES) or any(type(v) is not bool for v in proven.values()):
         raise ValueError('resume.proven を確認してください。')
-    return {'stage': value['stage'], 'idle': float(idle), 'proven': dict(proven)}
+    proof_values = value.get('proofValues', {})
+    if (not isinstance(proof_values, dict) or set(proof_values) - set(STAGES)
+            or any(not isinstance(values, list) or len(values) != STAGES.index(name) + 1
+                   or any(v is not None and (type(v) is not int or v < 0) for v in values)
+                   for name, values in proof_values.items())):
+        raise ValueError('resume.proofValues を確認してください。')
+    return {'stage': value['stage'], 'idle': float(idle), 'proven': dict(proven),
+            'proofValues': {name: list(values) for name, values in proof_values.items()}}
 

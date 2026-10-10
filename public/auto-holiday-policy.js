@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AutoHolidayPolicy=api;})(globalThis,function(){
 'use strict';
-const POLICY='auto-holidays-2',WORK_STORAGE='koukyu_v4_auto_work';
+const POLICY='auto-holidays-3',WORK_STORAGE='koukyu_v4_auto_work';
 const copy=x=>JSON.parse(JSON.stringify(x)),proxies=new WeakMap();
 const defaults=st=>{const part=st.type==='part',min=part?10:9,max=part?14:10;return {min,target:part?11:10,max,fixed:false};};
 function checkEntry(q){if(!q||typeof q!=='object'||Array.isArray(q)||Object.keys(q).some(k=>!['min','target','max','fixed'].includes(k))||typeof q.fixed!=='boolean'||['min','target','max'].some(k=>!Number.isInteger(q[k]))||q.min<0||q.max>31||q.min>q.target||q.target>q.max||q.fixed&&!(q.min===q.target&&q.target===q.max))throw Error('おまかせの公休条件を確認してください。');return copy(q);}

@@ -21,7 +21,7 @@ const current={schemaVersion:4,savedTables:[],staff,schedules:{'2026-10':{assign
   const actualKey=mode==='normal'?key:old.get('AutoHolidayPolicy.WORK_STORAGE');
   const work=JSON.parse(old.values.get(actualKey));assert.deepEqual(work.schedules['2026-10'].workSnapshot.staff.map(s=>s.maxConsecutive),[3,3,3]);
   const oldWork=JSON.parse(JSON.stringify(work)),w=oldWork.schedules['2026-10'];
-  w.workSignature=w.workSignature.replace('rules-3.35:','rules-3.31:').replace('auto-rules-4:','auto-rules-3:').replace(',"overtimeCycleLimit":true}','}');w.workSnapshot.staff.forEach(s=>s.maxConsecutive=0);
+  w.workSignature=w.workSignature.replace('rules-3.44:','rules-3.31:').replace('auto-rules-5:','auto-rules-3:').replace(',"overtimeCycleLimit":true}','}');w.workSnapshot.staff.forEach(s=>s.maxConsecutive=0);
   const reopened=harness(null,{current,stored:{[actualKey]:JSON.stringify(oldWork)}});reopened.eval(mode==='auto'?"setTab('auto')":"setTab('schedule')");
   assert(reopened.get('hasTable()'));assert(reopened.get('workChanged()'));assert.deepEqual(reopened.get('schedule().workSnapshot.staff.map(s=>s.maxConsecutive)'),[2,5,5]);
   assert.deepEqual(reopened.get('schedule().assignments'),w.assignments);assert.equal(reopened.calls.length,0);

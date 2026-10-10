@@ -128,7 +128,7 @@ class AutoScheduleTests(unittest.TestCase):
         raw, before = overtime_fixture()
         r = dispatch(dict(input=raw, initialAssignments=before, seconds=5, qualityFirst=True,
                           allowStaffingShortfall=True, allowRuleExceptions=True))
-        self.assertEqual(r['optimizationPolicy'], 'quality-first-8')
+        self.assertEqual(r['optimizationPolicy'], 'quality-first-9')
         self.assertEqual(validate(raw, r['assignments']), [])
 
     def test_additional_overtime_search_does_not_reduce_target_or_increase_spread(self):

@@ -178,7 +178,7 @@ class RequestedNightRestTests(unittest.TestCase):
                            'holidayPolicy':quota,'referenceAssignments':r['assignments']})
             self.assertIn(auto['status'],('FEASIBLE','OPTIMAL'),auto)
             self.assertEqual(auto['nightRestPreferences']['metCount'],2)
-            self.assertEqual(auto['optimizationPolicy'],'auto-holidays-2')
+            self.assertEqual(auto['optimizationPolicy'],'auto-holidays-3')
 
     def test_spaced_pattern_supports_all_three_period_boundaries(self):
         for day,hist,locks in [
