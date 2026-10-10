@@ -37,7 +37,7 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(self.request('/user_data.json')[0], 404)
         self.assertEqual(self.request('/roster-storage.js?v=32')[0], 200)
         self.assertEqual(self.request('/creation-workflow.js?v=34')[0], 200)
-        for script in ('consecutive-rest.js', 'auto-holiday-policy.js', 'auto-creation-workflow.js', 'auto-roster-ui.js'):
+        for script in ('consecutive-rest.js', 'overtime-cycles.js', 'auto-holiday-policy.js', 'auto-creation-workflow.js', 'auto-roster-ui.js'):
             self.assertEqual(self.request('/' + script + '?v=41')[0], 200)
 
     def test_cross_origin_and_invalid_json(self):

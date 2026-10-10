@@ -21,12 +21,12 @@ const current={schemaVersion:4,savedTables:[],staff,schedules:{'2026-10':{assign
   const actualKey=mode==='normal'?key:old.get('AutoHolidayPolicy.WORK_STORAGE');
   const work=JSON.parse(old.values.get(actualKey));assert.deepEqual(work.schedules['2026-10'].workSnapshot.staff.map(s=>s.maxConsecutive),[3,3,3]);
   const oldWork=JSON.parse(JSON.stringify(work)),w=oldWork.schedules['2026-10'];
-  w.workSignature=w.workSignature.replace('rules-3.35:','rules-3.31:').replace('auto-rules-4:','auto-rules-3:');w.workSnapshot.staff.forEach(s=>s.maxConsecutive=0);
+  w.workSignature=w.workSignature.replace('rules-3.35:','rules-3.31:').replace('auto-rules-4:','auto-rules-3:').replace(',"overtimeCycleLimit":true}','}');w.workSnapshot.staff.forEach(s=>s.maxConsecutive=0);
   const reopened=harness(null,{current,stored:{[actualKey]:JSON.stringify(oldWork)}});reopened.eval(mode==='auto'?"setTab('auto')":"setTab('schedule')");
   assert(reopened.get('hasTable()'));assert(reopened.get('workChanged()'));assert.deepEqual(reopened.get('schedule().workSnapshot.staff.map(s=>s.maxConsecutive)'),[2,5,5]);
   assert.deepEqual(reopened.get('schedule().assignments'),w.assignments);assert.equal(reopened.calls.length,0);
   reopened.eval('saveTableDialog()');await reopened.click('保存する');assert.deepEqual(reopened.get('data.savedTables.at(-1).staff.map(s=>s.maxConsecutive)'),[2,5,5]);
-  // version=1の同一入力も、当時の条件を記録して保持する。
+  // version=1の同一入力も、当時の条件を記録して保持する（旧版の署名にはA残の1サイクル1回の項目がない）。
   oldWork.version=1;delete w.workSnapshot;
   const v1=harness(null,{current,stored:{[actualKey]:JSON.stringify(oldWork)}});v1.eval(mode==='auto'?"setTab('auto')":"setTab('schedule')");
   assert(v1.get('hasTable()'));assert.deepEqual(v1.get('schedule().workSnapshot.staff.map(s=>s.maxConsecutive)'),[2,5,5]);

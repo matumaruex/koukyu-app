@@ -3,7 +3,7 @@ from copy import deepcopy
 from functools import lru_cache
 from .input_data import overtime_profile
 
-POLICY = 'quality-first-7'
+POLICY = 'quality-first-8'
 
 
 def offsets(p, scales):
@@ -24,6 +24,8 @@ def without_preferences(raw):
         st.pop('overtimePreference', None)
         # 夜勤の端数優先（3.39）も通常版だけ。おまかせは全機能をまとめて見直すまで適用しない。
         st.pop('nightRemainderPriority', None)
+    # A残の1サイクル1回（3.40）も通常版だけ。
+    result.pop('overtimeCycleLimit', None)
     return result
 
 

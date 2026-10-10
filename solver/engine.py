@@ -13,6 +13,7 @@ from .allocation import POLICY, covers, metrics, weights, quality_value, minor_u
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
 from .rest_blocks import report as rest_report, user_fixed_off
+from .overtime_cycles import eligible as cycle_eligible, carry_in, report as overtime_cycle_report
 from .night_remainder import plan as night_remainder_plan, report as night_remainder_report, max_nights
 from .overtime_preference import offsets, score_bounds, active as preference_active, arithmetic_proven, POLICY as PREFERENCE_POLICY
 
@@ -196,6 +197,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     night_totals, ab_totals = [], []
     night_total_by_sid = {}
     overtime_totals, overtime_squares = [], []
+    # A残の1サイクル1回（3.40）：2回目以降になったA残（人数不足の次に減らす）と、その数の上限。
+    cycle_excess, cycle_cap = [], 0
     # 残業回数を比べる値（出勤できる日数で換算した回数）。
     overtime_scaled = []
     ot_scales = overtime_scales(p)
@@ -233,6 +236,29 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             required(x[sid, d, 'nightOff'] == value(sid, d - 1, 'night'), sid + '_night_link', label + 'の夜勤翌日は明け（期間境界を含む）')
             required(x[sid, d, 'off'] >= value(sid, d - 1, 'nightOff'), sid + '_night_rest', label + 'の夜勤明け翌日は必ず公休（期間境界を含む）')
             required(x[sid, d, 'overtime'] + value(sid, d - 1, 'overtime') <= 1, sid + '_ot', ot_label)
+            if p['overtimeCycleLimit'] and cycle_eligible(st):
+                if d == 0:
+                    # seen：このサイクルに既にA残がある（希望・固定・前期の実績も数える）。
+                    seen = carry_in(p, sid)
+                    cycle_cap += ot_profile['cap']
+                ot_d = x[sid, d, 'overtime']
+                rest = x[sid, d, 'off'] + x[sid, d, 'nightOff']
+                # 2回目 ＝ 今日A残 かつ このサイクルに既にA残がある。
+                excess = model.new_bool_var(f'{sid}_{d}_ot_cycle_excess')
+                model.add(excess <= ot_d)
+                model.add(excess <= seen)
+                model.add(excess >= ot_d + seen - 1)
+                cycle_excess.append(excess)
+                # 次の日へ持ち越す状態 ＝ 今日のA残 または（前日までの状態 かつ 今日が公休・明けでない）。
+                kept = model.new_bool_var(f'{sid}_{d}_ot_cycle_keep')
+                model.add(kept <= seen)
+                model.add(kept <= 1 - rest)
+                model.add(kept >= seen - rest)
+                state = model.new_bool_var(f'{sid}_{d}_ot_cycle_seen')
+                model.add(state >= ot_d)
+                model.add(state >= kept)
+                model.add(state <= ot_d + kept)
+                seen = state
             if d + 1 in p['requests'].get(sid, []):
                 wish(x[sid, d, 'off'] == 1, sid + '_requests', label + 'の希望休',
                      {'kind': 'request', 'staff': sid, 'day': d + 1, 'shift': 'off'})
@@ -498,26 +524,35 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 下位項の最大値より1大きい係数なので、上位の1件を下位で逆転できない。
     balance_nights = bool(night_totals and objective is not None)
     preference_weight = n + 1 if balance_nights else 1
-    gap_weight = (len(preference_misses) + 1) * preference_weight
+    # A残の1サイクル1回は人数不足のすぐ下（人数不足を減らすためだけに2回目を許す）。
+    # 係数は希望休の件数を取り出す計算（preference_weight の倍数・余り）を崩さない値。
+    cycle_weight = (len(preference_misses) + 1) * preference_weight
+    gap_weight = (cycle_cap + 1) * cycle_weight if cycle_excess else cycle_weight
     shortage_priority_weight = (n + 1 if allow_night_shortfall else 1) * gap_weight
     night_gaps = sum(v for v in shortfalls if v.name.startswith('missing_night_'))
     priority = (sum(shortfalls) * shortage_priority_weight + night_gaps * gap_weight
+                + sum(cycle_excess) * cycle_weight
                 + sum(preference_misses) * preference_weight
                 + (night_spread if balance_nights else 0))
     # 中間ルールの違反は人数不足より上。係数は下位全体の上限より大きく、
     # 希望休の件数を取り出す計算（gap_weight の倍数）を崩さない値にする。
     violation_weight = 0
     if rule_violations:
-        lower_max = (shortfall_cap * shortage_priority_weight + n * gap_weight
+        lower_max = (shortfall_cap * shortage_priority_weight + n * gap_weight + cycle_cap * cycle_weight
                      + len(preference_misses) * preference_weight + n)
         violation_weight = (lower_max // gap_weight + 1) * gap_weight
         priority = sum(rule_violations) * violation_weight + priority
-    has_priority = bool(preference_misses or shortfalls or balance_nights or rule_violations)
+    has_priority = bool(preference_misses or shortfalls or balance_nights or rule_violations or cycle_excess)
+
+    def cycle_excess_of(a):
+        found = overtime_cycle_report(p, a)
+        return found['excess'] if found else 0
     initial_errors = validate(raw, initial_assignments) if initial_metric is not None else []
     initial_night_shortage = sum(e['required'] - e['actual'] for e in initial_errors
                                  if e['code'] == 'night_coverage') if initial_metric is not None else 0
     initial_priority = (exceptions_of(initial_errors) * violation_weight
                         + initial_shortage * shortage_priority_weight + initial_night_shortage * gap_weight
+                        + cycle_excess_of(initial_assignments) * cycle_weight
                         + len(initial_preferences['unmet']) * preference_weight
                         + (initial_metric['nightSpread'] if balance_nights else 0)) if initial_metric is not None else None
 
@@ -649,6 +684,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             gaps = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
             return (exceptions_of(errors) * violation_weight
                     + shortage * shortage_priority_weight + gaps * gap_weight
+                    + cycle_excess_of(a) * cycle_weight
                     + len(preference_report(p, a)['unmet']) * preference_weight
                     + (metrics(p, a)['nightSpread'] if balance_nights else 0))
         quality_result = quality_search(model, p, seconds=seconds, priority=priority if has_priority else None,
@@ -790,6 +826,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                     'seconds': round(night_proof_seconds, 3) if night_proof_seconds is not None else None}
         if remainder['exceptions']:
             result['nightRemainderExceptions'] = remainder['exceptions']
+    cycles = overtime_cycle_report(p, assignments)
+    if cycles is not None:
+        # 1サイクルに2回目となったA残は、人数不足を減らすためだけに入る。条件段階の証明があれば、その人数不足での最少。
+        result['overtimeCycles'] = dict(cycles, minimumProven=bool(priority_proven or not cycles['excess']))
+        result['overtimeCycleExcess'] = cycles['excess']
     exceptions = [e for e in errors if rule_exception(e)]
     if exceptions:
         # 中間ルールの例外は、守ると表が作れない分だけ。人数不足とは別に一覧で返す。
@@ -900,6 +941,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             new_priority = (result.get('exceptionCount', 0) * violation_weight
                             + result.get('staffingShortfallTotal', 0) * shortage_priority_weight
                             + result.get('nightShortfallTotal', 0) * gap_weight
+                            + result.get('overtimeCycleExcess', 0) * cycle_weight
                             + len(preferences['unmet']) * preference_weight
                             + (result['allocation']['nightSpread'] if balance_nights else 0))
             result['improved'] = (initial_priority, old_quality) > (new_priority, result['objective'])

@@ -30,7 +30,7 @@ const box=(h,text)=>h.nodes['dialog-body'].all('label').find(l=>l.text.includes(
  const prio={...raw,staff:[{...raw.staff[0],nightRemainderPriority:true},raw.staff[1],raw.staff[2]]};
  const err={code:'night_remainder',staff:'s1',actual:16,fair:15,count:1,priority:false,exceptions:1};
  const rows={s0:Object.fromEntries(Array.from({length:15},(_,i)=>[String(i*2+1),'night'])),s1:Object.fromEntries(Array.from({length:16},(_,i)=>[String(i*2+(i<15?2:1)),'night'])),s2:{'1':'off'}};
- const made=harness(prio,{response:async()=>({status:'FEASIBLE',assignments:rows,seconds:3,ruleExceptions:[err],exceptionCount:0,nightRemainderExceptions:1,nightRemainder:{priorityStaff:['s0'],base:15,extras:1,exceptions:1,proven:true},validationErrors:[err],allocation:{overtimeTotal:0,nightSpread:1},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-7'})});
+ const made=harness(prio,{response:async()=>({status:'FEASIBLE',assignments:rows,seconds:3,ruleExceptions:[err],exceptionCount:0,nightRemainderExceptions:1,nightRemainder:{priorityStaff:['s0'],base:15,extras:1,exceptions:1,proven:true},validationErrors:[err],allocation:{overtimeTotal:0,nightSpread:1},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-8'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.staff[0].nightRemainderPriority,true);
  const text=made.nodes.view.text;
