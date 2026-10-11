@@ -84,7 +84,7 @@ function response(p){return {status:'FEASIBLE',seconds:.1,boundaryComplete:true,
  for(const mode of ['normal','auto'])for(const snapshot of [true,false]){
   const old=harness(null,{current:raw});table(old,mode);
   const storage=mode==='normal'?'koukyu_v4_work':'koukyu_v4_auto_work',work=JSON.parse(old.values.get(storage)),w=work.schedules['2026-10'];
-  w.workSignature=w.workSignature.replace('rules-3.44:','rules-3.35:').replace('auto-rules-5:','auto-rules-4:');
+  w.workSignature=w.workSignature.replace('rules-3.45:','rules-3.35:').replace('auto-rules-6:','auto-rules-4:');
   w.meta={...w.meta,status:'OPTIMAL',optimizationPolicy:mode==='normal'?'quality-first-8':'auto-holidays-2',overtimeFairness:{minimumSpreadProven:true}};
   if(!snapshot)delete w.workSnapshot;
   const updated=harness(null,{current:JSON.parse(old.values.get('koukyu_v4_data')),stored:{[storage]:JSON.stringify(work)}});

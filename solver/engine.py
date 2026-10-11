@@ -139,6 +139,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if errors and (not allow_staffing_shortfall or any(not permitted_shortfall(e) for e in errors)):
             return {'status': 'INVALID_INPUT', 'errors': ['比較する元の表が現在の条件に合いません。'], 'validationErrors': errors}
         initial_assignments = {sid: {str(d): k for d, k in row.items()} for sid, row in initial_assignments.items()}
+    requested_seconds = seconds
     model = cp_model.CpModel()
     # おまかせ経路だけで使う。通常の計算・署名・優先順位は従来どおり。
     holiday_plan = _holiday_plan.bind(model, p) if _holiday_plan is not None else None
@@ -510,10 +511,19 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
                            if e['code'] in ('coverage', 'night_coverage')) if initial_metric is not None else 0
     preserved_night_spread = None
-    if initial_metric is not None and resume is None:
+    preserved_extra = initial_metric['commonExtraDaysOff'] if initial_metric is not None and resume is None else None
+    if resume is not None:
+        preserved_extra = resume.get('preservedCommonExtraDaysOff')
+        if 'preservedCommonExtraDaysOff' not in resume:
+            # 旧通信の証明は、追加公休を維持した範囲かどうか分からない。
+            resume = dict(resume, proven={}, proofValues={})
+        if preserved_extra is not None and (initial_metric is None or initial_metric['commonExtraDaysOff'] < preserved_extra):
+            return {'status': 'INVALID_INPUT', 'errors': ['維持する追加公休と、比較する元の表が一致しません。']}
+    if preserved_extra is not None:
         # 全員に配れている追加公休を、残業削減のために取り上げない。
-        # 続きの計算では、途中の表の追加公休はたまたまの値なので、ここでは固定しない。
-        model.add(min_extra >= initial_metric['commonExtraDaysOff'])
+        # 改善の最初に決めた日数を、通信をまたいでも維持する。
+        # 新規作成の途中の表ではnullを引き継ぎ、たまたま増えた公休を固定しない。
+        model.add(min_extra >= preserved_extra)
     shortage_weight = weights(p)[1]
     initial_preferences = preference_report(p, initial_assignments) if initial_assignments is not None else None
     objective = None
@@ -592,7 +602,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         elif proof_status != cp_model.INFEASIBLE:
             # 最少回数を確かめられないまま例外を入れた表は出さない。画面は別の探し方で続きを計算する。
             return {'status': 'UNKNOWN', 'seconds': round(rest_proof_seconds, 3), 'boundaryComplete': p['boundaryComplete'],
-                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': seconds, 'reason': 'rest_unconfirmed'},
+                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': requested_seconds, 'reason': 'rest_unconfirmed'},
                     'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_unconfirmed'},
                     'explanation': '連休なしの設定を守れるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
         seconds = max(.000001, seconds - rest_proof_seconds)
@@ -634,7 +644,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 break
         if night_minimum is None and proof_status != cp_model.INFEASIBLE:
             return {'status': 'UNKNOWN', 'seconds': round(night_proof_seconds + (rest_proof_seconds or 0), 3), 'boundaryComplete': p['boundaryComplete'],
-                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': seconds, 'reason': 'night_remainder_unconfirmed'},
+                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': requested_seconds, 'reason': 'night_remainder_unconfirmed'},
                     'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'night_remainder_unconfirmed'},
                     'explanation': '夜勤の端数を優先する人へ回せるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
         seconds = max(.000001, seconds - night_proof_seconds)
@@ -696,6 +706,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                         overtime_spread=overtime_range if overtime_scaled else None,
                                         new_solver=new_solver, extract=extract, priority_of=priority_of,
                                         initial_assignments=initial_assignments, resume=resume)
+        if quality_result['info'].get('resume') is not None:
+            quality_result['info']['resume']['preservedCommonExtraDaysOff'] = preserved_extra
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:
@@ -778,11 +790,14 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             status = solver.solve(model)
         elapsed = solver.wall_time
         lower_bound = solver.best_objective_bound
+    # 連休なし・夜勤端数の最少判定で使った時間も、通信をまたぐ累計予算へ返す。
+    # 探索予算から引くだけでは、画面がその時間を数えず8分の上限を超えて続けてしまう。
+    elapsed += (rest_proof_seconds or 0) + (night_proof_seconds or 0)
     result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
     reason = ('early_return' if stopped_early else 'optimal' if status == cp_model.OPTIMAL
               else 'infeasible' if status == cp_model.INFEASIBLE
-              else 'time_limit' if elapsed >= seconds - 0.1 else 'completed')
-    result['timing'] = {'mode': 'quality' if quality_first else 'adaptive' if stop_rule else 'full', 'maxSeconds': seconds, 'reason': reason}
+              else 'time_limit' if elapsed >= requested_seconds - 0.1 else 'completed')
+    result['timing'] = {'mode': 'quality' if quality_first else 'adaptive' if stop_rule else 'full', 'maxSeconds': requested_seconds, 'reason': reason}
     if quality_result is not None:
         result['search'] = quality_result['info']
     if stop_rule and not quality_first:
@@ -905,7 +920,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             idealBalance=allocation['overtimeIdealBalance'])
     if has_priority:
         result['allocation']['minimumOvertimeScope'] = 'WITH_FIXED_STAFFING_NIGHT_REST_AND_NIGHT_BALANCE'
-    result['allocation']['preservedCommonExtraDaysOff'] = initial_metric['commonExtraDaysOff'] if initial_metric is not None else None
+    result['allocation']['preservedCommonExtraDaysOff'] = preserved_extra
     if not preference_misses and result.get('staffingShortfallTotal', 0) < initial_shortage:
         preserved_night_spread = None
     result['allocation']['preservedNightSpread'] = preserved_night_spread

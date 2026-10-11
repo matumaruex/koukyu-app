@@ -18,12 +18,12 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
 
  // 通常版は常に送る。おまかせには送らない。
  const h=harness(null,{current:raw});
- assert.equal(h.get('inputData().p.overtimeCycleLimit'),true);assert(h.get('inputData().signature').startsWith('rules-3.44:'));
+ assert.equal(h.get('inputData().p.overtimeCycleLimit'),true);assert(h.get('inputData().signature').startsWith('rules-3.45:'));
  h.eval("setTab('auto')");assert.equal(h.eval('inputData().p.overtimeCycleLimit'),undefined);
 
  // 作成結果：2回目のサイクルと理由。
  const rows={s0:{'1':'overtime','2':'early','3':'overtime','4':'off'},s1:{'1':'night','2':'nightOff','3':'off'}};
- const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:rows,seconds:3,overtimeCycleExcess:1,overtimeCycles:{excess:1,items:[{staff:'s0',start:1,end:3,overtime:2,count:1}],minimumProven:true},allocation:{overtimeTotal:2,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-9'})});
+ const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:rows,seconds:3,overtimeCycleExcess:1,overtimeCycles:{excess:1,items:[{staff:'s0',start:1,end:3,overtime:2,count:1}],minimumProven:true},allocation:{overtimeTotal:2,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-10'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.overtimeCycleLimit,true);
  assert(made.nodes.view.text.includes('A残の1サイクル1回：2回目が1件（職員Aさん 10/16〜10/18） ・ 人数不足を減らすため'));
@@ -44,7 +44,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  // 3.39までに作った作業表（一時保存に作成時の条件がないもの）も、当時の条件を記録して保持する。
  const old=harness(null,{current:raw});old.eval("setTab('schedule');schedule().assignments={a:{'1':'early'},b:{'1':'off'}};schedule().workSignature=inputData().signature;render()");
  const work=JSON.parse(old.values.get('koukyu_v4_work')),w=work.schedules['2026-10'];
- w.workSignature=w.workSignature.replace('rules-3.44:','rules-3.35:').replace(',"overtimeCycleLimit":true}','}');delete w.workSnapshot;
+ w.workSignature=w.workSignature.replace('rules-3.45:','rules-3.35:').replace(',"overtimeCycleLimit":true}','}');delete w.workSnapshot;
  const reopened=harness(null,{current:raw,stored:{koukyu_v4_work:JSON.stringify(work)}});reopened.eval("setTab('schedule')");
  assert(reopened.get('hasTable()'));assert(reopened.get('workChanged()'));assert(reopened.get('Boolean(schedule().workSnapshot)'));
  assert.deepEqual(reopened.get('schedule().assignments'),w.assignments);

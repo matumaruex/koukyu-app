@@ -17,7 +17,7 @@ const select=h=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>
 
  // 職員設定：「連休」に連休なしを追加。指定がなければ送信内容も署名も今までどおり。
  const h=harness(null,{current:raw});
- const before=h.get('inputData().signature');assert(before.startsWith('rules-3.44:'));
+ const before=h.get('inputData().signature');assert(before.startsWith('rules-3.45:'));
  assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'noConsecutiveRest'));
  h.eval("setTab('staff');editStaff(data.staff[0])");
  const s=select(h);assert(s);assert.equal(s.value,'0');assert.deepEqual(s.children.map(o=>o.text),['指定なし','連休なし','月1回以上','月2回以上']);
@@ -25,7 +25,7 @@ const select=h=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>
  assert.equal(h.get('data.staff[0].noConsecutiveRest'),true);assert.equal(h.get('data.staff[0].minConsecutiveRest'),0);
  h.eval("setTab('schedule')");
  assert.equal(h.get('inputData().p.staff[0].noConsecutiveRest'),true);assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'minConsecutiveRest'));
- assert.notEqual(h.get('inputData().signature'),before);assert(h.get('inputData().signature').startsWith('rules-3.44:'));
+ assert.notEqual(h.get('inputData().signature'),before);assert(h.get('inputData().signature').startsWith('rules-3.45:'));
  h.eval("editStaff(data.staff[0])");assert.equal(select(h).value,'none');
  select(h).value='0';h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});
  assert.equal(h.get('data.staff[0].noConsecutiveRest'),false);assert.equal(h.get('inputData().signature'),before);
@@ -35,7 +35,7 @@ const select=h=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>
  // 作成結果の例外：一覧・最少確認済み・表の印（連休の両日）。
  const none={...raw,staff:[{...raw.staff[0],noConsecutiveRest:true},raw.staff[1]]};
  const restError={code:'no_consecutive_rest',staff:'s0',day:5,start:4,end:5,count:1};
- const made=harness(none,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'4':'off','5':'off','10':'off','11':'off'},s1:{'1':'off'}},seconds:3,ruleExceptions:[restError],exceptionCount:0,exceptionsProvenMinimum:true,restExceptionCount:1,restExceptionsProvenMinimum:true,noConsecutiveRest:{minimum:1,proven:true},validationErrors:[restError],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-9'})});
+ const made=harness(none,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'4':'off','5':'off','10':'off','11':'off'},s1:{'1':'off'}},seconds:3,ruleExceptions:[restError],exceptionCount:0,exceptionsProvenMinimum:true,restExceptionCount:1,restExceptionsProvenMinimum:true,noConsecutiveRest:{minimum:1,proven:true},validationErrors:[restError],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-10'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.staff[0].noConsecutiveRest,true);
  const text=made.nodes.view.text;

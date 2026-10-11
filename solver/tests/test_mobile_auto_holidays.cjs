@@ -2,14 +2,14 @@
 const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
 const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',monthlyDaysOff:10,nightShiftType:'all',canOvertime:true},{id:'b',name:'職員B',type:'full',monthlyDaysOff:12,nightShiftType:'none'},{id:'p',name:'職員P',type:'part',monthlyDaysOff:11,startTime:'09:00',endTime:'17:00'}],schedules:{'2026-10':{requests:{a:[2]},assignments:{},history:{a:Array(7).fill('off')},locked:{a:{'4':'early'}}}},preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[4,4,4],maxReducedSundays:3}}};
 function rows(day='off'){return Object.fromEntries(['s0','s1','s2'].map(sid=>[sid,Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),day]))]));}
-function candidate(payload){return {status:'DRAFT',assignments:rows(),selectedQuota:Object.fromEntries(Object.entries(payload.holidayPolicy).map(([sid,q])=>[sid,q.target])),seconds:60,allocation:{overtimeTotal:21,overtimeSpread:1,overtimeBalance:1,overtimeProportional:false,nightSpread:1,surplusTotal:0,commonExtraDaysOff:0,minor:0},overtimeFairness:{minimumSpreadProven:true,spread:1},nightRestPreferences:{unmet:[]},staffingShortfallTotal:1,boundaryComplete:true,unmetConditions:[{code:'coverage',day:11,time:600,actual:3,required:4}],optimizationPolicy:'auto-holidays-3',search:{done:true}};}
+function candidate(payload){return {status:'DRAFT',assignments:rows(),selectedQuota:Object.fromEntries(Object.entries(payload.holidayPolicy).map(([sid,q])=>[sid,q.target])),seconds:60,allocation:{overtimeTotal:21,overtimeSpread:1,overtimeBalance:1,overtimeProportional:false,nightSpread:1,surplusTotal:0,commonExtraDaysOff:0,minor:0},overtimeFairness:{minimumSpreadProven:true,spread:1},nightRestPreferences:{unmet:[]},staffingShortfallTotal:1,boundaryComplete:true,unmetConditions:[{code:'coverage',day:11,time:600,actual:3,required:4}],optimizationPolicy:'auto-holidays-4',search:{done:true}};}
 (async()=>{
  const h=harness(null,{current:raw,response:async p=>p.action==='validate'?{status:'VALID',boundaryComplete:true}:p.autoPhase==='base'?candidate(p):{status:'UNKNOWN',autoDone:true,autoReason:'unchanged',seconds:1}});
  const normalSignature=h.get('inputData().signature'),normalOff=h.get('data.staff.map(st=>st.monthlyDaysOff)'),history=h.get('history()');
  h.eval("schedule().assignments={a:{'1':'early'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE'};render();");const normalTable=h.get('schedule().assignments');
  assert.deepEqual(h.ctx.document.querySelectorAll('[data-tab]').map(b=>b.dataset.tab),['schedule','requests','staff','saved']);
  h.ctx.settings();await h.click('公休おまかせを開く');assert.equal(h.nodes.dialog.open,false);
- assert(h.nodes.view.text.includes('公休おまかせ'));assert(h.get('inputData().signature').startsWith('auto-rules-5:'));
+ assert(h.nodes.view.text.includes('公休おまかせ'));assert(h.get('inputData().signature').startsWith('auto-rules-6:'));
  assert.equal(h.calls.length,0);await h.click('通常の公休表に戻る','view');
  assert.equal(h.get('state.mode'),'normal');assert.equal(h.get('inputData().signature'),normalSignature);
  assert.deepEqual(h.get('schedule().assignments'),normalTable);
