@@ -182,7 +182,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 作れないときの理由調べ用：外せる形にした希望・固定。
     dropped = []
     rest_shortfalls = []
-    # 連休の回数の差（3.42）：比べる人ごとの、数える連休の回数。
+    # 連休の回数の差（3.45）：比べる人ごとの、数える連休の回数。
     rest_counts = []
     # 連休なしの人の、計算が作った連続した公休の組（前日・当日がともに公休）。
     rest_forbidden = []
