@@ -26,6 +26,8 @@ def without_preferences(raw):
         st.pop('nightRemainderPriority', None)
     # A残の1サイクル1回（3.40）も通常版だけ。
     result.pop('overtimeCycleLimit', None)
+    # 連休の回数の差（3.46）も通常版だけ。
+    result.pop('restCountBalance', None)
     return result
 
 

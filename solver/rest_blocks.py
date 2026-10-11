@@ -58,3 +58,28 @@ def forbidden_ranges(p, st, row):
         else:
             result.append({'start': day - 1, 'end': day, 'count': 1})
     return result
+
+
+def counted_ranges(p, sid, row):
+    """連休の回数の比較（3.46）に数える連休：希望休・固定の公休だけでできた連休は数えない。
+    計算が決めた公休を1日でも含む連休だけを数える。今期内の連休だけ（前期・翌期とはつなげない）。"""
+    return [b for b in ranges(row, p['days'])
+            if any(not user_fixed_off(p, sid, d) for d in range(b['start'], b['end'] + 1))]
+
+
+def balance_staff(p):
+    """連休の回数を比べる人：連休の設定（月1回以上・2回以上）をした人。公休の比較から外した人は除く。"""
+    if not p.get('restCountBalance'):
+        return []
+    staff = [st for st in p['staff'] if st['minConsecutiveRest'] and st['id'] not in p['fairnessExcludedStaff']]
+    return staff if len(staff) >= 2 else []
+
+
+def balance_report(p, assignments):
+    """連休の回数の差（3.46）：比べる人の回数と、差が1回を超えた分（excess）。比べる人が2人未満なら None。"""
+    staff = balance_staff(p)
+    if not staff:
+        return None
+    counts = {st['id']: len(counted_ranges(p, st['id'], assignments[st['id']])) for st in staff}
+    high, low = max(counts.values()), min(counts.values())
+    return {'counts': counts, 'high': high, 'low': low, 'excess': max(0, high - low - 1)}

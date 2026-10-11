@@ -40,6 +40,10 @@ def normalize(raw):
     p.setdefault('overtimeCycleLimit', False)
     if type(p['overtimeCycleLimit']) is not bool:
         raise ValueError('overtimeCycleLimit must be boolean.')
+    # 連休の設定をした人どうしの連休の回数の差を1回以内に（3.46、通常版の画面が連休の設定をした人がいるときだけ送る）。
+    p.setdefault('restCountBalance', False)
+    if type(p['restCountBalance']) is not bool:
+        raise ValueError('restCountBalance must be boolean.')
     p.setdefault('requiredStaff', [4, 4, 4])
     p.setdefault('maxReducedSundays', 3)
     def valid_counts(values):
