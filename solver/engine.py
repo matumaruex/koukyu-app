@@ -12,7 +12,7 @@ from .validator import validate, is_rule_exception, exception_count, rest_except
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales
 from .night_preferences import report as preference_report
 from .quality_search import search as quality_search
-from .rest_blocks import report as rest_report, user_fixed_off
+from .rest_blocks import report as rest_report, user_fixed_off, balance_report as rest_balance_report
 from .overtime_cycles import eligible as cycle_eligible, carry_in, report as overtime_cycle_report
 from .night_remainder import plan as night_remainder_plan, report as night_remainder_report, max_nights
 from .overtime_preference import offsets, score_bounds, active as preference_active, arithmetic_proven, POLICY as PREFERENCE_POLICY
@@ -182,6 +182,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 作れないときの理由調べ用：外せる形にした希望・固定。
     dropped = []
     rest_shortfalls = []
+    # 連休の回数の差（3.42）：比べる人ごとの、数える連休の回数。
+    rest_counts = []
     # 連休なしの人の、計算が作った連続した公休の組（前日・当日がともに公休）。
     rest_forbidden = []
     night_soft = allow_night_shortfall or relax_wishes
@@ -339,6 +341,28 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             else:
                 required(sum(blocks) >= st['minConsecutiveRest'], sid + '_rest_blocks',
                          label + f'の2日以上の連休を{st["minConsecutiveRest"]}回以上')
+            if p['restCountBalance'] and not relax_wishes and sid not in p['fairnessExcludedStaff']:
+                # 希望休・固定の公休だけでできた連休は数えない。そうした日のひと続き[a,b]（2日以上）は、
+                # 前後の日が公休でないときだけ、それだけの連休になる（希望休・固定は必ず公休なので）。
+                wish_only, d = [], 0
+                while d < n:
+                    if not user_fixed_off(p, sid, d + 1):
+                        d += 1
+                        continue
+                    e = d
+                    while e + 1 < n and user_fixed_off(p, sid, e + 2):
+                        e += 1
+                    if e > d:
+                        sides = ([x[sid, d - 1, 'off']] if d > 0 else []) + ([x[sid, e + 1, 'off']] if e + 1 < n else [])
+                        alone = model.new_bool_var(f'{sid}_rest_wish_only_{d}')
+                        for side in sides:
+                            model.add(alone <= 1 - side)
+                        model.add(alone >= 1 - sum(sides))
+                        wish_only.append(alone)
+                    d = e + 1
+                count = model.new_int_var(0, n, sid + '_rest_count')
+                model.add(count == sum(blocks) - sum(wish_only))
+                rest_counts.append(count)
         if st['noConsecutiveRest']:
             # 連休なし：前日と当日がともに公休なら1件。明けは休みに数えない。希望休・固定の公休・前期の実績どうしは数えない。
             # 前期の最終日は、実際に入力された前期の勤務が公休のときだけつなげる（仮定の休みではつなげない）。
@@ -491,6 +515,19 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if rest_forbidden and not relax_wishes and (not allow_rule_exceptions or holiday_plan is not None):
         # 厳密な作成とおまかせでは、連休なしは必ず守る条件。
         required(sum(rest_forbidden) == 0, 'no_consecutive_rest', '連休なしの職員に連休を作らない')
+    rest_spread_excess = None
+    if len(rest_counts) >= 2:
+        # 連休の回数の差が1回を超えた分。
+        high_rest, low_rest = model.new_int_var(0, n, 'rest_count_high'), model.new_int_var(0, n, 'rest_count_low')
+        model.add_max_equality(high_rest, rest_counts)
+        model.add_min_equality(low_rest, rest_counts)
+        rest_gap = model.new_int_var(-1, n, 'rest_count_gap')
+        model.add(rest_gap == high_rest - low_rest - 1)
+        rest_spread_excess = model.new_int_var(0, n, 'rest_count_excess')
+        model.add_max_equality(rest_spread_excess, [0, rest_gap])
+        if not allow_rule_exceptions:
+            # 厳密な作成では必ず守る条件。
+            required(rest_spread_excess == 0, 'rest_balance', '連休の設定をした人どうしの連休の回数の差は1回以内')
     if night_excess and not relax_wishes and not allow_rule_exceptions:
         # 厳密な作成では、夜勤の端数は必ず優先する人へ（避けられない分を除く）。
         required(sum(night_excess) <= remainder_plan['allowance'], 'night_remainder', '夜勤の端数は優先する人へ')
@@ -549,13 +586,25 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 + (night_spread if balance_nights else 0))
     # 中間ルールの違反は人数不足より上。係数は下位全体の上限より大きく、
     # 希望休の件数を取り出す計算（gap_weight の倍数）を崩さない値にする。
+    lower_max = (shortfall_cap * shortage_priority_weight + n * gap_weight + cycle_cap * cycle_weight
+                 + len(preference_misses) * preference_weight + n)
+    balance_weight = 0
+    if rest_spread_excess is not None and allow_rule_exceptions and holiday_plan is None:
+        # 連休の回数の差は人数不足より上・連勤などの例外より下。夜勤の端数のように証明した最少で固定すると、
+        # 人数不足が出る月に条件段階が悪い所で行き詰まる回があった（偽名データの長期休暇の例で不足14・16、
+        # 固定しなければ5〜7）。そのため最少の証明は先に行い、その値は表の採用の確認に使い、探索中は優先順位で守る。
+        balance_weight = (lower_max // gap_weight + 1) * gap_weight
+        priority = rest_spread_excess * balance_weight + priority
+        lower_max += n * balance_weight
     violation_weight = 0
     if rule_violations:
-        lower_max = (shortfall_cap * shortage_priority_weight + n * gap_weight + cycle_cap * cycle_weight
-                     + len(preference_misses) * preference_weight + n)
         violation_weight = (lower_max // gap_weight + 1) * gap_weight
         priority = sum(rule_violations) * violation_weight + priority
-    has_priority = bool(preference_misses or shortfalls or balance_nights or rule_violations or cycle_excess)
+    has_priority = bool(preference_misses or shortfalls or balance_nights or rule_violations or cycle_excess or balance_weight)
+
+    def balance_of(a):
+        found = rest_balance_report(p, a) if balance_weight else None
+        return found['excess'] if found else 0
 
     def cycle_excess_of(a):
         found = overtime_cycle_report(p, a)
@@ -564,6 +613,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     initial_night_shortage = sum(e['required'] - e['actual'] for e in initial_errors
                                  if e['code'] == 'night_coverage') if initial_metric is not None else 0
     initial_priority = (exceptions_of(initial_errors) * violation_weight
+                        + balance_of(initial_assignments) * balance_weight
                         + initial_shortage * shortage_priority_weight + initial_night_shortage * gap_weight
                         + cycle_excess_of(initial_assignments) * cycle_weight
                         + len(initial_preferences['unmet']) * preference_weight
@@ -579,7 +629,13 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         exceptions_bound = b // violation_weight if violation_weight else 0
         if exceptions_bound != found_exceptions:
             return exceptions_bound, None
-        return exceptions_bound, max(0, (b - found_exceptions * violation_weight) // shortage_priority_weight)
+        rest = b - found_exceptions * violation_weight
+        if balance_weight:
+            found_balance = balance_of(assignments)
+            if rest // balance_weight != found_balance:
+                return exceptions_bound, None
+            rest -= found_balance * balance_weight
+        return exceptions_bound, max(0, rest // shortage_priority_weight)
     rest_minimum = rest_proof_seconds = None
     if rest_forbidden and allow_rule_exceptions and holiday_plan is None:
         # 連休なしは「見つけられなかった」では破らない。まず連休の数だけを最小化し、最少回数を証明してから上限として固定する。
@@ -648,6 +704,48 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'night_remainder_unconfirmed'},
                     'explanation': '夜勤の端数を優先する人へ回せるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
         seconds = max(.000001, seconds - night_proof_seconds)
+    balance_minimum = balance_proof_seconds = None
+    balance_strict = False
+    if rest_spread_excess is not None and allow_rule_exceptions:
+        # 連休の回数の差も「見つけられなかった」では破らない。中間ルールの中では一番最後
+        # （連休なし・夜勤の端数は固定済み。連勤・日勤の種類の例外0件の範囲で先に確かめる）。
+        strict = model.new_bool_var('rest_balance_without_exceptions')
+        if rule_violations:
+            model.add(sum(rule_violations) == 0).only_enforce_if(strict)
+        balance_proof_seconds, proof_status = 0, cp_model.UNKNOWN
+        attempts = ([True] if rule_violations else []) + [False]
+        for without_exceptions in attempts:
+            budget = min(REMAINDER_STRICT_SECONDS if without_exceptions and len(attempts) > 1 else REST_PROOF_SECONDS,
+                         REST_PROOF_SECONDS - balance_proof_seconds, seconds - balance_proof_seconds)
+            if budget <= 0.01:
+                break
+            model.minimize(rest_spread_excess)
+            model.clear_assumptions()
+            if without_exceptions:
+                model.add_assumptions([strict])
+            if initial_assignments is not None:
+                for (sid, d, shift), variable in x.items():
+                    model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
+            proof = cp_model.CpSolver()
+            proof.parameters.max_time_in_seconds = budget
+            proof.parameters.random_seed = seed
+            proof.parameters.num_search_workers = SEARCH_WORKERS
+            proof_status = proof.solve(model)
+            model.clear_hints()
+            model.clear_assumptions()
+            balance_proof_seconds += proof.wall_time
+            if proof_status == cp_model.OPTIMAL:
+                balance_minimum = int(round(proof.objective_value))
+                # 連勤などの例外0件の範囲で確かめた最少なら、表は必ずこの値に届く（例外は差より上の優先順位）。
+                balance_strict = without_exceptions or not rule_violations
+                break
+        if balance_minimum is None and proof_status != cp_model.INFEASIBLE:
+            return {'status': 'UNKNOWN', 'seconds': round(balance_proof_seconds + (rest_proof_seconds or 0) + (night_proof_seconds or 0), 3),
+                    'boundaryComplete': p['boundaryComplete'],
+                    'timing': {'mode': 'quality' if quality_first else 'full', 'maxSeconds': requested_seconds, 'reason': 'rest_balance_unconfirmed'},
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_balance_unconfirmed'},
+                    'explanation': '連休の回数の差を1回以内にできるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
+        seconds = max(.000001, seconds - balance_proof_seconds)
     if has_priority:
         model.minimize(priority)
         if initial_priority is not None:
@@ -697,6 +795,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             shortage = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
             gaps = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
             return (exceptions_of(errors) * violation_weight
+                    + balance_of(a) * balance_weight
                     + shortage * shortage_priority_weight + gaps * gap_weight
                     + cycle_excess_of(a) * cycle_weight
                     + len(preference_report(p, a)['unmet']) * preference_weight
@@ -790,9 +889,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             status = solver.solve(model)
         elapsed = solver.wall_time
         lower_bound = solver.best_objective_bound
-    # 連休なし・夜勤端数の最少判定で使った時間も、通信をまたぐ累計予算へ返す。
+    # 連休なし・夜勤端数・連休の回数の差の最少判定で使った時間も、通信をまたぐ累計予算へ返す。
     # 探索予算から引くだけでは、画面がその時間を数えず8分の上限を超えて続けてしまう。
-    elapsed += (rest_proof_seconds or 0) + (night_proof_seconds or 0)
+    elapsed += (rest_proof_seconds or 0) + (night_proof_seconds or 0) + (balance_proof_seconds or 0)
     result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
     reason = ('early_return' if stopped_early else 'optimal' if status == cp_model.OPTIMAL
               else 'infeasible' if status == cp_model.INFEASIBLE
@@ -845,6 +944,18 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                     'seconds': round(night_proof_seconds, 3) if night_proof_seconds is not None else None}
         if remainder['exceptions']:
             result['nightRemainderExceptions'] = remainder['exceptions']
+    balance = rest_balance_report(p, assignments)
+    if balance is not None:
+        if balance['excess'] and (balance_minimum is None or (balance['excess'] > balance_minimum and balance_strict)):
+            # 証明した最少を超える連休の差の表は採用しない（元の表を保持した場合も含む）。
+            # 連勤などの例外を許して確かめた最少は、例外を減らす表では届かないことがあるので、そのときは採用して未確認と表示する。
+            return {'status': 'UNKNOWN', 'seconds': result['seconds'], 'boundaryComplete': p['boundaryComplete'],
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_balance_unconfirmed'},
+                    'explanation': '連休の回数の差が最少と確認できない表は採用しません。'}
+        result['restBalance'] = dict(balance, proven=balance_minimum is not None and balance['excess'] <= balance_minimum,
+                                     seconds=round(balance_proof_seconds, 3) if balance_proof_seconds is not None else None)
+        if balance['excess']:
+            result['restBalanceExceptions'] = balance['excess']
     cycles = overtime_cycle_report(p, assignments)
     if cycles is not None:
         # 1サイクルに2回目となったA残は、人数不足を減らすためだけに入る。条件段階の証明があれば、その人数不足での最少。
@@ -958,6 +1069,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if initial_assignments is not None:
             old_quality = quality_value(p, initial_assignments) + initial_shortage * shortage_weight
             new_priority = (result.get('exceptionCount', 0) * violation_weight
+                            + result.get('restBalanceExceptions', 0) * balance_weight
                             + result.get('staffingShortfallTotal', 0) * shortage_priority_weight
                             + result.get('nightShortfallTotal', 0) * gap_weight
                             + result.get('overtimeCycleExcess', 0) * cycle_weight

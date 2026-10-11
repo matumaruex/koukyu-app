@@ -1,7 +1,7 @@
 """ソルバーの制約や変数を使わず、完成した表を再集計して検査する。"""
 from datetime import timedelta
 from .input_data import normalize, SHIFTS, overtime_profile
-from .rest_blocks import ranges as rest_ranges, forbidden_ranges
+from .rest_blocks import ranges as rest_ranges, forbidden_ranges, balance_report as rest_balance_report
 from .night_remainder import report as night_remainder_report
 
 SHORTFALL_CODES = ('coverage', 'sunday_limit')
@@ -9,7 +9,7 @@ SHORTFALL_CODES = ('coverage', 'sunday_limit')
 
 def is_rule_exception(p, error):
     """中間ルール（守ると表が作れないときだけ破れる）の違反か。p は正規化済みの入力。"""
-    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest', 'night_remainder'):
+    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest', 'night_remainder', 'rest_balance'):
         return True
     if error['code'] == 'day_shift_eligibility':
         staff = next((st for st in p['staff'] if st['id'] == error['staff']), None)
@@ -21,7 +21,7 @@ def exception_count(p, errors):
     """計算側と同じ数え方：上限を超えた日数＋＋1の超過回数＋逆の日勤の日数。
     連休なしの例外は、最初に最少回数を証明して固定する別扱いなので、ここには数えない（rest_exception_count）。"""
     return sum(e.get('count', 1) for e in errors
-               if is_rule_exception(p, e) and e['code'] not in ('no_consecutive_rest', 'night_remainder'))
+               if is_rule_exception(p, e) and e['code'] not in ('no_consecutive_rest', 'night_remainder', 'rest_balance'))
 
 
 def rest_exception_count(errors):
@@ -139,6 +139,12 @@ def validate(raw, assignments):
             fail('night_remainder', sid, detail='夜勤の端数を優先する人以外に、目安を超える夜勤があります。')
             errors[-1].update(actual=remainder['counts'][sid], fair=remainder['fair'][sid], count=over,
                               priority=sid in remainder['priority'], exceptions=remainder['exceptions'])
+
+    # 連休の回数の差（3.46）：連休の設定をした人どうしで1回を超えた分を、1件の例外として報告する。
+    balance = rest_balance_report(p, {sid: dict(zip(map(str, range(1, p['days'] + 1)), rows[sid])) for sid in rows})
+    if balance and balance['excess']:
+        fail('rest_balance', detail='連休の設定をした人どうしの連休の回数の差が1回を超えています。')
+        errors[-1].update(counts=balance['counts'], high=balance['high'], low=balance['low'], count=balance['excess'])
 
     coverage_days = []
     for d in range(1, p['days'] + 1):
