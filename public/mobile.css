@@ -69,3 +69,154 @@
 /* 希望一覧は職員と同じ2段、入力は同じ大きさのダイアログ。 */
 .requests-card .request-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.requests-card .request-heading strong{min-width:0}.requests-card .request-status{font-size:11px;padding:2px 7px;flex-shrink:0}.requests-card .request-excluded{margin-left:6px;font-weight:400}.requests-card .request-leave{min-height:32px;margin:0;gap:7px;font-size:11px}.requests-card .request-leave input{width:18px;height:18px;margin:0;flex-shrink:0}.request-edit-dialog .request-counts{font-size:11px;overflow-wrap:anywhere}.request-edit-dialog .request-calendar{gap:4px;margin:8px 0}.request-edit-dialog .request-calendar button{min-height:46px;padding:3px 0;font-size:15px;border-radius:7px}.request-edit-dialog .request-calendar .weekday{font-size:11px}.request-edit-dialog .request-calendar .request-mark{font-size:11px}.request-edit-dialog .request-calendar button small{font-size:9px}
 .request-edit-dialog .dialog-heading h2{min-width:0;overflow-wrap:anywhere}.request-edit-dialog .dialog-heading button{flex-shrink:0;white-space:nowrap}.requests-card .request-leave input{accent-color:#276652}
+
+
+/* 3.48 エジプト（王墓）の見た目。画面だけに効かせ、印刷は従来の白い紙の配色のまま。
+   深い青（ラピスラズリ）と金を土台に、勤務は宝石の色、要所に象形文字・ピラミッド・カルトゥーシュを置く。 */
+@font-face{font-family:"Koukyu Egypt Glyphs";src:url(/fonts/egypt-glyphs.woff2) format("woff2");font-display:block;unicode-range:U+13000-1342F}
+@media screen{
+:root{color-scheme:dark;accent-color:#e2b23c;background:#0f1d3d;color:#f3e6c4;font-family:"Zen Kaku Gothic New",-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
+body{background:#0f1d3d}
+a{color:#f2c55c}
+h3{color:#f2c55c;font-family:"Zen Antique",serif;font-weight:400;letter-spacing:.06em}
+button{background:#1c3263;color:#f3e6c4;border:1px solid rgba(226,178,60,.45)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #f2c55c;outline-offset:3px}
+.primary{background:linear-gradient(160deg,#f2c55c,#d39f2a);color:#1a1200;border-color:#e2b23c;letter-spacing:.04em}
+.secondary{background:transparent;color:#f2c55c;border:1.5px solid #e2b23c}
+.plain{background:transparent;border:0;color:#f2c55c}
+.danger,.plain.danger{color:#ff9f86}
+.muted,.legend,.period-label{color:#c4cee8}
+.small{color:#e9ddc0}
+
+/* 見出し：星の天井・月・ピラミッド・ホルスの目・金の題字・ツタンカーメンの頭巾のしま */
+.top{position:relative;max-width:none;margin:0;padding:8px 16px 0;display:block;overflow:hidden;background:radial-gradient(ellipse at 50% 28%,#1f3a7a 0%,#13254f 60%,#0f1d3d 100%);text-align:center}
+.top>*{position:relative}
+.top .eg-sky{position:absolute;left:0;top:0;width:100%;height:100%;opacity:.22}
+.top .eg-moon{position:absolute;left:22px;top:18px;width:20px;height:20px;border-radius:50%;box-shadow:6px -3px 0 0 #f2c55c}
+.top .eg-pyramids{position:absolute;left:50%;bottom:16px;width:min(100%,520px);height:auto;transform:translateX(-50%)}
+.top .eg-title{display:flex;flex-direction:column;align-items:center;padding-top:6px}
+.top .eg-eye{width:120px;height:60px}
+.top small{display:none}
+.top h1{margin:2px 0 0;font-family:"Zen Antique",serif;font-weight:400;font-size:38px;line-height:1.2;color:#f2c55c;letter-spacing:.3em;text-indent:.3em;text-shadow:0 0 18px rgba(242,197,92,.35)}
+.top #settings{position:absolute;right:8px;top:8px;width:44px;height:44px;min-height:44px;padding:0;display:flex;align-items:center;justify-content:center;color:#f2c55c;border-radius:50%}
+.top .eg-settings-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.top .period{max-width:520px;margin:6px auto 0;gap:6px}
+.top .period button{width:44px;min-height:44px;padding:0;background:transparent;border:0;color:#f2c55c;font-size:20px}
+.top .period label{color:#c4cee8;font-size:12px}
+.top .period input{color:#f3e6c4;font-family:"Zen Antique",serif;font-weight:400;font-size:22px;text-align:center;max-width:220px}
+.top .period-label{margin:0 auto;padding:0 0 48px;font-size:14px;color:#e9ddc0}
+.top .eg-nemes{height:16px;margin:0 -16px;background:repeating-linear-gradient(90deg,#e2b23c 0 9px,#1d3a8a 9px 18px);border-top:1.5px solid #e2b23c;border-bottom:1.5px solid #e2b23c}
+.top:has(.period[hidden]) .eg-pyramids{bottom:16px}
+.top:has(.period[hidden]) .eg-title{padding-bottom:40px}
+main{padding:16px 16px 160px}
+
+/* カード：金の縁、見出しはカルトゥーシュ（王の名を囲む楕円と端の棒） */
+.card{background:#172a55;border:1px solid rgba(226,178,60,.55);border-radius:10px}
+.card>h2,dialog .dialog-heading h2{display:inline-block;position:relative;max-width:calc(100% - 12px);margin-right:10px;padding:1px 18px 0 20px;border:1.5px solid #e2b23c;border-radius:999px;font-family:"Zen Antique",serif;font-weight:400;color:#f2c55c;letter-spacing:.12em;line-height:1.5}
+.card>h2::after,dialog .dialog-heading h2::after{content:'';position:absolute;right:-8px;top:-1.5px;bottom:-1.5px;width:3px;border-radius:2px;background:#e2b23c}
+.card>h2{font-size:20px}
+.staff-card>h2,dialog .dialog-heading h2{font-size:16px}
+.banner,#notice{background:#3a2c10;color:#f7e3b0;border:1px solid #8a6a1f}
+.banner.good{background:#12352f;color:#c9f1e8;border-color:#2f8f83}
+.banner.bad{background:#3d1a14;color:#ffd6c9;border-color:#a84a33}
+.badge{background:rgba(226,178,60,.18);color:#f2c55c}
+.problem .actions button{background:#1c3263}
+
+/* 入力欄・ダイアログ */
+.field input,.field select,.row select{background:#0f1d3d;color:#f3e6c4;border:1px solid rgba(226,178,60,.45)}
+select option{background:#172a55;color:#f3e6c4}
+dialog{background:#172a55;color:#f3e6c4;border:1px solid rgba(226,178,60,.55);box-shadow:0 20px 70px rgba(0,0,0,.55)}
+dialog::backdrop{background:rgba(5,10,25,.72)}
+.dialog-heading button{background:#1c3263;color:#f3e6c4}
+.dialog-save{background:#172a55;border-top:1px solid rgba(226,178,60,.4)}
+summary{color:#f2c55c}
+fieldset{border-color:rgba(226,178,60,.4)}
+legend{color:#f2c55c}
+.staff-row,.shift-row,.saved-table-row{border-bottom-color:rgba(183,194,223,.18)}
+.counts>div{background:#1c3263}
+
+/* 名前はカルトゥーシュに入れる */
+.staff-row strong,.requests-card .request-heading strong{display:inline-block;position:relative;max-width:calc(100% - 12px);padding:0 12px 0 13px;border:1px solid rgba(226,178,60,.75);border-radius:999px;font-family:"Zen Antique",serif;font-weight:400;color:#f2c55c;letter-spacing:.06em}
+.staff-row strong::after,.requests-card .request-heading strong::after{content:'';position:absolute;right:-5px;top:-1px;bottom:-1px;width:2px;border-radius:2px;background:#e2b23c}
+.participation-toggle input{background:#0f1d3d;border-color:#8193b8}
+.participation-toggle input::before{background:#8193b8}
+.participation-toggle input:checked{background:#e2b23c;border-color:#e2b23c}
+.participation-toggle input:checked::before{background:#1a1200}
+.participation-status{color:#c4cee8}
+.not-in-period{background:rgba(255,255,255,.04)}
+.not-in-period .participation-status{color:#ffbf9e}
+
+/* カレンダー：選んだ日は金。希望休はアンク（生命の印）の判子 */
+.calendar .weekday{color:#c4cee8}
+.calendar button{background:#1c3263;border-color:rgba(183,194,223,.25)}
+.calendar button[aria-pressed=true]{background:linear-gradient(160deg,#f2c55c,#d39f2a);color:#1a1200;border:2px solid #e2b23c}
+.request-calendar .wish-off{background:#0a1430;color:#f2c55c;border-color:#e2b23c}
+.request-calendar .wish-off .request-mark::before{content:"\132F9";font-family:"Koukyu Egypt Glyphs","Noto Sans Egyptian Hieroglyphs",sans-serif;font-weight:400;margin-right:2px}
+.request-calendar .wish-early{background:linear-gradient(160deg,#f0c75a,#d39f2a);color:#2b1d00}
+.request-calendar .wish-late{background:linear-gradient(160deg,#55c7b8,#2f9e90);color:#052a25}
+.request-calendar .wish-overtime{background:linear-gradient(160deg,#d0623f,#b24a30);color:#fff}
+.request-calendar .wish-night{background:#0a1430;color:#f2c55c;box-shadow:inset 0 0 0 1.5px #e2b23c}
+.request-calendar .wish-part{background:#24396b;color:#dfe6f7}
+
+/* 1か月の表：勤務は宝石の色（金・トルコ石・赤めのう・ばら色）、夜勤は黒地に金 */
+.scroll{border-color:rgba(226,178,60,.35)}
+.month-table td,.month-table th{border-color:rgba(183,194,223,.16)}
+.month-table th{background:#13254f;color:#f3e6c4}
+.month-table .name{background:#13254f;color:#f3e6c4;font-family:"Zen Antique",serif;font-weight:400}
+.month-table th.sun{color:#ff9f86}
+.month-table th.sat{color:#8fbcff}
+.month-table td{color:#f3e6c4}
+.month-table td.early{background:linear-gradient(160deg,#f0c75a,#d39f2a);color:#2b1d00;font-weight:700}
+.month-table td.late{background:linear-gradient(160deg,#55c7b8,#2f9e90);color:#052a25;font-weight:700}
+.month-table td.overtime{background:linear-gradient(160deg,#d0623f,#b24a30);color:#fff}
+.month-table td.night{background:#0a1430;color:#f2c55c;box-shadow:inset 0 0 0 1.5px #e2b23c}
+.month-table td.nightOff{background:linear-gradient(160deg,#ebb6a5,#d79483);color:#2e120a;font-weight:700}
+.month-table td.off{background:#172a55;color:#9fb0d6}
+.month-table td.part{background:#24396b;color:#dfe6f7}
+.month-table td.total{color:#f3e6c4;background:#13254f}
+.month-table .count-night{background:#0a1430;color:#f2c55c}
+.month-table .count-early{background:rgba(226,178,60,.18);color:#f2c55c}
+.month-table .count-late{background:rgba(64,181,166,.18);color:#9eece2}
+.month-table .count-row td{background:#13254f;color:#f3e6c4}
+.month-table .count-row.first>*{border-top:2px solid rgba(226,178,60,.6)}
+.month-table td.short{background:#5a1f16;color:#ffd6c9}
+.month-table td.relaxed{background:rgba(226,178,60,.22);color:#f2c55c}
+.month-table td.locked{box-shadow:inset 0 0 0 2.5px #f2c55c}
+.month-table td.exception{outline-color:#ffb27a}
+.month-table td.editable:hover{outline-color:#f2c55c}
+.month-table td.wished{position:relative}
+.month-table td.wished::after{content:'';position:absolute;top:1px;right:1px;width:9px;height:8px;background:#f2c55c;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.month-title{color:#f2c55c}
+
+/* まとめの数字は金で大きく、守れている項目にはアンクの印 */
+.stat-line{display:block;margin:8px 0;padding:8px 12px;border:1px solid rgba(226,178,60,.4);border-radius:8px;background:#13254f;font-size:14px}
+.stat-line b{font-family:"Zen Antique",serif;font-weight:400;font-size:22px;color:#f2c55c;margin:0 2px}
+.ok-line{display:flex;align-items:center;gap:10px}
+.ok-line::before{content:"\132F9";flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#e2b23c;color:#1a1200;font-family:"Koukyu Egypt Glyphs","Noto Sans Egyptian Hieroglyphs",sans-serif;font-weight:400;font-size:19px;line-height:1}
+
+/* 計算中：スカラベ（ふんころがし）が太陽を転がす */
+.progress{position:relative;height:46px;margin:18px 0;background:transparent;border-radius:0;overflow:hidden;border-bottom:1.5px solid rgba(226,178,60,.55)}
+.progress::before{content:'';position:absolute;bottom:3px;left:34px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 38% 38%,#ffe9a6,#e2b23c 58%,#c8452c);box-shadow:0 0 14px rgba(242,197,92,.65);animation:eg-sun 4s linear infinite}
+.progress::after{content:"\131A3";position:absolute;bottom:0;left:0;display:block;width:auto;height:auto;background:none;border-radius:0;color:#f2c55c;font-family:"Koukyu Egypt Glyphs","Noto Sans Egyptian Hieroglyphs",sans-serif;font-size:30px;line-height:1;animation:eg-scarab 4s linear infinite}
+@keyframes eg-sun{from{left:34px;transform:rotate(0)}to{left:calc(100% + 40px);transform:rotate(720deg)}}
+@keyframes eg-scarab{from{left:0}to{left:calc(100% + 6px)}}
+
+/* 保存した表はパピルスの巻物 */
+.saved-table-row{margin:10px 0;padding:12px 14px;border:1.5px solid #e2b23c;border-radius:8px;color:#2b2118;background-color:#efe2c4;background-image:repeating-linear-gradient(0deg,rgba(120,88,36,.07) 0 2px,transparent 2px 7px),repeating-linear-gradient(90deg,rgba(120,88,36,.05) 0 3px,transparent 3px 11px)}
+.saved-table-row:last-child{border-bottom:1.5px solid #e2b23c}
+.saved-table-row strong{font-family:"Zen Antique",serif;font-weight:400;font-size:18px;color:#2b2118}
+.saved-table-row .muted{color:#5f4e32}
+.saved-table-row button{background:#1d3a8a;color:#f2c55c;border-color:#e2b23c}
+.saved-table-row .plain.danger{background:transparent;color:#a8432a}
+
+/* 下のメニュー：上に象形文字の碑文、選んでいる画面は金 */
+.bottom{background:#0a1430;border-top:0}
+.bottom::before{content:"\13080\132F9\131F3\131A3\132BD\13300\13274\132F9\13080\131F3\131A3\132BD\13300\13274";position:absolute;left:0;right:0;bottom:100%;height:36px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;letter-spacing:9px;background:#0a1430;border-top:1.5px solid #e2b23c;border-bottom:1px solid rgba(226,178,60,.35);color:#e2b23c;font-family:"Koukyu Egypt Glyphs","Noto Sans Egyptian Hieroglyphs",sans-serif;font-size:22px;line-height:1}
+.bottom button{background:transparent;color:#b7c2df}
+.bottom button span{display:flex;align-items:center;justify-content:center;height:30px}
+.bottom [aria-current=page]{background:transparent;color:#f2c55c;font-weight:700}
+#toast{background:linear-gradient(160deg,#f2c55c,#d39f2a);color:#1a1200;bottom:calc(122px + env(safe-area-inset-bottom))}
+footer{color:#8f9cc0;padding-bottom:160px}
+}
+@media screen and (prefers-reduced-motion:reduce){.progress::before{animation:none;left:58%}.progress::after{animation:none;left:calc(58% - 34px)}}
+@media print{.screen-only{display:none!important}}

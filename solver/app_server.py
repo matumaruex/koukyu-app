@@ -12,6 +12,8 @@ class AppHandler(handler):
         files = {'/': ('index.html', 'text/html'), '/mobile.js': ('mobile.js', 'text/javascript'), '/roster-storage.js': ('roster-storage.js', 'text/javascript'), '/creation-workflow.js': ('creation-workflow.js', 'text/javascript'), '/mobile.css': ('mobile.css', 'text/css'), '/example.json': ('example.json', 'application/json')}
         for script in ('overtime-preference.js', 'consecutive-rest.js', 'overtime-cycles.js', 'auto-holiday-policy.js', 'auto-creation-workflow.js', 'auto-roster-ui.js'):
             files['/' + script] = (script, 'text/javascript')
+        # 3.48：象形文字だけを切り出した書体（公開版と同じく public/fonts から配る）。
+        files['/fonts/egypt-glyphs.woff2'] = ('fonts/egypt-glyphs.woff2', 'font/woff2')
         if path == '/api/schedule':
             return super().do_GET()
         if path not in files:
@@ -19,7 +21,7 @@ class AppHandler(handler):
         name, mime = files[path]
         body = (PUBLIC / name).read_bytes()
         self.send_response(200)
-        self.send_header('Content-Type', mime + '; charset=utf-8')
+        self.send_header('Content-Type', mime if mime.startswith('font/') else mime + '; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Cache-Control', 'no-store')
         self.end_headers()
