@@ -443,3 +443,14 @@ UI/API3.42、アセットv54。通常はquality-first-8／rules-3.35、並行8�
 通常のファイル別APIビルドは `[[tool.vercel.workflows]]` の実行先を登録しないため、`pyproject.toml` を独立したビルド対象として明示する。ローカルの公式Pythonビルダーで `_py_workflows/solver-background__wf` のLambdaと `queue/v2beta` のトリガー（topic `__wkf_workflow_*`、consumer `default`）が生成されることを確認した。静的ファイル・通常APIは従来のURLに配信する。`builds` を明示するため、Vercel画面のBuild/Development設定よりリポジトリの設定を優先する。
 
 2026年11月1日の確認用デプロイ `dpl_3qJWuRQruRDeJf5oqyk7icsExWY2` はPreview・READY。画面とmobile.jsはHTTP200、`/api/schedule` はHTTP200・3.57、`/api/background` はGETを想定どおり405で拒否し、起動を確認した。実サーバーでの開始・継続・結果取得・中止は未検証。一時リンクの発行はオーナーが承認済みで発行できたが、作業環境の許可先にVercelがなく、直接のHTTP送信はプロキシがCONNECT403で拒否する。閲覧用の接続ツールはGET専用。次の検証には作業環境で `koukyu-app-git-codex-background-roster-matumaruexs-projects.vercel.app` への接続許可が必要（制限を迂回しない）。その後、秘密のリンクで認証して架空データのPOST検証、Androidで画面離脱・復帰を確認する。本番3.56は変更していない。
+
+### 実環境の開始・受取・中止（2026年11月2日・日本時間）
+
+- 環境で許可された上記ブランチの固定URLだけを通信先に使用。既存の確認用リンクを23時間で失効するリンクへ更新した（11月3日04:37 JST失効）。秘密・Cookie・作成の秘密・勤務表はGitへ入れない。
+- 上記Previewで、架空6人の開始POSTがHTTP200で作成IDを返し、`not_ready` → `running / conditions` → `completed` と進んだ。計算25.756秒の不足あり候補を取得でき、再取得でも同じ結果だった。独立検査の不足65件・日曜緩和1件は結果の報告と一致し、それ以外の違反なし。
+- 別の秘密による取得・中止はいずれもHTTP403。正しい秘密の中止は、開始直後の `not_ready` を経てHTTP200・`cancelled` になり、15秒後も同じ状態だった。中止はWorkflowの継続を停止するもので、すでに実行中の計算ステップを即座に強制終了する保証はない。
+- 実Chromium・幅390pxで架空11人の通常作成を開始し、ページを閉じて12秒後に開き直すと同じ作成IDの追跡を再開。計算49.534秒の `FEASIBLE` を表へ反映し、受取待ちの端末記録を削除した。独立検査は違反0、ページのJavaScript例外0。今回は1回の計算ステップで終わったため、60秒をまたぐ複数ステップの実測ではない。
+- 実画面の「作成を中止する」でもサーバーが `cancelled` になり、操作が戻ること・元の表が保持されること・再読込後も元の表が残り受取待ち情報がないことを確認した。
+- 実画面で、正常に受け取った直後にも「以前の作成結果の受け取りを取り消す」が残る不具合を発見。終了時の受取待ち情報の削除を、画面の再描画より前へ移した。`test_mobile_background.cjs` に修正前は失敗する回帰確認を追加し、アセットをv70へ更新した。計算ルール・方式・署名は変更しない。
+- Python全273件と画面関連29ファイル（`test_mobile_*.cjs` と `test_background_job.cjs`）は修正後も全件合格。
+- 本番は変更しない。Android実機での画面離脱・復帰、利用プランの保存期間・利用条件の最終確認は引き続き未完了で、本番反映の条件として残す。

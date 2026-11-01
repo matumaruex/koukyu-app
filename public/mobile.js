@@ -351,7 +351,7 @@ else if(run.error)state.error=typeof run.error==='string'?run.error:run.error.me
 else if(r?.status==='INFEASIBLE'){const why=diagnosisIssues(r.diagnosis,payload.map)||solverIssues(r.conflictGroups||[],payload.map);state.failure={title:'この条件では表を作れません',notes:['希望・固定・職員の設定が同時には成り立ちません。',why.lead],items:why.items,signature:payload.signature};}
 else if(r?.status==='UNKNOWN'){s.retryLong=payload.signature;state.error='時間内に表の成立を確認できませんでした。不可能と判定したわけではありません。';}
 else state.error=(r?.errors||[]).map(e=>typeof e==='string'?e:'入力を確認してください').join('／')||'今回の条件で表を作成できませんでした。';
-}catch(e){if(current())state.error=e.message;}finally{if(state.generation===generation){state.progressStage=null;busy(false);if(state.backgroundJob&&!state.workStorageErrors?.normal){BackgroundJob.clear(state.backgroundJob);state.backgroundJob=null;}showCreationSection(state.error?'notice':hasTable()?'roster-result':'creation-panel');}}
+}catch(e){if(current())state.error=e.message;}finally{if(state.generation===generation){state.progressStage=null;if(state.backgroundJob&&!state.workStorageErrors?.normal){BackgroundJob.clear(state.backgroundJob);state.backgroundJob=null;}busy(false);showCreationSection(state.error?'notice':hasTable()?'roster-result':'creation-panel');}}
 }
 
 // 条件と表の両方を照合し、変更中に戻った古い確認結果は採用しない。

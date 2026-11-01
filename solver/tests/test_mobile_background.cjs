@@ -12,6 +12,7 @@ const answer=mode=>({best:{status:'FEASIBLE',assignments:{s0:{'1':'off'}},second
  const reopened=harness(null,{current:raw,stored,backgroundActual:true,response:async p=>{assert.equal(p.action,'status');return {status:'completed',result:answer(mode)};}});
  await tick();await tick();
  assert.equal(reopened.get('state.mode'),mode);assert.equal(reopened.get('hasTable()'),true);assert.equal(reopened.get('schedule().assignments.local[1]'),'off');assert(!reopened.values.has('koukyu_background_job_v1'));
+ assert(!reopened.nodes.view.text.includes('以前の作成結果は条件や表が変わったため'),'受け取り済みの作成を、未受け取りとして表示しない');
  // 別の端末画面で条件が変わっていたら、自動的に結果を採用しない。
  const changed=JSON.parse(stored.koukyu_v4_data);changed.schedules['2026-10']??={requests:{},assignments:{}};changed.schedules['2026-10'].requests.local=[2];
  const mismatch=harness(null,{current:changed,stored:{...stored,koukyu_v4_data:JSON.stringify(changed)},backgroundActual:true,response:async()=>{throw Error('must not fetch');}});
