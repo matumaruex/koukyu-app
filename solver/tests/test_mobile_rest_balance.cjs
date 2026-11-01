@@ -11,7 +11,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
 
  // 送信：連休の設定をした人がいるときだけ。署名の先頭は据え置き。おまかせには送らない。
  const h=harness(null,{current:raw});
- assert.equal(h.get('inputData().p.restCountBalance'),true);assert(h.get('inputData().signature').startsWith('rules-3.56:'));
+ assert.equal(h.get('inputData().p.restCountBalance'),true);assert(h.get('inputData().signature').startsWith('rules-3.58:'));
  const none=harness(null,{current:{...raw,staff:raw.staff.map(({minConsecutiveRest,...s})=>s)}});
  assert.equal(none.eval('inputData().p.restCountBalance'),undefined);
 
@@ -23,7 +23,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
 
  // 旧方式の作業表は残し、古い公平性の例外を現行の違反として見せない。
  const legacy=harness(null,{current:raw});legacy.eval("schedule().assignments={a:{'4':'off','5':'off','8':'off','9':'off'},b:{'3':'off','4':'off'},c:{'1':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',optimizationPolicy:'quality-first-11',ruleExceptions:[{code:'rest_balance',counts:{s0:1,s1:0},high:2,low:0,count:1}]};render()");
- const legacyWork=JSON.parse(legacy.values.get('koukyu_v4_work'));legacyWork.schedules['2026-10'].workSignature=legacyWork.schedules['2026-10'].workSignature.replace('rules-3.56:','rules-3.49:');
+ const legacyWork=JSON.parse(legacy.values.get('koukyu_v4_work'));legacyWork.schedules['2026-10'].workSignature=legacyWork.schedules['2026-10'].workSignature.replace('rules-3.58:','rules-3.49:');
  const legacyReload=harness(null,{current:raw,stored:{koukyu_v4_work:JSON.stringify(legacyWork)}});
  assert(legacyReload.get('hasTable()'));assert(legacyReload.get('workChanged()'));assert(legacyReload.nodes.view.text.includes('差1回'));
  assert(!legacyReload.nodes.view.text.includes('連休の回数の差が2回'));
@@ -33,12 +33,12 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  legacyReload.eval("const record=RosterStorage.capture(data,key(),'旧表','saved-rest-test');record.schedule.meta={status:'FEASIBLE',optimizationPolicy:'quality-first-11',ruleExceptions:[{code:'rest_balance',high:2,low:0,count:1}]};data.savedTables.push(record);state.archiveId=record.id;state.tab='saved';render()");
  assert(legacyReload.nodes.view.text.includes('差1回'));assert(!legacyReload.nodes.view.text.includes('連休の回数の差が2回'));
  assert.equal(legacyReload.get('data.savedTables[0].schedule.meta.ruleExceptions.length'),1);
- legacyReload.eval("data.savedTables[0].schedule.meta={status:'VALID',signature:'rules-3.56:edited',ruleExceptions:[{code:'rest_balance',counts:{s0:3,s1:1},high:3,low:1,count:1}]};render()");
+ legacyReload.eval("data.savedTables[0].schedule.meta={status:'VALID',signature:'rules-3.58:edited',ruleExceptions:[{code:'rest_balance',counts:{s0:3,s1:1},high:3,low:1,count:1}]};render()");
  assert(legacyReload.nodes.view.text.includes('連休の回数の差が2回'));
 
  // 作成結果の例外：名前と回数、最少を確認済み。
  const err={code:'rest_balance',counts:{s0:3,s1:1},high:3,low:1,count:1};
- const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'8':'off','9':'off','14':'off','15':'off','20':'off','21':'off'},s1:{'3':'off','4':'off'},s2:{'1':'off'}},seconds:3,ruleExceptions:[err],exceptionCount:0,restBalanceExceptions:1,restBalance:{counts:{s0:3,s1:1},high:3,low:1,excess:1,proven:true},validationErrors:[err],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-13'})});
+ const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'8':'off','9':'off','14':'off','15':'off','20':'off','21':'off'},s1:{'3':'off','4':'off'},s2:{'1':'off'}},seconds:3,ruleExceptions:[err],exceptionCount:0,restBalanceExceptions:1,restBalance:{counts:{s0:3,s1:1},high:3,low:1,excess:1,proven:true},validationErrors:[err],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-14'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.restCountBalance,true);
  const text=made.nodes.view.text;
@@ -58,7 +58,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  // 3.43までに作った作業表（一時保存に作成時の条件がないもの）も、当時の条件を記録して保持する。
  const old=harness(null,{current:raw});old.eval("setTab('schedule');schedule().assignments={a:{'1':'early'},b:{'1':'off'},c:{'1':'off'}};schedule().workSignature=inputData().signature;render()");
  const work=JSON.parse(old.values.get('koukyu_v4_work')),w=work.schedules['2026-10'];
- w.workSignature=w.workSignature.replace(',"restCountBalance":true','');delete w.workSnapshot;
+ w.workSignature=w.workSignature.replace('rules-3.58:','rules-3.44:').replace(',"nightDistribution":true','').replace(',"restCountBalance":true','');delete w.workSnapshot;
  const reopened=harness(null,{current:raw,stored:{koukyu_v4_work:JSON.stringify(work)}});reopened.eval("setTab('schedule')");
  assert(reopened.get('hasTable()'));assert(reopened.get('workChanged()'));assert(reopened.get('Boolean(schedule().workSnapshot)'));
  assert(reopened.nodes.view.text.includes('最新の条件とは異なる条件で作成した表です。'));

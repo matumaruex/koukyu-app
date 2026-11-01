@@ -36,6 +36,10 @@ def normalize(raw):
     if type(p['maxExtraOffSpread']) is not int or not 0 <= p['maxExtraOffSpread'] <= p['days']:
         raise ValueError('maxExtraOffSpread must be an integer from 0 to period length.')
     p['start'] = date(year, month, 16)
+    # 通常画面が自動で指定する。旧API・旧表の評価は、項目がなければ従来どおり。
+    p.setdefault('nightDistribution', False)
+    if type(p['nightDistribution']) is not bool:
+        raise ValueError('nightDistribution must be boolean.')
     # A残は1回の出勤サイクルに1回まで（3.40、通常版の画面が送る。人数不足を減らすためだけに2回目を許す）。
     p.setdefault('overtimeCycleLimit', False)
     if type(p['overtimeCycleLimit']) is not bool:

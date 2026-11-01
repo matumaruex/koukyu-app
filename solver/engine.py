@@ -11,6 +11,7 @@ from .input_data import normalize, SHIFTS, overtime_profile
 from .validator import validate, is_rule_exception, exception_count, rest_exception_count, SHORTFALL_CODES
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales
 from .night_preferences import report as preference_report
+from .night_distribution import build as distribution_build, report as distribution_report, POLICY as DISTRIBUTION_POLICY
 from .quality_search import search as quality_search
 from .rest_blocks import report as rest_report, user_fixed_off, balance_report as rest_balance_report
 from .overtime_cycles import eligible as cycle_eligible, carry_in, report as overtime_cycle_report
@@ -119,6 +120,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
 
     # 公平性の数え方が異なる旧版の続きからは、段階と最少証明を引き継がない。
     if p['restCountBalance'] and resume is not None and resume.get('restBalancePolicy') != 'actual-rest-1':
+        resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
+    if resume is not None and resume.get('nightDistributionPolicy') != (DISTRIBUTION_POLICY if p['nightDistribution'] else None):
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
 
     def rule_exception(e):
@@ -414,6 +417,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 night_totals.append(total)
                 night_total_by_sid[sid] = total
 
+    # 配置の仕上げだけで評価する。集中が残っても必須違反にはしない。
+    if not relax_wishes and (optimize or allow_staffing_shortfall):
+        quality.append(distribution_build(model, p, x, night_total_by_sid))
     night_spread = 0
     if night_totals:
         high, low = model.new_int_var(0, n, 'night_high'), model.new_int_var(0, n, 'night_low')
@@ -803,6 +809,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             quality_result['info']['resume']['preservedCommonExtraDaysOff'] = preserved_extra
             if p['restCountBalance']:
                 quality_result['info']['resume']['restBalancePolicy'] = 'actual-rest-1'
+            if p['nightDistribution']:
+                quality_result['info']['resume']['nightDistributionPolicy'] = DISTRIBUTION_POLICY
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:
@@ -998,6 +1006,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': excluded_off_staff, 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0, 'provenOptimal': optimize and status == cp_model.OPTIMAL}
     result['optimizationPolicy'] = PREFERENCE_POLICY if preference_active(p) else POLICY
     result['allocation'] = metrics(p, assignments)
+    if p['nightDistribution']:
+        result['nightDistribution'] = distribution_report(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None
                                                        else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
     allocation = result['allocation']

@@ -78,7 +78,7 @@ def dispatch(payload, *, _deadline=None):
 def check_resume(value, quality_first):
     if value is None:
         return None
-    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy'}:
+    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy'}:
         raise ValueError('resume の形式を確認してください。')
     if value.get('stage') not in STAGES:
         raise ValueError('resume.stage を確認してください。')
@@ -100,8 +100,12 @@ def check_resume(value, quality_first):
     policy = value.get('restBalancePolicy')
     if policy is not None and (not isinstance(policy, str) or len(policy) > 40):
         raise ValueError('resume.restBalancePolicy を確認してください。')
+    distribution_policy = value.get('nightDistributionPolicy')
+    if distribution_policy is not None and (not isinstance(distribution_policy, str) or len(distribution_policy) > 40):
+        raise ValueError('resume.nightDistributionPolicy を確認してください。')
     return {'stage': value['stage'], 'idle': float(idle), 'proven': dict(proven),
             'proofValues': {name: list(values) for name, values in proof_values.items()},
             **({'restBalancePolicy': policy} if policy is not None else {}),
+            **({'nightDistributionPolicy': distribution_policy} if distribution_policy is not None else {}),
             **({'preservedCommonExtraDaysOff': extra} if 'preservedCommonExtraDaysOff' in value else {})}
 

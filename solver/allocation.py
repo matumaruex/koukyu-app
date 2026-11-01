@@ -1,8 +1,9 @@
 """月全体の残業・配置を評価する。完成表の独立検査とは別の計算。"""
 from .input_data import overtime_profile
 from .overtime_preference import offsets, score_bounds, ideal_balance as ideal_balance_fn, active
+from .night_distribution import bound as distribution_bound, report as distribution_report, WEIGHT as DISTRIBUTION_WEIGHT
 
-POLICY = 'quality-first-13'
+POLICY = 'quality-first-14'
 CHECKPOINTS = (420, 600, 1065)
 
 
@@ -44,8 +45,8 @@ def overtime_balance_bound(p):
 
 def minor_unit(p):
     n, k = p['days'], len(p['staff'])
-    # 夜勤の差1回を、A/B比率だけの改善で逆転しない。
-    return 36 * k + n * (100 * k + 1) + 100 * k + 1
+    # 追加公休の差1日を、夜勤の分散やA/B比率など細部の改善で逆転しない。
+    return 36 * k + n * (100 * k + 1) + 100 * k + 1 + distribution_bound(p)
 
 
 def ab_ratio_report(p, assignments):
@@ -132,11 +133,13 @@ def metrics(p, assignments):
     night_spread = max(nights) - min(nights) if nights else 0
     balance = ab['deviationTotal'] + (100 * len(p['staff']) + 1) * night_spread
     minor = spread * minor_unit(p)
-    minor += sum(v * v for v in ot.values()) + balance
+    distribution = distribution_report(p, assignments)
+    minor += sum(v * v for v in ot.values()) + balance + DISTRIBUTION_WEIGHT * distribution['penalty']
     return {'overtimeTotal': sum(ot.values()), 'overtimeByStaff': ot,
             'overtimeSpread': ot_range, 'overtimeBalance': ot_balance,
             'overtimeIdealBalance': ideal_balance, 'overtimeProportional': proportional,
             **({'overtimePreferred': True} if preferred else {}),
+            **({'nightDistributionPenalty': distribution['penalty']} if p.get('nightDistribution') else {}),
             'surplusTotal': surplus,
             'commonExtraDaysOff': common, 'extraOffSpread': spread,
             'nightSpread': night_spread, 'abRatioBalance': ab, 'minor': minor}
