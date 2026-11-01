@@ -14,7 +14,7 @@ const current={schemaVersion:4,savedTables:[],staff,schedules:{'2026-10':{assign
  form.onsubmit({preventDefault(){}});assert.equal(h.get('data.staff[0].maxConsecutive'),0);
  h.eval("editStaff(data.staff[0])");const f=body.all('form')[0],c=f.all('label').find(e=>e.text.startsWith('連勤上限')).all('input')[0];c.value='4';f.onsubmit({preventDefault(){}});assert.equal(h.get('inputData().p.staff.find(s=>s.nightShiftType===\"all\").maxConsecutive'),4);
  // 旧版の未指定は2/5日で確定し、新しく作成した表は3日で残す。
- for(const mode of ['normal','auto']){
+ for(const mode of ['normal']){
   const old=harness(null,{current});old.eval(mode==='auto'?"setTab('auto')":"setTab('schedule')");
   old.eval("schedule().assignments={n:{'1':'early'},d:{'1':'off'},p:{'1':'part'}};schedule().workSignature=inputData().signature;"+(mode==='auto'?"schedule().selectedQuota={n:10,d:10,p:11};":"")+"render()");
   const key=mode==='normal'?'koukyu_v4_work':'koukyu_v4_auto_work';

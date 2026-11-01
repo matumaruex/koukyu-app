@@ -20,7 +20,7 @@ function response(p){return {status:'FEASIBLE',seconds:.1,boundaryComplete:true,
  allocation:{overtimeTotal:0},overtimeFairness:{minimumSpreadProven:true},
  autoDone:true,autoReason:'quality_preserved',search:{done:true}};}
 (async()=>{
- for(const mode of ['normal','auto']){
+ for(const mode of ['normal']){
   const h=harness(null,{current:raw});table(h,mode);
   const original=h.get('schedule().workSnapshot'),sig=h.get('inputData().signature');
   assert(original);assert.equal(h.get('workChanged()'),false);
@@ -81,7 +81,7 @@ function response(p){return {status:'FEASIBLE',seconds:.1,boundaryComplete:true,
  undo.eval("state.month=9;render();schedule().assignments=clone(rows);schedule().workSignature=inputData().signature;render();state.month=10;data.staff[0].monthlyDaysOff=10;save(true);render()");
  const both=reopen(undo);both.eval('state.month=9;render()');assert(both.get('workChanged()'));assert.deepEqual(both.get('schedule().assignments'),rows);
  // 判定方式の更新後も旧署名の表を保持し、旧証明を新しい計算へ流用しない。
- for(const mode of ['normal','auto'])for(const snapshot of [true,false]){
+ for(const mode of ['normal'])for(const snapshot of [true,false]){
   const old=harness(null,{current:raw});table(old,mode);
   const storage=mode==='normal'?'koukyu_v4_work':'koukyu_v4_auto_work',work=JSON.parse(old.values.get(storage)),w=work.schedules['2026-10'];
   w.workSignature=w.workSignature.replace('rules-3.50:','rules-3.35:').replace('auto-rules-6:','auto-rules-4:');

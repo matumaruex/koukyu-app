@@ -17,7 +17,7 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        self.reply(200, {'version': '3.52', 'ready': True})
+        self.reply(200, {'version': '3.53', 'ready': True})
 
     def do_POST(self):
         origin = self.headers.get('Origin')

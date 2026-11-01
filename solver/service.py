@@ -19,11 +19,8 @@ def dispatch(payload, *, _deadline=None):
         p = normalize(raw)
         if len(p['staff']) > 40:
             raise ValueError('40人以内で指定してください。')
-        if payload.get('mode') == 'auto' and payload.get('action') != 'validate':
-            from .auto_schedule import dispatch_auto
-            return dispatch_auto(payload)
-        if payload.get('mode') not in (None, 'normal', 'auto'):
-            raise ValueError('作成方式を確認してください。')
+        if payload.get('mode') not in (None, 'normal'):
+            raise ValueError('公休おまかせは終了しました。通常の公休表をご利用ください。')
         if payload.get('action') == 'validate':
             errors = validate(raw, payload.get('assignments'))
             result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete']}

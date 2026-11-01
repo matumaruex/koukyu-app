@@ -7,7 +7,7 @@ function table(h,mode){
  h.eval("schedule().assignments={a:{'1':'early'}};schedule().workSignature=inputData().signature;schedule().meta={status:'OPTIMAL',optimizationPolicy:OPTIMIZATION_POLICY,tableSignature:JSON.stringify(schedule().assignments)};render()");
 }
 const reopen=h=>harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work'),koukyu_v4_auto_work:h.values.get('koukyu_v4_auto_work')}});
-for(const mode of ['normal','auto']){
+for(const mode of ['normal']){
  const h=harness(null,{current:raw});table(h,mode);
  const signature=h.get('inputData().signature'),snapshot=h.get('schedule().workSnapshot');
  h.ctx.setStaffIncluded('a',false);h.ctx.setStaffIncluded('b',true);
@@ -43,7 +43,7 @@ for(const mode of ['normal','auto']){
 }
 (async()=>{
  // 計算中に同じ設定の別人へ入力が変わった場合も、旧応答を採用しない。
- for(const mode of ['normal','auto']){
+ for(const mode of ['normal']){
   let finish;const h=harness(null,{current:raw,response:()=>new Promise(resolve=>finish=resolve)});
   table(h,mode);const original=h.get('schedule().assignments'),task=h.ctx.generate();
   h.eval("data.schedules['2026-10'].excludedStaff=['a']");

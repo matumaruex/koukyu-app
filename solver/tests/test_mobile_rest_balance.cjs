@@ -12,7 +12,6 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  // 送信：連休の設定をした人がいるときだけ。署名の先頭は据え置き。おまかせには送らない。
  const h=harness(null,{current:raw});
  assert.equal(h.get('inputData().p.restCountBalance'),true);assert(h.get('inputData().signature').startsWith('rules-3.50:'));
- h.eval("setTab('auto')");assert.equal(h.eval('inputData().p.restCountBalance'),undefined);
  const none=harness(null,{current:{...raw,staff:raw.staff.map(({minConsecutiveRest,...s})=>s)}});
  assert.equal(none.eval('inputData().p.restCountBalance'),undefined);
 

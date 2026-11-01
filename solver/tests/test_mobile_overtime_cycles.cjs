@@ -19,7 +19,6 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  // 通常版は常に送る。おまかせには送らない。
  const h=harness(null,{current:raw});
  assert.equal(h.get('inputData().p.overtimeCycleLimit'),true);assert(h.get('inputData().signature').startsWith('rules-3.50:'));
- h.eval("setTab('auto')");assert.equal(h.eval('inputData().p.overtimeCycleLimit'),undefined);
 
  // 作成結果：2回目のサイクルと理由。
  const rows={s0:{'1':'overtime','2':'early','3':'overtime','4':'off'},s1:{'1':'night','2':'nightOff','3':'off'}};

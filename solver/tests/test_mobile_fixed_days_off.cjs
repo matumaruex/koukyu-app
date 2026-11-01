@@ -5,7 +5,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
 const h=harness(null,{current:raw});
 assert.equal(h.get('data.staff[0].fixedDaysOff'),false);
 assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'fixedDaysOff'));
-h.eval("setTab('auto')");const autoBefore=h.get('inputData().signature');h.eval("setTab('schedule');schedule().assignments={a:{'1':'off'}};schedule().workSignature=inputData().signature;render()");
+h.eval("setTab('schedule');schedule().assignments={a:{'1':'off'}};schedule().workSignature=inputData().signature;render()");
 const before=h.get('inputData().signature');
 h.eval('editStaff(data.staff[0])');
 const mode=()=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>o.value==='fixed'));
@@ -17,9 +17,6 @@ assert.equal(h.get('hasTable()'),true);assert.equal(h.get('workChanged()'),true)
 assert.equal(h.get('schedule().workSnapshot.staff[0].fixedDaysOff'),false);
 assert(h.nodes.view.text.includes('最新の条件とは異なる条件で作成した表です。'));
 assert.equal(JSON.parse(h.values.get('koukyu_v4_data')).staff[0].fixedDaysOff,true);
-h.eval("setTab('auto')");assert.equal(h.get('inputData().signature'),autoBefore);
-assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'fixedDaysOff'));
-assert(!Object.hasOwn(h.get('inputData().sourceInput.staff[0]'),'fixedDaysOff'));
 h.eval("setTab('schedule');editStaff(data.staff[0])");assert.equal(mode().value,'fixed');
 const reopened=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work')}});
 assert.equal(reopened.get('data.staff[0].fixedDaysOff'),true);assert.equal(reopened.get('hasTable()'),true);

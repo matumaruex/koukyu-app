@@ -78,16 +78,6 @@ class FixedDaysOffTests(unittest.TestCase):
         self.assertEqual(list(result['assignments']['s0'].values()).count('off'), 25)
         self.assertEqual(result['allocation']['overtimeTotal'], 13)
 
-    def test_auto_entry_ignores_normal_fixed_setting(self):
-        from solver.tests.test_auto_schedule import reduction_fixture
-        raw, rows, policy = reduction_fixture()
-        raw['staff'][0]['fixedDaysOff'] = True
-        # s0は通常なら0日固定と全日休みの固定マスが矛盾。おまかせは従来どおり解く。
-        result = dispatch(dict(mode='auto', autoPhase='base', input=raw,
-                               holidayPolicy=policy, seconds=3))
-        self.assertIn('assignments', result, result)
-        self.assertEqual(list(result['assignments']['s0'].values()).count('off'), 31)
-        self.assertTrue(raw['staff'][0]['fixedDaysOff'])
 
     def test_validator_rejects_extra_or_missing_holidays_as_hard_error(self):
         for difference in (-1, 1):

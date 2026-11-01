@@ -7,8 +7,6 @@ from solver.allocation import metrics, weights, overtime_scales
 from solver.overtime_preference import minimum_balance, offsets
 from solver.input_data import normalize
 from solver.engine import solve
-from solver.auto_schedule import inspect, HolidayPlan
-from solver.holiday_policy import checked_policy
 from solver.validator import validate
 from solver.tests.test_overtime_fairness import overtime_fixture
 from solver.tests.test_proportional_overtime import leave_fixture
@@ -149,25 +147,6 @@ class PreferenceTests(unittest.TestCase):
         raw['staff'][1]['overtimePreference'] = 2
         self.assertEqual(validate(raw, before), [])
 
-    def test_auto_calculation_and_inspection_ignore_preferences(self):
-        raw, before = overtime_fixture()
-        baseline = inspect(raw, before)
-        raw['staff'][0]['overtimePreference'] = 2
-        self.assertEqual(inspect(raw, before), baseline)
-        policy = checked_policy(raw, {st['id']: {'min': 0, 'target': 0, 'max': 0, 'fixed': False} for st in raw['staff']})
-        plan = HolidayPlan(raw, policy, 100000000000, baseline)
-        self.assertNotIn('overtimePreference', plan.prepare()['staff'][0])
-        # 境界で除去し、通常エンジンを呼ぶ場合も同じ入力になる。
-        received = []
-        def capture(payload, **kw):
-            received.append(payload['input'])
-            return {'status': 'UNKNOWN'}
-        with patch('solver.service.dispatch', capture):
-            from solver.auto_schedule import dispatch_auto
-            dispatch_auto({'mode': 'auto', 'input': raw, 'seconds': 1, 'holidayPolicy': policy})
-        self.assertTrue(received)
-        self.assertNotIn('overtimePreference', received[0]['staff'][0])
-        self.assertEqual(raw['staff'][0]['overtimePreference'], 2)
 
     def test_weights_have_room_with_maximum_preference_and_proportional_scales(self):
         for leave in (0, 12, 18, 22, 30):

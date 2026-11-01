@@ -7,9 +7,8 @@ from solver.input_data import normalize
 from solver.rest_blocks import ranges
 from solver.service import dispatch
 from solver.validator import validate, is_rule_exception
-from solver.auto_schedule import inspect
 from solver.tests.test_overtime_fairness import overtime_fixture
-from solver.tests.test_auto_schedule import policy_for, reduction_fixture
+from solver.tests.rest_fixtures import reduction_fixture
 
 
 def fixed_day_fixture(two=False):
@@ -109,8 +108,6 @@ class RestBlockTests(unittest.TestCase):
         self.assertEqual((error['actual'], error['required']), (1, 2))
         self.assertFalse(is_rule_exception(normalize(raw), error))
         self.assertEqual(result['consecutiveRest']['s0']['actual'], 1)
-        with self.assertRaises(ValueError):
-            inspect(raw, rows)
 
     def test_diagnosis_keeps_wishes_and_explains_rest_shortfall_without_adopting_table(self):
         raw, _ = fixed_day_fixture()
@@ -127,38 +124,16 @@ class RestBlockTests(unittest.TestCase):
         self.assertEqual(diagnostic['restShortfalls'], [{'staff': 's0', 'required': 2, 'actual': 1, 'missing': 1}])
         self.assertNotIn('assignments', diagnostic)
 
-    def test_auto_base_adjust_and_finish_keep_required_blocks(self):
-        raw, rows = fixed_day_fixture(two=True)
-        policy = policy_for(raw)
-        base = dict(mode='auto', input=raw, holidayPolicy=policy, seconds=5)
-        result = dispatch(dict(base, autoPhase='base'))
-        self.assertIn('assignments', result)
-        adjusted = dispatch(dict(base, autoPhase='adjust', referenceAssignments=result['assignments']))
-        self.assertIn('assignments', adjusted)
-        finished = dispatch(dict(base, autoPhase='finish', initialAssignments=adjusted['assignments'],
-                                 selectedQuota=adjusted['selectedQuota']))
-        self.assertIn('assignments', finished)
-        for item in (result, adjusted, finished):
-            self.assertEqual(item['consecutiveRest']['s0']['actual'], 2)
-            self.assertEqual(item['assignments']['s0'], rows['s0'])
 
-    def test_auto_cannot_relax_rest_even_when_holiday_count_can_be_reduced(self):
-        raw, _, policy = reduction_fixture(locked=True)
-        raw['staff'][-1]['minConsecutiveRest'] = 2
-        result = dispatch(dict(mode='auto', autoPhase='adjust', input=raw, holidayPolicy=policy, seconds=5))
-        self.assertEqual(result['status'], 'INFEASIBLE')
-        self.assertNotIn('assignments', result)
 
     def test_part_time_staff_also_get_two_blocks_and_keep_weekly_limits(self):
         raw, rows, _ = reduction_fixture()
         raw['staff'][-1].update(monthlyDaysOff=25, minConsecutiveRest=2)
         rows['p'] = {str(d): 'part' if d <= 5 or d == 8 else 'off' for d in range(1, 32)}
         raw['locked']['p'] = deepcopy(rows['p'])
-        for mode in ('normal', 'auto'):
+        for mode in ('normal',):
             payload = dict(input=raw, seconds=5, qualityFirst=True, allowStaffingShortfall=True,
                            allowRuleExceptions=True)
-            if mode == 'auto':
-                payload.update(mode='auto', autoPhase='base', holidayPolicy=policy_for(raw))
             result = dispatch(payload)
             self.assertIn('assignments', result)
             self.assertEqual(validate(raw, result['assignments']), [])

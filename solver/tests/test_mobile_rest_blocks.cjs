@@ -13,7 +13,6 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  const h=harness(null,{current:raw,response:async()=>({status:'VALID',boundaryComplete:true})});
  assert(h.get('inputData().signature').startsWith('rules-3.50:'));
  assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'minConsecutiveRest'));
- h.eval("setTab('auto')");assert(h.get('inputData().signature').startsWith('auto-rules-6:'));
  h.eval("setTab('staff');editStaff(data.staff[0])");
  const select=h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>o.text==='月2回以上'));
  assert(select);assert.equal(select.value,'0');select.value='2';
@@ -21,8 +20,6 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  assert.equal(h.get('data.staff[0].minConsecutiveRest'),2);
  h.eval("setTab('schedule')");assert(h.get('inputData().signature').startsWith('rules-3.50:'));
  assert.equal(h.get('inputData().p.staff[0].minConsecutiveRest'),2);
- h.eval("setTab('auto')");assert(h.get('inputData().signature').startsWith('auto-rules-6:'));
- assert.equal(h.get('inputData().sourceInput.staff[0].minConsecutiveRest'),2);
  assert.equal(h.get('inputData().p.staff[0].minConsecutiveRest'),2);
  const v=harness(null,{current:required,response:async()=>({status:'VALID',boundaryComplete:true})});
  v.ctx.testRows=rows;v.eval("schedule().assignments=clone(testRows);schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
@@ -34,19 +31,13 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  const reload=harness(null,{current:backup});assert.equal(reload.get('state.loadError'),false);
  assert.equal(reload.get('data.staff[0].minConsecutiveRest'),2);
  assert.equal(reload.get('data.savedTables.at(-1).staff[0].minConsecutiveRest'),2);
- v.eval("setTab('auto');schedule().assignments=clone(testRows);schedule().selectedQuota={a:9,p:11};schedule().workSignature=inputData().signature;saveTableDialog()");await v.click('保存する');
- const autoSaved=v.get('data.savedTables.at(-1)');assert.equal(autoSaved.staff[0].minConsecutiveRest,2);
  // 共有設定を変えると両方式が古い条件になる。保存表と手入力の前期は残る。
  const history=v.get('history()');v.eval("data.staff[0].minConsecutiveRest=1;setTab('schedule')");assert.equal(v.get('hasTable()'),true);assert(v.get('workChanged()'));
- v.eval("setTab('auto')");assert.equal(v.get('hasTable()'),true);assert(v.get('workChanged()'));
  assert.deepEqual(v.get('data.savedTables[0]'),saved);assert.deepEqual(v.get('history()'),history);
  v.eval("setTab('saved');state.archiveId=data.savedTables[0].id;render()");assert(v.nodes.view.text.includes('連休2回／必要2回'));
  v.eval('copySavedTableDialog(data.savedTables[0])');await v.click('編集用のコピーを作る');
  assert.equal(v.get('data.staff[0].minConsecutiveRest'),2);assert.equal(v.calls.at(-1).input.staff[0].minConsecutiveRest,2);
  assert.deepEqual(v.get('data.savedTables[0]'),saved);assert.deepEqual(v.get('history()'),history);
- v.eval('copySavedTableDialog(data.savedTables.at(-1))');await v.click('編集用のコピーを作る');
- assert.equal(v.get('state.mode'),'auto');assert.equal(v.get('data.staff[0].minConsecutiveRest'),2);
- assert.deepEqual(v.get('data.savedTables.at(-1)'),autoSaved);
  // 手直し後は古い集計を使わず、最新の勤務から不足を表示。必須違反をDRAFTにしない。
  const edit=harness(null,{current:required,response:async()=>({status:'INVALID',boundaryComplete:true,validationErrors:[{code:'rest_blocks',staff:'s0',actual:1,required:2}],consecutiveRest:{s0:{actual:1,required:2,ranges:[{start:1,end:4}]}}})});
  edit.ctx.testRows=rows;edit.eval("schedule().assignments=clone(testRows);schedule().assignments.a['8']='early';schedule().workSignature=inputData().signature");
@@ -54,7 +45,7 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  assert.equal(edit.get('schedule().meta.consecutiveRest.s0.actual'),1);
  assert(edit.nodes.view.text.includes('職員A：連休1回／必要2回'));assert(edit.nodes.view.text.includes('1回不足'));
  assert(edit.eval("errorsText([{code:'rest_blocks',staff:'s0',actual:1,required:2}],inputData().map)").includes('職員Aさん：連休1回／必要2回'));
- for(const mode of ['normal','auto']){
+ for(const mode of ['normal']){
   const fail=harness(null,{current:required,response:async p=>({status:'INFEASIBLE',seconds:.1,autoDone:true,...(p.autoPhase==='adjust'?{}:{diagnosis:diagnostic})})});
   if(mode==='auto')fail.eval("setTab('auto')");await fail.ctx.generate();
   assert.equal(fail.get('hasTable()'),false);assert(fail.nodes.view.text.includes('この条件では表を作れません'));

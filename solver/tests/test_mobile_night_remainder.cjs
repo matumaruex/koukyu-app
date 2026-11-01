@@ -22,10 +22,6 @@ const box=(h,text)=>h.nodes['dialog-body'].all('label').find(l=>l.text.includes(
  h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});assert.equal(h.get('data.staff[0].nightRemainderPriority'),false);
  assert.throws(()=>h.ctx.checkBackup({staff:[{...raw.staff[0],nightRemainderPriority:'yes'}],schedules:{}}));
 
- // おまかせには送らない。
- const auto=harness(null,{current:{...raw,staff:[{...raw.staff[0],nightRemainderPriority:true},raw.staff[1],raw.staff[2]]}});
- auto.eval("setTab('auto')");assert.equal(auto.eval('inputData().p.staff[0].nightRemainderPriority'),undefined);
-
  // 作成結果：夜勤の集計に優先の人の回数、例外の一覧に目安を超えた人。
  const prio={...raw,staff:[{...raw.staff[0],nightRemainderPriority:true},raw.staff[1],raw.staff[2]]};
  const err={code:'night_remainder',staff:'s1',actual:16,fair:15,count:1,priority:false,exceptions:1};

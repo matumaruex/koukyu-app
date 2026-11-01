@@ -23,16 +23,17 @@ const RosterStorage=(()=>{
     const out=copy(data);out.schemaVersion=4;out.savedTables??=[];
     for(const schedule of Object.values(out.schedules))clearResult(schedule);
     delete out.autoSchedules;
+    delete out.autoHolidayPolicy;
     return out;
   }
   function prepare(raw,validate){
     const data=validate(copy(raw));
-    const policy=HolidayPolicy.check(raw.autoHolidayPolicy,data.staff);if(policy)data.autoHolidayPolicy=policy;
     if(raw.schemaVersion!==undefined&&raw.schemaVersion!==4)throw Error('このバックアップの形式には対応していません。');
     if(raw.schemaVersion===4){
       if(!Array.isArray(raw.savedTables))throw Error('保存した表の一覧を確認してください。');
       const ids=new Set();
-      data.savedTables=raw.savedTables.map(record=>{
+      // 終了したおまかせの保存表は引き継がず、通常の保存表だけを残す。
+      data.savedTables=raw.savedTables.filter(record=>record?.creationMode!=='auto').map(record=>{
         if(!record||typeof record.id!=='string'||!record.id||ids.has(record.id)||typeof record.name!=='string'||!record.name.trim()||record.name.length>80||typeof record.createdAt!=='string'||Number.isNaN(Date.parse(record.createdAt)))throw Error('保存した表の情報を確認してください。');
         ids.add(record.id);periodParts(record.period);
         if(record.creationMode!==undefined&&!['normal','auto'].includes(record.creationMode))throw Error('保存した表の作成方式を確認してください。');

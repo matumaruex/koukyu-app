@@ -5,7 +5,6 @@ from solver.service import dispatch
 from solver.input_data import normalize
 from solver.night_remainder import plan, report, max_nights
 from solver.validator import validate
-from solver.overtime_preference import without_preferences
 from solver.tests.test_night_fairness import six_staff
 
 SCREEN = {'qualityFirst': True, 'allowStaffingShortfall': True, 'allowRuleExceptions': True, 'seconds': 20}
@@ -102,8 +101,7 @@ class CalculationTests(unittest.TestCase):
         self.assertNotIn('assignments', r)
         self.assertTrue(r['search']['continueRecommended'])
 
-    def test_auto_mode_and_unset_are_unchanged(self):
-        self.assertNotIn('nightRemainderPriority', without_preferences(priority('s3'))['staff'][3])
+    def test_unset_priority_is_unchanged(self):
         r = dispatch(dict(SCREEN, input=six_staff(10)))
         self.assertNotIn('nightRemainder', r)
 

@@ -170,15 +170,6 @@ class RequestedNightRestTests(unittest.TestCase):
             checked=dispatch({'input':p,'action':'validate','assignments':r['assignments']})
             self.assertEqual(checked['status'],'VALID')
             self.assertEqual(checked['nightRestPreferences']['metCount'],2)
-            from solver.auto_schedule import inspect
-            self.assertEqual(inspect(p,r['assignments'])['nightRestPreferences']['metCount'],2)
-            fixed=deepcopy(p);fixed['locked']=deepcopy(r['assignments'])
-            quota={st['id']:dict(min=9,target=9,max=9,fixed=True) for st in fixed['staff']}
-            auto=dispatch({'mode':'auto','autoPhase':'adjust','input':fixed,'seconds':5,
-                           'holidayPolicy':quota,'referenceAssignments':r['assignments']})
-            self.assertIn(auto['status'],('FEASIBLE','OPTIMAL'),auto)
-            self.assertEqual(auto['nightRestPreferences']['metCount'],2)
-            self.assertEqual(auto['optimizationPolicy'],'auto-holidays-4')
 
     def test_spaced_pattern_supports_all_three_period_boundaries(self):
         for day,hist,locks in [

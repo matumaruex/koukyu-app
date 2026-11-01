@@ -17,7 +17,6 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  const originalSignature=h.get('inputData().signature'),history=h.get('history()');
  assert(originalSignature.startsWith('rules-3.50:'));
  assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'overtimePreference'));
- h.eval("setTab('auto')");const autoSignature=h.get('inputData().signature');
  h.eval("setTab('staff');editStaff(data.staff[0])");
  const selector=h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>o.text==='多め（＋2回目安）'));
  assert(selector);assert.equal(selector.value,'0');assert(!selector.disabled);selector.value='2';
@@ -25,12 +24,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert.equal(h.get('data.staff[0].overtimePreference'),2);
  h.eval("setTab('schedule')");assert(h.get('inputData().signature').startsWith('rules-3.50:'));
  assert.equal(h.get('inputData().p.staff[0].overtimePreference'),2);
- h.eval("setTab('auto')");assert.equal(h.get('inputData().signature'),autoSignature);
- assert(h.get('inputData().sourceInput.staff').every(st=>!Object.hasOwn(st,'overtimePreference')));
- // 配分設定だけを変えても既存のおまかせの表を消さない。
  h.ctx.testRows={a:row(5),b:row(3),c:row(3),p:row(0)};
- h.eval("schedule().assignments=clone(testRows);schedule().workSignature=inputData().signature;data.staff[0].overtimePreference=1;render()");
- assert(h.get('hasTable()'));assert(!h.eval('overtimeFairnessSummary()').text.includes('歓迎の目安'));
  h.eval("data.staff[0].overtimePreference=2;setTab('schedule');schedule().assignments=clone(testRows);schedule().workSignature=inputData().signature;render()");
  let text=h.eval('allocationSummary()').text;
  assert(text.includes('職員Aさん：5回 ／ 多め（＋2回目安）'));
