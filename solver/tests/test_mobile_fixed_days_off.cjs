@@ -2,6 +2,15 @@
 // 職員設定から通信・保存・旧表の保持・おまかせとの分離まで確認する。
 const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
 const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',monthlyDaysOff:9,nightShiftType:'all',canOvertime:true}],schedules:{'2026-10':{requests:{},assignments:{}}}};
+// 新規の職員は9日固定が初期選択。既存の最低日数や固定は書き換えない。
+const add=harness(null,{current:raw});add.eval('editStaff()');
+const addMode=add.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>o.value==='fixed'));
+assert.equal(addMode.value,'fixed');
+const form=add.nodes['dialog-body'].all('form')[0];form.all('input').find(i=>i.type==='text').value='新規職員';form.onsubmit({preventDefault(){}});
+assert.equal(add.get('data.staff[1].monthlyDaysOff'),9);assert.equal(add.get('data.staff[1].fixedDaysOff'),true);
+assert.equal(add.get('data.staff[0].fixedDaysOff'),false);
+const add2=harness(null,{current:raw});add2.eval('editStaff()');add2.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>o.value==='fixed')).value='minimum';
+const form2=add2.nodes['dialog-body'].all('form')[0];form2.all('input').find(i=>i.type==='text').value='最低日数の職員';form2.onsubmit({preventDefault(){}});assert.equal(add2.get('data.staff[1].fixedDaysOff'),false);
 const h=harness(null,{current:raw});
 assert.equal(h.get('data.staff[0].fixedDaysOff'),false);
 assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'fixedDaysOff'));
