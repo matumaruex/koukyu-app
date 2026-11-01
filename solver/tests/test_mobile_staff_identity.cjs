@@ -27,7 +27,7 @@ for(const mode of ['normal']){
  for(const withSnapshot of [true,false]){
   const old=harness(null,{current:raw});table(old,mode);
   const storage=mode==='auto'?'koukyu_v4_auto_work':'koukyu_v4_work',work=JSON.parse(old.values.get(storage)),w=work.schedules['2026-10'];
-  w.workSignature=w.workSignature.split('|staff:')[0].replace('rules-3.58:','rules-3.44:').replace('auto-rules-6:','auto-rules-5:');w.meta.signature=w.workSignature;w.meta.optimizationPolicy=mode==='auto'?'auto-holidays-3':'quality-first-9';
+  w.workSignature=w.workSignature.split('|staff:')[0].replace('rules-3.59:','rules-3.44:').replace('auto-rules-6:','auto-rules-5:');w.meta.signature=w.workSignature;w.meta.optimizationPolicy=mode==='auto'?'auto-holidays-3':'quality-first-9';
   if(!withSnapshot)delete w.workSnapshot;
   const updated=harness(null,{current:JSON.parse(old.values.get('koukyu_v4_data')),stored:{[storage]:JSON.stringify(work)}});
   if(mode==='auto')updated.eval("setTab('auto')");

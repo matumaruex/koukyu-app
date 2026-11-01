@@ -12,6 +12,7 @@ from .validator import validate, is_rule_exception, exception_count, rest_except
 from .allocation import POLICY, covers, metrics, weights, quality_value, minor_unit, overtime_scales
 from .night_preferences import report as preference_report
 from .night_distribution import build as distribution_build, report as distribution_report, POLICY as DISTRIBUTION_POLICY
+from .overtime_distribution import build as overtime_distribution_build, report as overtime_distribution_report, POLICY as OVERTIME_DISTRIBUTION_POLICY
 from .quality_search import search as quality_search
 from .rest_blocks import report as rest_report, user_fixed_off, balance_report as rest_balance_report
 from .overtime_cycles import eligible as cycle_eligible, carry_in, report as overtime_cycle_report
@@ -123,6 +124,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
     if resume is not None and resume.get('nightDistributionPolicy') != (DISTRIBUTION_POLICY if p['nightDistribution'] else None):
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
+    if resume is not None and resume.get('overtimeDistributionPolicy') != (OVERTIME_DISTRIBUTION_POLICY if p['overtimeDistribution'] else None):
+        resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
 
     def rule_exception(e):
         return allow_rule_exceptions and is_rule_exception(p, e)
@@ -213,6 +216,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     night_totals, ab_totals = [], []
     night_total_by_sid = {}
     overtime_totals, overtime_squares = [], []
+    overtime_total_by_sid = {}
     # A残の1サイクル1回（3.40）：2回目以降になったA残（人数不足の次に減らす）と、その数の上限。
     cycle_excess, cycle_cap = [], 0
     # 残業回数を比べる値（出勤できる日数で換算した回数）。
@@ -391,6 +395,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             square = model.new_int_var(0, min(6, n) ** 2, sid + '_ot_square')
             model.add_multiplication_equality(square, [total_ot, total_ot])
             overtime_totals.append(total_ot)
+            overtime_total_by_sid[sid] = total_ot
             if sid in ot_scales:
                 offset = 0 if holiday_plan is not None else ot_offsets[sid]
                 scaled = model.new_int_var(-offset, holiday_plan.balance_bound if holiday_plan is not None else min(ot_profile['cap'], n) * ot_scales[sid] - offset, sid + '_ot_scaled')
@@ -420,6 +425,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 配置の仕上げだけで評価する。集中が残っても必須違反にはしない。
     if not relax_wishes and (optimize or allow_staffing_shortfall):
         quality.append(distribution_build(model, p, x, night_total_by_sid))
+        quality.append(overtime_distribution_build(model, p, x, overtime_total_by_sid))
     night_spread = 0
     if night_totals:
         high, low = model.new_int_var(0, n, 'night_high'), model.new_int_var(0, n, 'night_low')
@@ -811,6 +817,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 quality_result['info']['resume']['restBalancePolicy'] = 'actual-rest-1'
             if p['nightDistribution']:
                 quality_result['info']['resume']['nightDistributionPolicy'] = DISTRIBUTION_POLICY
+            if p['overtimeDistribution']:
+                quality_result['info']['resume']['overtimeDistributionPolicy'] = OVERTIME_DISTRIBUTION_POLICY
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:
@@ -1008,6 +1016,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['allocation'] = metrics(p, assignments)
     if p['nightDistribution']:
         result['nightDistribution'] = distribution_report(p, assignments)
+    if p['overtimeDistribution']:
+        result['overtimeDistribution'] = overtime_distribution_report(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None
                                                        else (optimize or allow_staffing_shortfall) and status == cp_model.OPTIMAL)
     allocation = result['allocation']

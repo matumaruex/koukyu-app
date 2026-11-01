@@ -2,8 +2,9 @@
 from .input_data import overtime_profile
 from .overtime_preference import offsets, score_bounds, ideal_balance as ideal_balance_fn, active
 from .night_distribution import bound as distribution_bound, report as distribution_report, WEIGHT as DISTRIBUTION_WEIGHT
+from .overtime_distribution import bound as overtime_distribution_bound, report as overtime_distribution_report, WEIGHT as OVERTIME_DISTRIBUTION_WEIGHT
 
-POLICY = 'quality-first-14'
+POLICY = 'quality-first-15'
 CHECKPOINTS = (420, 600, 1065)
 
 
@@ -45,8 +46,8 @@ def overtime_balance_bound(p):
 
 def minor_unit(p):
     n, k = p['days'], len(p['staff'])
-    # 追加公休の差1日を、夜勤の分散やA/B比率など細部の改善で逆転しない。
-    return 36 * k + n * (100 * k + 1) + 100 * k + 1 + distribution_bound(p)
+    # 追加公休の差1日を、夜勤・残業の分散やA/B比率など細部の改善で逆転しない。
+    return 36 * k + n * (100 * k + 1) + 100 * k + 1 + distribution_bound(p) + overtime_distribution_bound(p)
 
 
 def ab_ratio_report(p, assignments):
@@ -73,7 +74,7 @@ def weights(p):
     # 40人・31日・不足3720人分でもCP-SATの64bit整数範囲に収まる。
     minor_bound = (n + 1) * (minor_unit(p) - 1) + n
     # 残業回数差は、出勤できる日数で換算した回数の差。普通の月は3.25と同じく上限6。
-    # 比率で比べる人がいる月は最大でおよそ1200（上限回数×係数）になるが、40人・31日でも約1.4e17で64bit整数に収まる。
+    # 比率・歓迎・夜勤と残業の分散を含む40人・31日の64bit上限は回帰テストでも確認する。
     balance_bound = overtime_balance_bound(p) if 'days' in p and all('id' in st for st in p['staff']) else 6
     # 残業合計 → 残業回数差 → 人数超過 → 追加公休 → 細部。
     bounds = (6 * k, balance_bound, 3 * k * n, n, minor_bound)
@@ -134,12 +135,16 @@ def metrics(p, assignments):
     balance = ab['deviationTotal'] + (100 * len(p['staff']) + 1) * night_spread
     minor = spread * minor_unit(p)
     distribution = distribution_report(p, assignments)
-    minor += sum(v * v for v in ot.values()) + balance + DISTRIBUTION_WEIGHT * distribution['penalty']
+    overtime_distribution = overtime_distribution_report(p, assignments)
+    minor += (sum(v * v for v in ot.values()) + balance
+              + DISTRIBUTION_WEIGHT * distribution['penalty']
+              + OVERTIME_DISTRIBUTION_WEIGHT * overtime_distribution['penalty'])
     return {'overtimeTotal': sum(ot.values()), 'overtimeByStaff': ot,
             'overtimeSpread': ot_range, 'overtimeBalance': ot_balance,
             'overtimeIdealBalance': ideal_balance, 'overtimeProportional': proportional,
             **({'overtimePreferred': True} if preferred else {}),
             **({'nightDistributionPenalty': distribution['penalty']} if p.get('nightDistribution') else {}),
+            **({'overtimeDistributionPenalty': overtime_distribution['penalty']} if p.get('overtimeDistribution') else {}),
             'surplusTotal': surplus,
             'commonExtraDaysOff': common, 'extraOffSpread': spread,
             'nightSpread': night_spread, 'abRatioBalance': ab, 'minor': minor}

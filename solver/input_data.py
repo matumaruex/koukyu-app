@@ -40,6 +40,9 @@ def normalize(raw):
     p.setdefault('nightDistribution', False)
     if type(p['nightDistribution']) is not bool:
         raise ValueError('nightDistribution must be boolean.')
+    p.setdefault('overtimeDistribution', False)
+    if type(p['overtimeDistribution']) is not bool:
+        raise ValueError('overtimeDistribution must be boolean.')
     # A残は1回の出勤サイクルに1回まで（3.40、通常版の画面が送る。人数不足を減らすためだけに2回目を許す）。
     p.setdefault('overtimeCycleLimit', False)
     if type(p['overtimeCycleLimit']) is not bool:
