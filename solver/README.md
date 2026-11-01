@@ -480,6 +480,6 @@ UI/API3.42、アセットv54。通常はquality-first-8／rules-3.35、並行8�
 - [Workflow料金](https://vercel.com/docs/workflows/pricing)：Hobbyは月50,000イベント・書込1GBの枠。Proの従量単価はイベント1,000件あたり$0.02、書込1GBあたり$0.50、保持1GB月あたり$0.50。計算するFunctionsと、継続を運ぶQueuesも使用量を消費し、「バックグラウンドにしたから計算が無料になる」わけではない。
 - [Hobby](https://vercel.com/docs/plans/hobby)は無料枠内の追加料金なし。通常は上限超過で利用を制限し、30日後などの枠回復を待つ。Functionsは月Active CPU 4時間・メモリ360GB時間・呼出100万回、[Queues](https://vercel.com/docs/queues/pricing)はAPI操作100万回が無料枠。APIの4秒ごとの状態確認もFunctions呼出を消費する。Proへ自動で移行する設定変更はしていない。
 - [Pro](https://vercel.com/docs/plans/pro-plan)は月$20（配信できる1席・月$20の使用量クレジットを含む、税別）。クレジット超過は従量課金で、追加席・任意の有料機能は別。現在の利用料金そのものをツールで測定した結果ではなく、公式の料金条件の確認である。
-- [利用条件](https://vercel.com/docs/limits/fair-use-guidelines)：Hobbyは個人の非商用利用のみで、商用利用はProまたはEnterprise。職場の業務で使う本アプリをHobbyで利用できるとは今回断定しない。業務用途ならPro等の適切なプラン、またはVercelへの適用確認が必要。料金や用途の判断を省いて本番反映しない。
+- [利用条件](https://vercel.com/docs/limits/fair-use-guidelines)：Hobbyは個人の非商用利用のみで、商用利用はProまたはEnterprise。オーナーから「職場から公式に依頼されたものではなく、個人の趣味として自主的に作り、使うか使わないかも自由」と説明を受けた。以後はこの用途説明を前提に扱い、職場から依頼された業務システムとは決めつけない。これはオーナーの用途説明の記録で、Vercelによる個別判断を得たという意味ではない。
 
-残り：Android実機の結果、契約プラン表示名・用途の適合確認、オーナーの本番反映許可。本番反映後は本番の配信状態と通常作成の動作を確認して追記する。まだ本番反映済みとは扱わない。
+残り：Android実機の結果、契約プラン表示名、オーナーの本番反映許可。実機手順が見えなくなったとの申告があり、確認用リンク・架空データ・手順を返信に再掲する。プラン名確認用は [TeamのBilling](https://vercel.com/teams/matumaruexs-projects/settings/billing)。本番反映後は本番の配信状態と通常作成の動作を確認して追記する。まだ本番反映済みとは扱わない。
