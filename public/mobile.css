@@ -223,3 +223,20 @@ footer{color:#8f9cc0;padding-bottom:160px}
 
 /* 対象外の職員を一覧で控えめに表示する。 */
 .staff-card .not-in-period{opacity:.56}.staff-card .participation-badge{flex-shrink:0;margin-left:0;font-size:.75em}
+
+/* 横表示はダイアログの中だけ。回転ロック中も、表そのものを横向きにできる。 */
+@media screen{
+dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw;height:100vh;height:100dvh;max-width:none;max-height:none;padding:0;border:0;border-radius:0;overflow:hidden;overscroll-behavior:contain}
+.landscape-body{position:absolute;left:50%;top:50%;width:100vw;width:100dvw;height:100vh;height:100dvh;transform:translate(-50%,-50%);padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.landscape-body .dialog-heading{flex-shrink:0;gap:8px}.landscape-body .dialog-heading h2{margin:0 auto 0 0;min-width:0;font-size:16px}.landscape-body .dialog-heading button{flex-shrink:0;min-height:40px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.landscape-body .landscape-hint{margin:0;font-size:11px;line-height:1.4;flex-shrink:0}
+.landscape-body .month-wrap{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;gap:4px}.landscape-body .consecutive-rest-summary{display:none}.landscape-body .month-title{margin:0;font-size:14px;line-height:1.4}.landscape-body .legend{margin:0;font-size:10px;line-height:1.35}
+.landscape-body .scroll{flex:1;min-height:80px;min-width:0;overflow:auto;overscroll-behavior:contain;border-radius:6px;-webkit-overflow-scrolling:touch}
+.landscape-body .month-table{font-size:12px;min-width:900px}.landscape-body .month-table th,.landscape-body .month-table td{height:28px;padding:4px 2px;line-height:1.2}
+.landscape-body .month-table tr:first-child>th{position:sticky;top:0;z-index:3}.landscape-body .month-table tr:nth-child(2)>th{position:sticky;top:28px;z-index:2}.landscape-body .month-table tr:first-child>.name{z-index:4}
+.landscape-enlarged .month-table{font-size:14px;min-width:1100px}
+}
+@media screen and (orientation:portrait){
+.landscape-body{width:100vh;width:100dvh;height:100vw;height:100dvw;transform:translate(-50%,-50%) rotate(90deg);padding:max(8px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)) max(12px,env(safe-area-inset-top))}
+}
+@media print{dialog.landscape-dialog{display:none!important}}
