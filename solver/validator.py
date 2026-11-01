@@ -54,7 +54,7 @@ def validate(raw, assignments):
     if errors:
         return errors
     extras = [rows[st['id']].count('off') - st['monthlyDaysOff'] for st in p['staff']
-              if st['id'] not in p['fairnessExcludedStaff']]
+              if st['id'] not in p['fairnessExcludedStaff'] and not st['fixedDaysOff']]
     if len(extras) >= 2 and max(extras) - min(extras) > p['maxExtraOffSpread']:
         fail('fairness', detail=f'Extra-off spread exceeds {p["maxExtraOffSpread"]}.')
 
@@ -113,7 +113,10 @@ def validate(raw, assignments):
         if st['allowConsecutivePlus1'] and extensions > 1:
             fail('consecutive_plus_one', sid, detail=f'{extensions} extensions')
             errors[-1].update(actual=extensions, allowed=1, count=extensions - 1, limit=limit)
-        if values.count('off') < st['monthlyDaysOff']:
+        if st['fixedDaysOff'] and values.count('off') != st['monthlyDaysOff']:
+            fail('fixed_days_off', sid, detail='公休が指定した固定日数と異なります。')
+            errors[-1].update(actual=values.count('off'), required=st['monthlyDaysOff'])
+        elif values.count('off') < st['monthlyDaysOff']:
             fail('days_off', sid, detail=f"{values.count('off')} < {st['monthlyDaysOff']}")
         if st['minConsecutiveRest']:
             blocks = rest_ranges(assignments[sid], p['days'])

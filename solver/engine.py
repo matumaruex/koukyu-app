@@ -320,7 +320,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 rule_violations.append(sum(overs))
         off = sum(x[sid, d, 'off'] for d in range(n))
         minimum_off = holiday_plan.minimum(sid) if holiday_plan is not None else st['monthlyDaysOff']
-        required(off >= minimum_off, sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
+        if st['fixedDaysOff'] and holiday_plan is None:
+            required(off == minimum_off, sid + '_off', label + f'の公休{minimum_off}日固定')
+        else:
+            required(off >= minimum_off, sid + '_off', label + f'の公休{st["monthlyDaysOff"]}日以上')
         if st['minConsecutiveRest']:
             blocks = []
             for d in range(n - 1):
@@ -386,7 +389,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         extra = model.new_int_var(-n, n, sid + '_extra_off')
         model.add(extra == off - minimum_off)
         extra_off.append(extra)
-        if sid not in p['fairnessExcludedStaff']:
+        # 固定の人は追加公休だけ比較から外す。残業や連休の公平さには引き続き含める。
+        if sid not in p['fairnessExcludedStaff'] and not st['fixedDaysOff']:
             compared_extra_off.append(extra)
         if st['type'] != 'part' and st['canOvertime']:
             total_ot = model.new_int_var(0, min(6, n), sid + '_ot_total')
@@ -994,10 +998,12 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     result['validationErrors'] = errors
     result['verificationScope'] = ('DRAFT_' if is_draft else '') + ('WITH_HISTORY' if p['boundaryComplete'] else 'PERIOD_ONLY')
     extras = {st['id']: sum(k == 'off' for k in assignments[st['id']].values()) - st['monthlyDaysOff'] for st in p['staff']}
-    compared = [sid for sid in extras if sid not in p['fairnessExcludedStaff']]
+    fixed_off_staff = [st['id'] for st in p['staff'] if st['fixedDaysOff']]
+    excluded_off_staff = list(dict.fromkeys(p['fairnessExcludedStaff'] + fixed_off_staff))
+    compared = [sid for sid in extras if sid not in excluded_off_staff]
     compared_values = [extras[sid] for sid in compared]
     spread = max(compared_values) - min(compared_values) if compared_values else 0
-    result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': p['fairnessExcludedStaff'], 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0, 'provenOptimal': optimize and status == cp_model.OPTIMAL}
+    result['fairness'] = {'extraDaysOff': extras, 'comparedStaff': compared, 'excludedStaff': excluded_off_staff, 'spread': spread, 'limit': p['maxExtraOffSpread'], 'spreadProvenOptimal': spread == 0, 'provenOptimal': optimize and status == cp_model.OPTIMAL}
     result['optimizationPolicy'] = PREFERENCE_POLICY if preference_active(p) else POLICY
     result['allocation'] = metrics(p, assignments)
     result['allocation']['minimumOvertimeProven'] = bool(quality_result['overtimeProven'] if quality_result is not None

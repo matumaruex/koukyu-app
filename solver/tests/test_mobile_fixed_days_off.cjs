@@ -1,0 +1,33 @@
+'use strict';
+// 職員設定から通信・保存・旧表の保持・おまかせとの分離まで確認する。
+const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
+const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',monthlyDaysOff:9,nightShiftType:'all',canOvertime:true}],schedules:{'2026-10':{requests:{},assignments:{}}}};
+const h=harness(null,{current:raw});
+assert.equal(h.get('data.staff[0].fixedDaysOff'),false);
+assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'fixedDaysOff'));
+h.eval("setTab('auto')");const autoBefore=h.get('inputData().signature');h.eval("setTab('schedule');schedule().assignments={a:{'1':'off'}};schedule().workSignature=inputData().signature;render()");
+const before=h.get('inputData().signature');
+h.eval('editStaff(data.staff[0])');
+const mode=()=>h.nodes['dialog-body'].all('select').find(s=>s.children.some(o=>o.value==='fixed'));
+assert.equal(mode().value,'minimum');mode().value='fixed';h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});
+assert.equal(h.get('data.staff[0].fixedDaysOff'),true);
+assert.equal(h.get('inputData().p.staff[0].fixedDaysOff'),true);
+assert.notEqual(h.get('inputData().signature'),before);
+assert.equal(h.get('hasTable()'),true);assert.equal(h.get('workChanged()'),true);
+assert.equal(h.get('schedule().workSnapshot.staff[0].fixedDaysOff'),false);
+assert(h.nodes.view.text.includes('最新の条件とは異なる条件で作成した表です。'));
+assert.equal(JSON.parse(h.values.get('koukyu_v4_data')).staff[0].fixedDaysOff,true);
+h.eval("setTab('auto')");assert.equal(h.get('inputData().signature'),autoBefore);
+assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'fixedDaysOff'));
+assert(!Object.hasOwn(h.get('inputData().sourceInput.staff[0]'),'fixedDaysOff'));
+h.eval("setTab('schedule');editStaff(data.staff[0])");assert.equal(mode().value,'fixed');
+const reopened=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work')}});
+assert.equal(reopened.get('data.staff[0].fixedDaysOff'),true);assert.equal(reopened.get('hasTable()'),true);
+assert(reopened.ctx.errorsText([{code:'fixed_days_off',staff:'s0',actual:10,required:9}],{s0:'a'}).includes('公休10日／指定9日固定'));
+for(const v of [1,'true',null])assert.throws(()=>h.ctx.checkBackup({...raw,staff:[{...raw.staff[0],fixedDaysOff:v}]}));
+mode().value='minimum';h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});assert.equal(h.get('inputData().signature'),before);
+// 3.48の作業表を保持し、以前の最少証明を今の計算に流用しない。
+const work=JSON.parse(h.values.get('koukyu_v4_work'));const w=work.schedules['2026-10'];delete w.workSnapshot;w.workSignature=w.workSignature.replace('rules-3.49:','rules-3.45:');w.meta={status:'OPTIMAL',optimizationPolicy:'quality-first-10'};
+const upgraded=harness(null,{current:raw,stored:{koukyu_v4_work:JSON.stringify(work)}});
+assert.equal(upgraded.get('hasTable()'),true);assert.equal(upgraded.get('workChanged()'),true);assert.equal(upgraded.get('metadata()'),null);
+console.log('PASS: 公休固定の編集・保存・復元・通常への送信・おまかせの独立・旧表保持と証明の無効化');

@@ -11,7 +11,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
 
  // 送信：連休の設定をした人がいるときだけ。署名の先頭は据え置き。おまかせには送らない。
  const h=harness(null,{current:raw});
- assert.equal(h.get('inputData().p.restCountBalance'),true);assert(h.get('inputData().signature').startsWith('rules-3.45:'));
+ assert.equal(h.get('inputData().p.restCountBalance'),true);assert(h.get('inputData().signature').startsWith('rules-3.49:'));
  h.eval("setTab('auto')");assert.equal(h.eval('inputData().p.restCountBalance'),undefined);
  const none=harness(null,{current:{...raw,staff:raw.staff.map(({minConsecutiveRest,...s})=>s)}});
  assert.equal(none.eval('inputData().p.restCountBalance'),undefined);
@@ -24,7 +24,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
 
  // 作成結果の例外：名前と回数、最少を確認済み。
  const err={code:'rest_balance',counts:{s0:3,s1:1},high:3,low:1,count:1};
- const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'8':'off','9':'off','14':'off','15':'off','20':'off','21':'off'},s1:{'3':'off','4':'off'},s2:{'1':'off'}},seconds:3,ruleExceptions:[err],exceptionCount:0,restBalanceExceptions:1,restBalance:{counts:{s0:3,s1:1},high:3,low:1,excess:1,proven:true},validationErrors:[err],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-10'})});
+ const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:{s0:{'8':'off','9':'off','14':'off','15':'off','20':'off','21':'off'},s1:{'3':'off','4':'off'},s2:{'1':'off'}},seconds:3,ruleExceptions:[err],exceptionCount:0,restBalanceExceptions:1,restBalance:{counts:{s0:3,s1:1},high:3,low:1,excess:1,proven:true},validationErrors:[err],allocation:{overtimeTotal:0,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-11'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.restCountBalance,true);
  const text=made.nodes.view.text;

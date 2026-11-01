@@ -2,7 +2,7 @@
 from .input_data import overtime_profile
 from .overtime_preference import offsets, score_bounds, ideal_balance as ideal_balance_fn, active
 
-POLICY = 'quality-first-10'
+POLICY = 'quality-first-11'
 CHECKPOINTS = (420, 600, 1065)
 
 
@@ -104,7 +104,7 @@ def metrics(p, assignments):
                 proportional = True
             else:
                 plain.append(ot[st['id']])
-        if st['id'] not in p['fairnessExcludedStaff']:
+        if st['id'] not in p['fairnessExcludedStaff'] and not st.get('fixedDaysOff', False):
             extras.append(values.count('off') - st['monthlyDaysOff'])
         if st['type'] != 'part':
             if st['nightShiftType'] != 'none':

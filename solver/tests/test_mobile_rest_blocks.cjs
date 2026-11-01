@@ -11,7 +11,7 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  assert.deepEqual(rest.ranges({'1':'off','2':'off','3':'early','4':'off','5':'off'},31),[{start:1,end:2},{start:4,end:5}]);
  for(const value of [null,true,'1',3,-1,1.5])assert.throws(()=>rest.check(value));
  const h=harness(null,{current:raw,response:async()=>({status:'VALID',boundaryComplete:true})});
- assert(h.get('inputData().signature').startsWith('rules-3.45:'));
+ assert(h.get('inputData().signature').startsWith('rules-3.49:'));
  assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'minConsecutiveRest'));
  h.eval("setTab('auto')");assert(h.get('inputData().signature').startsWith('auto-rules-6:'));
  h.eval("setTab('staff');editStaff(data.staff[0])");
@@ -19,7 +19,7 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  assert(select);assert.equal(select.value,'0');select.value='2';
  h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});
  assert.equal(h.get('data.staff[0].minConsecutiveRest'),2);
- h.eval("setTab('schedule')");assert(h.get('inputData().signature').startsWith('rules-3.45:'));
+ h.eval("setTab('schedule')");assert(h.get('inputData().signature').startsWith('rules-3.49:'));
  assert.equal(h.get('inputData().p.staff[0].minConsecutiveRest'),2);
  h.eval("setTab('auto')");assert(h.get('inputData().signature').startsWith('auto-rules-6:'));
  assert.equal(h.get('inputData().sourceInput.staff[0].minConsecutiveRest'),2);
