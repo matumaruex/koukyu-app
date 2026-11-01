@@ -26,7 +26,7 @@ function harness(raw,options={}){
   document:{getElementById:id=>nodes[id]??=new Element(),createElement:tag=>{const e=new Element(tag);all.push(e);return e;},querySelector:()=>period,querySelectorAll:selector=>selector==='[data-tab]'?nav:all.filter(e=>['BUTTON','INPUT','SELECT'].includes(e.tagName))},
   localStorage:{getItem:k=>values.get(k)??null,setItem:(k,v)=>{if(options.quota)throw Error('Quota');values.set(k,v);}},
   setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},setInterval:()=>1,clearInterval(){},
-  fetch:async(url,opts)=>{const body=JSON.parse(opts.body);calls.push(body);const response=options.response?await options.response(body):{status:'UNKNOWN'};return {ok:true,json:async()=>response};}};
+  fetch:async(url,opts)=>{const body=JSON.parse(opts.body);calls.push(body);const response=options.response?await options.response(body,opts):{status:'UNKNOWN'};return {ok:true,json:async()=>response};}};
  vm.createContext(ctx);
  const root=path.join(__dirname,'../../public');
  vm.runInContext(fs.readFileSync(path.join(root,'consecutive-rest.js'),'utf8'),ctx);vm.runInContext(fs.readFileSync(path.join(root,'overtime-cycles.js'),'utf8'),ctx);
