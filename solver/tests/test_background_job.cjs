@@ -1,0 +1,22 @@
+'use strict';
+const assert=require('node:assert/strict');
+const values=new Map(),requests=[];
+global.localStorage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+if(!global.crypto)Object.defineProperty(global,'crypto',{value:require('node:crypto').webcrypto});
+const jobApi=require('../../public/background-job.js');
+(async()=>{
+ let checks=0;
+ global.fetch=async(url,opts)=>{const b=JSON.parse(opts.body);requests.push(b);assert.equal(url,'/api/background');if(b.action==='start')return {ok:true,json:async()=>({runId:'wrun_TEST1'})};if(b.action==='status'){checks++;if(checks===1)throw Error('offline');return {ok:true,json:async()=>({status:'completed',result:{best:{assignments:{s0:{1:'off'}}}}})};}return {ok:true,json:async()=>({status:'cancelled'})};};
+ const actualSetTimeout=global.setTimeout;global.setTimeout=fn=>actualSetTimeout(fn,1);
+ const job=await jobApi.start({mode:'normal',input:{staff:[]}},{mode:'normal',period:'2026-10',signature:'same',tableSignature:'{}'});
+ assert.equal(job.token.length,64);assert.equal(jobApi.load().runId,'wrun_TEST1');
+ const stages=[];const result=await jobApi.wait(job,{onWait:offline=>stages.push(offline)});
+ assert.equal(result.best.assignments.s0[1],'off');assert.deepEqual(stages,[true]);
+ assert.equal(jobApi.load().runId,'wrun_TEST1','completed job remains until result is persisted');
+ jobApi.clear(job);assert.equal(jobApi.load(),null);
+ const second=await jobApi.start({mode:'normal',input:{staff:[]}},{period:'2026-10'});await jobApi.cancel(second);assert.equal(jobApi.load(),null);assert(requests.some(r=>r.action==='cancel'));
+ assert(requests.every(r=>!JSON.stringify(r).includes('架空の職員名')));
+ global.setTimeout=actualSetTimeout;
+ console.log('PASS: 接続復帰、端末保存、結果保持、中止');
+})().catch(e=>{console.error(e);process.exit(1);});
+

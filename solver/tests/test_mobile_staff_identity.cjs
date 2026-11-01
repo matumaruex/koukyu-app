@@ -45,7 +45,7 @@ for(const mode of ['normal']){
  // 計算中に同じ設定の別人へ入力が変わった場合も、旧応答を採用しない。
  for(const mode of ['normal']){
   let finish;const h=harness(null,{current:raw,response:()=>new Promise(resolve=>finish=resolve)});
-  table(h,mode);const original=h.get('schedule().assignments'),task=h.ctx.generate();
+  table(h,mode);const original=h.get('schedule().assignments'),task=h.ctx.generate();await new Promise(setImmediate);
   h.eval("data.schedules['2026-10'].excludedStaff=['a']");
   finish({status:'OPTIMAL',seconds:1,assignments:{s0:{'1':'off'}},selectedQuota:{s0:9},search:{done:true}});
   await task;assert.deepEqual(h.get('schedule().assignments'),original);
