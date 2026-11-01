@@ -1,0 +1,222 @@
+{
+  "year": 2026,
+  "month": 3,
+  "requiredStaff": [
+    4,
+    4,
+    4
+  ],
+  "maxReducedSundays": 3,
+  "maxExtraOffSpread": 1,
+  "overtimeCycleLimit": true,
+  "staff": [
+    {
+      "id": "s0",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "all",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 2
+    },
+    {
+      "id": "s1",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "weekday",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 2
+    },
+    {
+      "id": "s2",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "all",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 2
+    },
+    {
+      "id": "s3",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "all",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 2
+    },
+    {
+      "id": "s4",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "none",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 3
+    },
+    {
+      "id": "s5",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "all",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 2
+    },
+    {
+      "id": "s6",
+      "type": "full",
+      "dayShiftType": "both",
+      "nightShiftType": "all",
+      "canOvertime": true,
+      "monthlyDaysOff": 9,
+      "maxConsecutive": 2
+    },
+    {
+      "id": "s7",
+      "type": "part",
+      "nightShiftType": "none",
+      "canOvertime": false,
+      "monthlyDaysOff": 9,
+      "maxDaysPerWeek": 3,
+      "maxConsecutive": 3,
+      "startTime": "07:00",
+      "endTime": "16:00"
+    },
+    {
+      "id": "s8",
+      "type": "part",
+      "nightShiftType": "none",
+      "canOvertime": false,
+      "monthlyDaysOff": 9,
+      "maxDaysPerWeek": 3,
+      "maxConsecutive": 3,
+      "startTime": "14:00",
+      "endTime": "19:00"
+    },
+    {
+      "id": "s9",
+      "type": "part",
+      "nightShiftType": "none",
+      "canOvertime": false,
+      "monthlyDaysOff": 9,
+      "maxDaysPerWeek": 3,
+      "maxConsecutive": 4,
+      "startTime": "08:30",
+      "endTime": "17:30"
+    },
+    {
+      "id": "s10",
+      "type": "part",
+      "nightShiftType": "none",
+      "canOvertime": false,
+      "monthlyDaysOff": 9,
+      "maxDaysPerWeek": 3,
+      "maxConsecutive": 2,
+      "startTime": "14:00",
+      "endTime": "19:00"
+    }
+  ],
+  "history": {
+    "s0": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s1": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s2": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s3": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s4": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s5": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s6": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s7": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s8": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s9": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ],
+    "s10": [
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off",
+      "off"
+    ]
+  }
+}
