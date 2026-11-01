@@ -10,11 +10,13 @@ const raw={schemaVersion:4,savedTables:[],staff:[
 function start(options={}){const h=harness(null,{current:raw,...options});h.eval("setTab('requests')");return h;}
 const day=(h,d)=>h.nodes['dialog-body'].all('button').find(e=>e.attributes['data-request-day']===String(d));
 const mode=h=>h.nodes['dialog-body'].all('select')[0];
+const leave=h=>h.nodes['dialog-body'].all('label').find(e=>e.text.startsWith('長期休暇')).all('input')[0];
 const row=(h,id)=>h.nodes.view.all('div').find(e=>e.className?.startsWith('staff-row')&&e.text.includes('職員'+id));
 (async()=>{
  const h=start(),before=h.get('inputData()');
- assert.deepEqual(h.nodes.view.all('strong').map(e=>e.text),['職員B','職員A','職員C今期対象外']);
- assert(row(h,'B').text.includes('入力済み'));assert(row(h,'A').text.includes('未確認'));assert(row(h,'C').text.includes('今期対象外'));assert(row(h,'C').all('input')[0].checked);
+ assert.deepEqual(h.nodes.view.all('strong').map(e=>e.text),['職員B','職員A','職員C']);
+ assert(row(h,'B').text.includes('入力済み'));assert(row(h,'A').text.includes('未確認'));assert(row(h,'C').text.includes('今期対象外'));assert.equal(h.nodes.view.all('input').length,0);assert(!h.nodes.view.text.includes('長期休暇'));
+ h.ctx.editRequests('c');assert.equal(leave(h).checked,true);await h.click('閉じる');assert.deepEqual(h.get('inputData()'),before);
  assert.equal(h.nodes.view.all('select').length,0);assert(!h.nodes.view.text.includes('公休表を作る'));assert(!h.nodes.view.text.includes('希望休：'));
  // 3.41の追加ルール・時間を変えず、開く/閉じるだけでは条件も確認状態も変わらない。
  h.ctx.editRequests('b');assert.equal(h.nodes.dialog.open,true);assert(h.nodes['dialog-body'].text.includes('希望休：1日 ／ 希望出勤：1日 ／ 希望夜勤：1日'));
@@ -33,17 +35,19 @@ const row=(h,id)=>h.nodes.view.all('div').find(e=>e.className?.startsWith('staff
  h.ctx.editRequests('a');assert.deepEqual(mode(h).children.map(e=>e.value),['off','part']);await h.click('入力完了');assert(row(h,'A').text.includes('希望なし'));assert(h.nodes.view.text.includes('2 / 2人 確認済み'));
  assert(!h.nodes.view.text.includes('公休表を作る'));
  // 長期休暇は従来の公休比較設定だけを今期に保存する。
- const leave=row(h,'B').all('input')[0];leave.checked=true;leave.onchange();assert.deepEqual(h.get('schedule().fairnessExcludedStaff'),['c','b']);assert.deepEqual(h.get('schedule().requests.b'),[7]);assert.deepEqual(h.get('schedule().excludedStaff'),['c']);
+ h.ctx.editRequests('b');const beforeLeaveSnapshot=h.get('schedule().workSnapshot'),checkbox=leave(h);assert.equal(checkbox.checked,false);checkbox.checked=true;checkbox.onchange();assert.equal(checkbox.checked,true);assert.equal(h.get('schedule().requestReviewed.b'),true);assert.deepEqual(h.get('schedule().workSnapshot'),beforeLeaveSnapshot);assert.deepEqual(h.get('schedule().history'),history);assert.deepEqual(h.get('schedule().fairnessExcludedStaff'),['c','b']);assert.deepEqual(h.get('schedule().requests.b'),[7]);assert.deepEqual(h.get('schedule().excludedStaff'),['c']);
+ checkbox.checked=false;checkbox.onchange();assert.deepEqual(h.get('schedule().fairnessExcludedStaff'),['c']);checkbox.checked=true;checkbox.onchange();await h.click('閉じる');h.ctx.editRequests('b');assert.equal(leave(h).checked,true);await h.click('閉じる');
  // 対象外の人も編集可能だが、参加を勝手に変えない。
  h.ctx.editRequests('c');day(h,12).click();await h.click('入力完了');assert.deepEqual(h.get('schedule().requests.c'),[12]);assert.deepEqual(h.get('schedule().excludedStaff'),['c']);
  const reopen=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work')}});reopen.eval("setTab('requests')");assert(row(reopen,'B').text.includes('入力済み'));assert(row(reopen,'A').text.includes('希望なし'));assert.deepEqual(reopen.get('schedule().assignments'),assignments);
+ reopen.ctx.editRequests('b');assert.equal(leave(reopen).checked,true);await reopen.click('閉じる');
  reopen.ctx.changePeriod(1);assert.deepEqual(reopen.get('schedule().fairnessExcludedStaff||[]'),[]);assert.deepEqual(reopen.get('schedule().requests'),{});
  // 古い入力画面の操作は別の期へ書き込めない。
- h.ctx.editRequests('b');const staleDay=day(h,13);h.ctx.changePeriod(1);staleDay.click();assert.deepEqual(h.get('schedule().requests'),{});assert.equal(h.nodes.dialog.open,false);
+ h.ctx.editRequests('b');const staleDay=day(h,13),staleLeave=leave(h);h.ctx.changePeriod(1);staleDay.click();staleLeave.checked=true;staleLeave.onchange();assert.deepEqual(h.get('schedule().fairnessExcludedStaff||[]'),[]);assert.deepEqual(h.get('schedule().requests'),{});assert.equal(h.nodes.dialog.open,false);
  // 容量不足では希望・確認・長期休暇を戻す。入力画面は閉じず失敗を示す。
  const q=start({quota:true}),original=q.get('schedule().requests');q.ctx.editRequests('b');day(q,11).click();assert.deepEqual(q.get('schedule().requests'),original);assert.equal(q.get('schedule().requestReviewed.b'),true);assert(q.nodes['dialog-body'].text.includes('この端末に保存できませんでした'));
  q.ctx.editRequests('a');await q.click('入力完了');assert.notEqual(q.get('schedule().requestReviewed.a??null'),true);assert.equal(q.nodes.dialog.open,true);assert(q.nodes['dialog-body'].text.includes('この端末に保存できませんでした'));
- const failedLeave=row(q,'B').all('input')[0];failedLeave.checked=true;failedLeave.onchange();assert.deepEqual(q.get('schedule().fairnessExcludedStaff'),['c']);assert.equal(row(q,'B').all('input')[0].checked,false);
+ q.ctx.editRequests('b');const failedLeave=leave(q);failedLeave.checked=true;failedLeave.onchange();assert.deepEqual(q.get('schedule().fairnessExcludedStaff'),['c']);assert.equal(failedLeave.checked,false);assert.equal(q.nodes.dialog.open,true);assert(q.nodes['dialog-body'].text.includes('この端末に保存できませんでした'));
  const empty=start({current:{...raw,staff:[],schedules:{}}});assert(empty.nodes.view.text.includes('職員を登録する'));
- console.log('PASS: 希望の2段一覧、種類・日数・完了・再編集、長期休暇・対象外・期間分離、保存失敗の復元、旧表・前期・計算条件の保持');
+ console.log('PASS: 希望の1行一覧、種類・日数・完了・再編集、入力画面内の長期休暇・対象外・期間分離、保存失敗の復元、旧表・前期・計算条件の保持');
 })().catch(e=>{console.error(e);process.exitCode=1;});
