@@ -59,7 +59,7 @@ function response(p){return {status:'FEASIBLE',seconds:.1,boundaryComplete:true,
   }
   // 古い応答は採用しない。計算の途中で離れても、端末には前の表が残る。
   let finish;const pending=harness(null,{current:raw,response:async()=>new Promise(resolve=>finish=resolve)});
-  table(pending,mode);const task=pending.ctx.generate('new');
+  table(pending,mode);const task=pending.ctx.generate('new');await new Promise(setImmediate);
   const during=reopen(pending);if(mode==='auto')during.eval("setTab('auto')");
   assert.deepEqual(during.get('schedule().assignments'),rows);
   pending.eval("schedule().requests.a.push(5)");finish(response(pending.calls[0]));await task;

@@ -24,7 +24,7 @@ function harness(raw,options={}){
  const ctx={console,Date:Clock,Math,JSON,Set,Map,AbortController,File,URL,crypto:require('node:crypto').webcrypto,
   navigator:{storage:{persist:async()=>true}},window:{print(){}},confirm:message=>{confirmations.push(message);return true;},
   document:{getElementById:id=>nodes[id]??=new Element(),createElement:tag=>{const e=new Element(tag);all.push(e);return e;},querySelector:()=>period,querySelectorAll:selector=>selector==='[data-tab]'?nav:all.filter(e=>['BUTTON','INPUT','SELECT'].includes(e.tagName))},
-  localStorage:{getItem:k=>values.get(k)??null,setItem:(k,v)=>{if(options.quota)throw Error('Quota');values.set(k,v);}},
+  localStorage:{getItem:k=>values.get(k)??null,setItem:(k,v)=>{if(options.quota)throw Error('Quota');values.set(k,v);},removeItem:k=>values.delete(k)},
   setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},setInterval:()=>1,clearInterval(){},
   fetch:async(url,opts)=>{const body=JSON.parse(opts.body);calls.push(body);const response=options.response?await options.response(body,opts):{status:'UNKNOWN'};return {ok:true,json:async()=>response};}};
  vm.createContext(ctx);
@@ -35,6 +35,12 @@ function harness(raw,options={}){
  vm.runInContext(fs.readFileSync(path.join(root,'roster-storage.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'creation-workflow.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'auto-creation-workflow.js'),'utf8'),ctx);
+ // 既存の画面テストは計算の応答を直接差し替える。通信・復帰は別の専用テストで実機能を検査する。
+ if(options.backgroundActual)vm.runInContext(fs.readFileSync(path.join(root,'background-job.js'),'utf8'),ctx);else ctx.BackgroundJob={load:()=>null,clear:()=>{},cancel:()=>{},start:async(details,identity)=>({...details,...identity}),wait:async(job,opts)=>{
+  let seed=0;
+  if(job.mode==='auto')return ctx.AutoCreationWorkflow.run({input:job.input,holidayPolicy:job.holidayPolicy,request:p=>ctx.api(p),nextSeed:()=>++seed,isCurrent:opts.isCurrent});
+  return ctx.CreationWorkflow.run({input:job.input,initialAssignments:job.initialAssignments,request:p=>ctx.api({...p,allowStaffingShortfall:true,allowNightShortfall:false,allowRuleExceptions:true}),nextSeed:()=>++seed,isCurrent:opts.isCurrent});
+ }};
  vm.runInContext(fs.readFileSync(path.join(root,'auto-roster-ui.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'mobile.js'),'utf8'),ctx);
  return {ctx,values,nodes,calls,confirmations,timers,eval:s=>vm.runInContext(s,ctx),get:s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',ctx)),click:async(name,where='dialog-body')=>{const button=nodes[where].all('button').find(e=>e.text===name);if(!button)throw Error('Missing button '+name+' in '+nodes[where].text);await button.click();}};
