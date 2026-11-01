@@ -1,9 +1,11 @@
 """連休の回数の差（3.46）：連休の設定をした人どうしで1回以内。数学的に無理なときだけ最少回数を例外にする。
-希望休・固定の公休だけでできた連休は数えない。公休の比較から外した人は比べない。"""
+希望休・固定の公休を含む実際の連休を数える。公休の比較から外した人は比べない。"""
 import copy
 import unittest
 from unittest.mock import patch
 from solver.service import dispatch
+from solver.service import check_resume
+from solver.quality_search import search
 from solver.input_data import normalize
 from solver.rest_blocks import counted_ranges, balance_report
 from solver.validator import validate, is_rule_exception, exception_count
@@ -30,14 +32,23 @@ def counted(r, p):
 
 
 class ReportTests(unittest.TestCase):
-    def test_wish_only_blocks_are_not_counted(self):
+    def test_wish_and_fixed_blocks_are_counted(self):
         raw = with_rest(six_staff())
         raw['requests'] = {'s0': [4, 5, 10]}
         raw['locked'] = {'s0': {'15': 'off', '16': 'off'}}
         p = normalize(raw)
         blocks = counted_ranges(p, 's0', row({4, 5, 10, 11, 15, 16, 20, 21}))
-        # 4〜5日（希望休だけ）と15〜16日（固定の公休だけ）は数えない。10〜11日は計算が決めた11日を含むので数える。
-        self.assertEqual(blocks, [{'start': 10, 'end': 11}, {'start': 20, 'end': 21}])
+        self.assertEqual(blocks, [{'start': 4, 'end': 5}, {'start': 10, 'end': 11},
+                                  {'start': 15, 'end': 16}, {'start': 20, 'end': 21}])
+
+    def test_one_wish_block_and_two_regular_blocks_are_fair(self):
+        raw = with_rest(six_staff())
+        raw['requests'] = {'s0': [4, 5]}
+        a = {f's{i}': row({4, 5} if i == 0 else {8, 9, 15, 16}) for i in range(6)}
+        result = balance_report(normalize(raw), a)
+        self.assertEqual(result['counts'], {'s0': 1, 's1': 2})
+        self.assertEqual(result['excess'], 0)
+        self.assertFalse(any(e['code'] == 'rest_balance' for e in validate(raw, a)))
 
     def test_compared_staff(self):
         raw = with_rest(six_staff())
@@ -65,6 +76,44 @@ class ReportTests(unittest.TestCase):
 
 
 class CalculationTests(unittest.TestCase):
+    def test_one_requested_and_two_requested_blocks_pass_real_solver(self):
+        raw = with_rest(six_staff())
+        one = {2, 3, 7, 11, 15, 19, 23, 27, 30}
+        two = {2, 3, 7, 8, 12, 16, 20, 24, 28}
+        raw['staff'][0].update(nightShiftType='none', fixedDaysOff=True)
+        raw['staff'][1].update(nightShiftType='none', fixedDaysOff=True, minConsecutiveRest=2)
+        raw['requests'] = {'s0': [2, 3], 's1': [2, 3, 7, 8]}
+        raw['locked'] = {sid: row(offs) for sid, offs in [('s0', one), ('s1', two)]}
+        r = dispatch(dict(SCREEN, input=raw))
+        self.assertIn('assignments', r, r)
+        self.assertEqual(r['restBalance']['counts'], {'s0': 1, 's1': 2})
+        self.assertEqual(r['restBalance']['excess'], 0)
+        self.assertNotIn('restBalanceExceptions', r)
+        self.assertEqual(validate(raw, r['assignments']), [])
+
+    def test_generation_agrees_with_validator_for_requested_blocks(self):
+        raw = with_rest(six_staff())
+        raw['requests'] = {'s0': [4, 5], 's1': [10, 11, 20, 21]}
+        r = dispatch(dict(SCREEN, input=raw))
+        self.assertIn('assignments', r, r)
+        self.assertEqual(counted(r, normalize(raw)), r['restBalance']['counts'])
+        self.assertTrue(all(r['assignments'][sid][str(d)] == 'off' for sid, days in raw['requests'].items() for d in days))
+
+    def test_old_continuation_restarts_without_reusing_old_proofs(self):
+        raw = with_rest(six_staff())
+        seen = []
+        def observe(*args, **kwargs):
+            seen.append(kwargs['resume'].copy())
+            return search(*args, **kwargs)
+        old = {'stage': 'placement', 'idle': 7, 'proven': {'conditions': True},
+               'proofValues': {'conditions': [1]}, 'preservedCommonExtraDaysOff': None}
+        with patch('solver.engine.quality_search', observe):
+            r = dispatch(dict(SCREEN, input=raw, resume=old))
+        self.assertIn('assignments', r, r)
+        self.assertEqual((seen[0]['stage'], seen[0]['idle'], seen[0]['proven'], seen[0]['proofValues']),
+                         ('conditions', 0, {}, {}))
+        self.assertEqual(check_resume(dict(old, restBalancePolicy='actual-rest-1'), True)['restBalancePolicy'], 'actual-rest-1')
+
     def test_kept_within_one(self):
         raw = with_rest(six_staff(10), sids=('s0', 's1', 's2', 's3'))
         raw['requests'] = {'s0': [4, 12, 21], 's2': [7, 16]}

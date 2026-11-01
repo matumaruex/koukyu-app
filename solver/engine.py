@@ -117,6 +117,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     except (ValueError, TypeError) as exc:
         return {'status': 'INVALID_INPUT', 'errors': [str(exc)]}
 
+    # 公平性の数え方が異なる旧版の続きからは、段階と最少証明を引き継がない。
+    if p['restCountBalance'] and resume is not None and resume.get('restBalancePolicy') != 'actual-rest-1':
+        resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
+
     def rule_exception(e):
         return allow_rule_exceptions and is_rule_exception(p, e)
 
@@ -345,26 +349,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 required(sum(blocks) >= st['minConsecutiveRest'], sid + '_rest_blocks',
                          label + f'の2日以上の連休を{st["minConsecutiveRest"]}回以上')
             if p['restCountBalance'] and not relax_wishes and sid not in p['fairnessExcludedStaff']:
-                # 希望休・固定の公休だけでできた連休は数えない。そうした日のひと続き[a,b]（2日以上）は、
-                # 前後の日が公休でないときだけ、それだけの連休になる（希望休・固定は必ず公休なので）。
-                wish_only, d = [], 0
-                while d < n:
-                    if not user_fixed_off(p, sid, d + 1):
-                        d += 1
-                        continue
-                    e = d
-                    while e + 1 < n and user_fixed_off(p, sid, e + 2):
-                        e += 1
-                    if e > d:
-                        sides = ([x[sid, d - 1, 'off']] if d > 0 else []) + ([x[sid, e + 1, 'off']] if e + 1 < n else [])
-                        alone = model.new_bool_var(f'{sid}_rest_wish_only_{d}')
-                        for side in sides:
-                            model.add(alone <= 1 - side)
-                        model.add(alone >= 1 - sum(sides))
-                        wish_only.append(alone)
-                    d = e + 1
+                # 表に表示する実際の連休をすべて比較する。
                 count = model.new_int_var(0, n, sid + '_rest_count')
-                model.add(count == sum(blocks) - sum(wish_only))
+                model.add(count == sum(blocks))
                 rest_counts.append(count)
         if st['noConsecutiveRest']:
             # 連休なし：前日と当日がともに公休なら1件。明けは休みに数えない。希望休・固定の公休・前期の実績どうしは数えない。
@@ -811,6 +798,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                         initial_assignments=initial_assignments, resume=resume)
         if quality_result['info'].get('resume') is not None:
             quality_result['info']['resume']['preservedCommonExtraDaysOff'] = preserved_extra
+            if p['restCountBalance']:
+                quality_result['info']['resume']['restBalancePolicy'] = 'actual-rest-1'
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:

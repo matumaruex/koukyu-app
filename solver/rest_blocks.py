@@ -61,10 +61,8 @@ def forbidden_ranges(p, st, row):
 
 
 def counted_ranges(p, sid, row):
-    """連休の回数の比較（3.46）に数える連休：希望休・固定の公休だけでできた連休は数えない。
-    計算が決めた公休を1日でも含む連休だけを数える。今期内の連休だけ（前期・翌期とはつなげない）。"""
-    return [b for b in ranges(row, p['days'])
-            if any(not user_fixed_off(p, sid, d) for d in range(b['start'], b['end'] + 1))]
+    """希望休・固定を含め、今期内の実際の連休をすべて数える。"""
+    return ranges(row, p['days'])
 
 
 def balance_staff(p):
