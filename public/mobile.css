@@ -220,3 +220,6 @@ footer{color:#8f9cc0;padding-bottom:160px}
 }
 @media screen and (prefers-reduced-motion:reduce){.progress::before{animation:none;left:58%}.progress::after{animation:none;left:calc(58% - 34px)}}
 @media print{.screen-only{display:none!important}}
+
+/* 対象外の職員を一覧で控えめに表示する。 */
+.staff-card .not-in-period{opacity:.56}.staff-card .participation-badge{margin-left:6px;font-size:.75em}

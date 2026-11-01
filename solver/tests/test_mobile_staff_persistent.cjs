@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
+const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',nightShiftType:'none',monthlyDaysOff:9},{id:'b',name:'職員B',type:'full',nightShiftType:'none',monthlyDaysOff:9}],schedules:{'2026-10':{requests:{a:[5]},assignments:{}},'2026-11':{requests:{b:[3]},assignments:{},excludedStaff:[]}}};
+const h=harness(null,{current:raw});h.eval("schedule().assignments={a:{'1':'off'},b:{'1':'early'}};schedule().workSignature=inputData().signature;render();data.savedTables.push(RosterStorage.capture(data,key(),'保存表','saved'));setTab('staff');editStaff(data.staff[0])");const saved=h.get('data.savedTables[0]');
+const form=()=>h.nodes['dialog-body'].all('form')[0],checkbox=()=>form().all('label').find(l=>l.text.includes('公休表に入れる')).all('input')[0];
+assert.equal(checkbox().checked,true);checkbox().checked=false;form().onsubmit({preventDefault(){}});
+assert.deepEqual(h.get('activeStaff().map(s=>s.id)'),['b']);assert(h.get('workChanged()'));assert.deepEqual(h.get('schedule().workSnapshot.schedule.assignments'),{a:{'1':'off'},b:{'1':'early'}});assert.deepEqual(h.get('data.savedTables[0]'),saved);assert(h.nodes.view.text.includes('対象外'));assert(!h.nodes.view.text.includes('今期に入れる'));
+assert.deepEqual(h.get('data.schedules["2026-11"].excludedStaff'),['a']);h.eval('state.month=12;render()');assert.deepEqual(h.get('activeStaff().map(s=>s.id)'),['b']);
+const reload=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data'))});reload.eval('state.month=12;render()');assert.deepEqual(reload.get('activeStaff().map(s=>s.id)'),['b']);
+reload.eval("setTab('staff');editStaff(data.staff[0])");const f=reload.nodes['dialog-body'].all('form')[0],toggle=f.all('label').find(l=>l.text.includes('公休表に入れる')).all('input')[0];assert.equal(toggle.checked,false);toggle.checked=true;f.onsubmit({preventDefault(){}});
+assert.deepEqual(reload.get('activeStaff().map(s=>s.id)'),['a','b']);reload.eval('state.month=1;state.year=2027;render()');assert.deepEqual(reload.get('activeStaff().map(s=>s.id)'),['a','b']);
+assert.deepEqual(reload.get('data.schedules["2026-10"].requests.a'),[5]);assert.deepEqual(reload.get('data.schedules["2026-11"].requests.b'),[3]);
+const fail=harness(null,{current:raw,quota:true});fail.eval("setTab('staff');editStaff(data.staff[0])");const ff=fail.nodes['dialog-body'].all('form')[0];ff.all('label').find(l=>l.text.includes('公休表に入れる')).all('input')[0].checked=false;ff.onsubmit({preventDefault(){}});assert.deepEqual(fail.get('activeStaff().map(s=>s.id)'),['a','b']);
+console.log('PASS: 職員設定・期間を越える対象外・再読込・復帰・希望の保持');
