@@ -178,8 +178,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     def value(sid, d, shift):
         return x[sid, d, shift] if d >= 0 else int(p['history'][sid][d + 7] == shift)
 
+    exempt_nights = {st['id'] for st in p['staff'] if st['excludeNightFromConsecutive']}
+
     def working(sid, d):
-        return 1 - value(sid, d, 'off') - value(sid, d, 'nightOff')
+        return (1 - value(sid, d, 'off') - value(sid, d, 'nightOff')
+                - (value(sid, d, 'night') if sid in exempt_nights else 0))
 
     # 中間ルールの違反（連勤上限を超えた日、＋1の超過、許可した人の逆の日勤）。
     rule_violations = []
@@ -397,7 +400,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if st['type'] == 'part':
             mondays = {d - (p['start'] + timedelta(days=d)).weekday() for d in range(n)}
             for monday in sorted(mondays):
-                required(sum(working(sid, d) for d in range(monday, min(n, monday + 7))) <= st['maxDaysPerWeek'], sid + '_weekly', label + f'の週{st["maxDaysPerWeek"]}日以内（月曜始まり）')
+                required(sum(1 - value(sid, d, 'off') - value(sid, d, 'nightOff') for d in range(monday, min(n, monday + 7))) <= st['maxDaysPerWeek'], sid + '_weekly', label + f'の週{st["maxDaysPerWeek"]}日以内（月曜始まり）')
         else:
             if st['dayShiftType'] == 'both' and (optimize or allow_staffing_shortfall):
                 a = model.new_int_var(0, n, sid + '_a_total')

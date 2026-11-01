@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
+const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',monthlyDaysOff:9,nightShiftType:'all'}],schedules:{'2026-10':{requests:{},assignments:{}}}};
+const h=harness(null,{current:raw});h.eval("schedule().assignments={a:{'1':'early'}};schedule().workSignature=inputData().signature;render();setTab('staff');editStaff(data.staff[0])");
+const find=()=>h.nodes['dialog-body'].all('label').find(l=>l.text.includes('夜勤は連続出勤日数に含めない'));
+const box=find().all('input')[0],before=h.get('inputData().signature');assert.equal(box.checked,false);box.checked=true;
+h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});
+assert.equal(h.get('data.staff[0].excludeNightFromConsecutive'),true);assert.equal(h.get('inputData().p.staff[0].excludeNightFromConsecutive'),true);assert.notEqual(h.get('inputData().signature'),before);
+assert(h.get('workChanged()'));assert.equal(h.get('hasTable()'),true);assert.equal(h.get('schedule().workSnapshot.staff[0].excludeNightFromConsecutive'),false);
+const re=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work')}});assert.equal(re.get('data.staff[0].excludeNightFromConsecutive'),true);assert.equal(re.get('hasTable()'),true);
+h.eval('editStaff(data.staff[0])');assert.equal(find().all('input')[0].checked,true);find().all('input')[0].checked=false;h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});assert.equal(h.get('inputData().signature'),before);
+for(const v of [1,null,'true'])assert.throws(()=>h.ctx.checkBackup({...raw,staff:[{...raw.staff[0],excludeNightFromConsecutive:v}]}));
+console.log('PASS: 夜勤を連勤に含めない設定の保存・再読込・作業表保持');

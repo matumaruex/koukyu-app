@@ -33,7 +33,7 @@ assert(reopened.ctx.errorsText([{code:'fixed_days_off',staff:'s0',actual:10,requ
 for(const v of [1,'true',null])assert.throws(()=>h.ctx.checkBackup({...raw,staff:[{...raw.staff[0],fixedDaysOff:v}]}));
 mode().value='minimum';h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});assert.equal(h.get('inputData().signature'),before);
 // 3.48の作業表を保持し、以前の最少証明を今の計算に流用しない。
-const work=JSON.parse(h.values.get('koukyu_v4_work'));const w=work.schedules['2026-10'];delete w.workSnapshot;w.workSignature=w.workSignature.replace('rules-3.50:','rules-3.45:');w.meta={status:'OPTIMAL',optimizationPolicy:'quality-first-10'};
+const work=JSON.parse(h.values.get('koukyu_v4_work'));const w=work.schedules['2026-10'];delete w.workSnapshot;w.workSignature=w.workSignature.replace('rules-3.56:','rules-3.45:');w.meta={status:'OPTIMAL',optimizationPolicy:'quality-first-10'};
 const upgraded=harness(null,{current:raw,stored:{koukyu_v4_work:JSON.stringify(work)}});
 assert.equal(upgraded.get('hasTable()'),true);assert.equal(upgraded.get('workChanged()'),true);assert.equal(upgraded.get('metadata()'),null);
 console.log('PASS: 公休固定の編集・保存・復元・通常への送信・おまかせの独立・旧表保持と証明の無効化');

@@ -72,7 +72,7 @@ def validate(raw, assignments):
             current = i >= 7
             day = i - 6
             dt = p['start'] + timedelta(days=day - 1)
-            run = run + 1 if shift not in ('off', 'nightOff') else 0
+            run = run + 1 if shift not in ('off', 'nightOff') and not (shift == 'night' and st['excludeNightFromConsecutive']) else 0
             if current:
                 if run > limit + (1 if st['allowConsecutivePlus1'] else 0):
                     fail('consecutive', sid, day, f'{run} consecutive days')
