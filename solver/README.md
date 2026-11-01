@@ -440,4 +440,6 @@ UI/API3.42、アセットv54。通常はquality-first-8／rules-3.35、並行8�
 
 配信する Python 依存関係は `uv.lock` に固定する。従来の事前インストールと Python ビルダーのインストールが重なり、確認用ビルドが容量超過（最適化後241.59 MB／上限225 MB）で失敗した。ロックの追加だけでは解消しなかったが、確認用デプロイの `installCommand` を空にするとビルド・配信が成功（dpl_BbGjrBVFXgEqEygoEQ5Qw96Giqsx、Preview、READY）。同じ設定を `vercel.json` に保持し、依存関係のインストールは Python ビルダーに任せる。計算ライブラリ自体は削除・変更しない。
 
-この段階では実サーバーでの開始・継続・結果取得は未検証。一時アクセスリンクの発行が自動承認審査で拒否されたため、発行の許可を得てから動作確認を進める。リンクを知る人は最大23時間プレビューにアクセスできる。本番は3.56のままで変更していない。
+通常のファイル別APIビルドは `[[tool.vercel.workflows]]` の実行先を登録しないため、`pyproject.toml` を独立したビルド対象として明示する。ローカルの公式Pythonビルダーで `_py_workflows/solver-background__wf` のLambdaと `queue/v2beta` のトリガー（topic `__wkf_workflow_*`、consumer `default`）が生成されることを確認した。静的ファイル・通常APIは従来のURLに配信する。`builds` を明示するため、Vercel画面のBuild/Development設定よりリポジトリの設定を優先する。
+
+2026年11月1日の確認用デプロイ `dpl_3qJWuRQruRDeJf5oqyk7icsExWY2` はPreview・READY。画面とmobile.jsはHTTP200、`/api/schedule` はHTTP200・3.57、`/api/background` はGETを想定どおり405で拒否し、起動を確認した。実サーバーでの開始・継続・結果取得・中止は未検証。一時リンクの発行はオーナーが承認済みで発行できたが、作業環境の許可先にVercelがなく、直接のHTTP送信はプロキシがCONNECT403で拒否する。閲覧用の接続ツールはGET専用。次の検証には作業環境で `koukyu-app-git-codex-background-roster-matumaruexs-projects.vercel.app` への接続許可が必要（制限を迂回しない）。その後、秘密のリンクで認証して架空データのPOST検証、Androidで画面離脱・復帰を確認する。本番3.56は変更していない。
