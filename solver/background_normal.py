@@ -70,4 +70,3 @@ async def normal(input_data, initial, solve, max_seconds=480, base_seconds=60, p
     if best and bound is not None and isinstance(best.get('staffingShortfallTotal'), int):
         best = {**best, 'shortfallLowerBound': min(bound, best['staffingShortfallTotal'])}
     return {'best': best, 'last': last, 'seconds': seconds, 'rounds': rounds, 'error': '計算を完了できませんでした。' if last and last.get('status') == 'WORKER_ERROR' else None, 'done': done, 'stale': False}
-

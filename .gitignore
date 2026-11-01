@@ -6,3 +6,6 @@ __pycache__/
 public/example.json
 solver/results/
 ソルへの引継ぎ.md
+
+# 作成中のワークフローデータを公開しない。
+.workflow-data/

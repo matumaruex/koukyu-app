@@ -19,4 +19,3 @@ const jobApi=require('../../public/background-job.js');
  global.setTimeout=actualSetTimeout;
  console.log('PASS: 接続復帰、端末保存、結果保持、中止');
 })().catch(e=>{console.error(e);process.exit(1);});
-

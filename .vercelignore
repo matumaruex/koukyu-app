@@ -8,3 +8,6 @@ solver/lab.html
 user_data.json
 
 public/example.json
+
+# 作成中のワークフローデータを公開しない。
+.workflow-data/

@@ -16,7 +16,9 @@ const answer=mode=>({best:{status:'FEASIBLE',assignments:{s0:{'1':'off'}},second
  const changed=JSON.parse(stored.koukyu_v4_data);changed.schedules['2026-10']??={requests:{},assignments:{}};changed.schedules['2026-10'].requests.local=[2];
  const mismatch=harness(null,{current:changed,stored:{...stored,koukyu_v4_data:JSON.stringify(changed)},backgroundActual:true,response:async()=>{throw Error('must not fetch');}});
  await tick();assert.equal(mismatch.get('hasTable()'),false);assert(mismatch.nodes.notice.textContent.includes('自動で上書きしません'),JSON.stringify({mode,notice:mismatch.nodes.notice.textContent,job:mismatch.values.has('koukyu_background_job_v1')}));assert(mismatch.values.has('koukyu_background_job_v1'));
-}console.log('PASS: 通常の画面再読込と条件変更時の上書き防止');})().catch(e=>{console.error(e);process.exit(1);});
-
-
-
+}
+// ローカルPC版は、従来の計算窓口を使い、画面を開いたまま作成する。
+const local=harness(null,{current:raw,response:async()=>({status:'OPTIMAL',seconds:1,assignments:{s0:{'1':'off'}},allocation:{overtimeTotal:0},search:{done:true}})});
+local.eval("window.location={hostname:'127.0.0.1'}");await local.ctx.generate();
+assert.equal(local.get('hasTable()'),true);assert.equal(local.calls[0].qualityFirst,true);
+console.log('PASS: 通常の画面再読込・条件変更時の上書き防止・PCローカル版');})().catch(e=>{console.error(e);process.exit(1);});
