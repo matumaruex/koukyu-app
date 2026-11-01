@@ -43,6 +43,10 @@ def normalize(raw):
     p.setdefault('overtimeDistribution', False)
     if type(p['overtimeDistribution']) is not bool:
         raise ValueError('overtimeDistribution must be boolean.')
+    # 通常画面では全員共通。旧入力・旧表では当時の職員ごとの指定を保つ。
+    p.setdefault('excludeNightFromConsecutive', False)
+    if type(p['excludeNightFromConsecutive']) is not bool:
+        raise ValueError('excludeNightFromConsecutive must be boolean.')
     # A残は1回の出勤サイクルに1回まで（3.40、通常版の画面が送る。人数不足を減らすためだけに2回目を許す）。
     p.setdefault('overtimeCycleLimit', False)
     if type(p['overtimeCycleLimit']) is not bool:
@@ -99,6 +103,8 @@ def normalize(raw):
             st.setdefault(field, False)
             if type(st[field]) is not bool:
                 raise ValueError(f'{sid}: {field} must be boolean.')
+        if p['excludeNightFromConsecutive']:
+            st['excludeNightFromConsecutive'] = True
         if st['noConsecutiveRest'] and st['minConsecutiveRest']:
             raise ValueError(f'{sid}: noConsecutiveRest cannot be combined with minConsecutiveRest.')
         if st['type'] == 'part':

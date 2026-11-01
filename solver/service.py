@@ -78,7 +78,7 @@ def dispatch(payload, *, _deadline=None):
 def check_resume(value, quality_first):
     if value is None:
         return None
-    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy', 'overtimeDistributionPolicy'}:
+    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy', 'overtimeDistributionPolicy', 'nightConsecutivePolicy'}:
         raise ValueError('resume の形式を確認してください。')
     if value.get('stage') not in STAGES:
         raise ValueError('resume.stage を確認してください。')
@@ -106,10 +106,14 @@ def check_resume(value, quality_first):
     overtime_distribution_policy = value.get('overtimeDistributionPolicy')
     if overtime_distribution_policy is not None and (not isinstance(overtime_distribution_policy, str) or len(overtime_distribution_policy) > 40):
         raise ValueError('resume.overtimeDistributionPolicy を確認してください。')
+    night_consecutive_policy = value.get('nightConsecutivePolicy')
+    if night_consecutive_policy is not None and (not isinstance(night_consecutive_policy, str) or len(night_consecutive_policy) > 40):
+        raise ValueError('resume.nightConsecutivePolicy を確認してください。')
     return {'stage': value['stage'], 'idle': float(idle), 'proven': dict(proven),
             'proofValues': {name: list(values) for name, values in proof_values.items()},
             **({'restBalancePolicy': policy} if policy is not None else {}),
             **({'nightDistributionPolicy': distribution_policy} if distribution_policy is not None else {}),
             **({'overtimeDistributionPolicy': overtime_distribution_policy} if overtime_distribution_policy is not None else {}),
+            **({'nightConsecutivePolicy': night_consecutive_policy} if night_consecutive_policy is not None else {}),
             **({'preservedCommonExtraDaysOff': extra} if 'preservedCommonExtraDaysOff' in value else {})}
 

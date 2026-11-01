@@ -126,6 +126,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
     if resume is not None and resume.get('overtimeDistributionPolicy') != (OVERTIME_DISTRIBUTION_POLICY if p['overtimeDistribution'] else None):
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
+    if resume is not None and resume.get('nightConsecutivePolicy') != ('exclude-night-1' if p['excludeNightFromConsecutive'] else None):
+        resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
 
     def rule_exception(e):
         return allow_rule_exceptions and is_rule_exception(p, e)
@@ -819,6 +821,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 quality_result['info']['resume']['nightDistributionPolicy'] = DISTRIBUTION_POLICY
             if p['overtimeDistribution']:
                 quality_result['info']['resume']['overtimeDistributionPolicy'] = OVERTIME_DISTRIBUTION_POLICY
+            if p['excludeNightFromConsecutive']:
+                quality_result['info']['resume']['nightConsecutivePolicy'] = 'exclude-night-1'
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:

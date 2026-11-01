@@ -10,12 +10,12 @@ const raw={schemaVersion:4,savedTables:[],staff:[
  assert.equal(h.get('inputData().p.overtimeDistribution'),true);
  assert.equal(h.get('inputData().p.nightDistribution'),true);
  assert.equal(h.get('inputData().p.staff[0].overtimePreference'),1);
- assert.equal(h.get('OPTIMIZATION_POLICY'),'quality-first-15');
+ assert.equal(h.get('OPTIMIZATION_POLICY'),'quality-first-16');
  assert.equal(h.get('OvertimePreference.POLICY'),h.get('OPTIMIZATION_POLICY'));
  h.eval("schedule().assignments={a:{'1':'overtime','2':'off','7':'off'},b:{'1':'early'}};schedule().workSignature=inputData().signature;render()");
  const values=Object.fromEntries(h.values),work=JSON.parse(values.koukyu_v4_work),table=work.schedules['2026-10'];
  delete table.workSnapshot;
- table.workSignature=table.workSignature.replace('rules-3.59:','rules-3.58:').replace(',"overtimeDistribution":true','');
+ table.workSignature=table.workSignature.replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.61:','rules-3.58:').replace(',"overtimeDistribution":true','');
  table.meta={status:'OPTIMAL',optimizationPolicy:'quality-first-14',signature:table.workSignature,allocation:{minimumOvertimeProven:true}};
  const reopened=harness(null,{current:JSON.parse(values.koukyu_v4_data),stored:{...values,koukyu_v4_work:JSON.stringify(work)}});
  assert(reopened.get('hasTable()'));assert(reopened.get('workChanged()'));assert.equal(reopened.get('metadata()'),null);

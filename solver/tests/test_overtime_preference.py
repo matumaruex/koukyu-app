@@ -51,7 +51,7 @@ class PreferenceTests(unittest.TestCase):
         self.assertEqual(f['balance'], 0)
         self.assertTrue(f['minimumSpreadProven'])
         self.assertTrue(result['allocation']['minimumOvertimeProven'])
-        self.assertEqual(result['optimizationPolicy'], 'quality-first-15')
+        self.assertEqual(result['optimizationPolicy'], 'quality-first-16')
 
     def test_existing_candidate_can_be_reallocated_without_more_overtime(self):
         raw, before = overtime_fixture()
