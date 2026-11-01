@@ -52,8 +52,8 @@
 /* 中間ルールの例外（守ると作れないため入れた日）は点線枠。印刷でも残す。 */
 .month-table td.exception{outline:2px dashed #b4690e;outline-offset:-3px}
 
-/* 職員一覧は名前と操作の2段にまとめる。 */
-.staff-row{display:block;padding:10px 0}.staff-row strong{display:block;overflow-wrap:anywhere}.staff-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}.staff-controls .participation-toggle{margin:0;gap:6px;flex-wrap:nowrap;white-space:nowrap}.staff-card .staff-tools button{padding:8px 12px}.staff-card .staff-tools .move{padding:8px 0}
+/* 職員一覧は名前・対象外表示・操作を1行にまとめる。 */
+.staff-row{display:block;padding:10px 0}.staff-row strong{display:block;overflow-wrap:anywhere}.staff-card .staff-row{display:flex;align-items:center;gap:8px}.staff-card .staff-row strong{min-width:0}.staff-name-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.staff-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-left:auto;flex:0 0 auto}.staff-controls .participation-toggle{margin:0;gap:6px;flex-wrap:nowrap;white-space:nowrap}.staff-card .staff-tools button{padding:8px 12px}.staff-card .staff-tools .move{padding:8px 0}
 @media(max-width:359px){.staff-controls .participation-status{display:none}}
 
 /* 入力欄の短い補足は見出しの横に置く。 */
@@ -63,7 +63,7 @@
 .staff-card,.staff-edit-dialog{font-size:12px;line-height:1.5}.staff-card h2,.staff-edit-dialog h2{font-size:16px}.staff-card .staff-row strong{font-size:13px}.staff-card .muted,.staff-card .participation-toggle,.staff-edit-dialog .muted{font-size:11px}.staff-edit-dialog .field{font-size:12px;gap:4px;margin:12px 0}.staff-edit-dialog .check{font-size:12px;gap:8px;margin:12px 0;min-height:44px}.staff-edit-dialog .field-heading small{font-size:11px}.staff-edit-dialog .field input,.staff-edit-dialog .field select{font-size:16px;min-height:44px;padding:8px 10px}
 
 /* 職員画面は文字に合わせて余白と操作部品も詰める。 */
-.staff-card{padding:12px;border-radius:13px}.staff-card h2{margin-bottom:6px}.staff-card p{margin:6px 0}.staff-card button,.staff-edit-dialog button{min-height:32px;padding:4px 10px;border-radius:8px}.staff-card .wide{margin-top:8px}.staff-card .staff-row{padding:4px 0}.staff-card .staff-controls{margin-top:2px;gap:6px}.staff-card .staff-tools{gap:4px}.staff-card .staff-tools button{padding:4px 10px}.staff-card .staff-tools .move{min-width:32px;padding:4px 0}.staff-card .participation-toggle{min-height:32px;gap:5px}.staff-card .participation-toggle input{width:36px;height:22px}.staff-card .participation-toggle input::before{width:14px;height:14px}.staff-card .participation-toggle input:checked::before{transform:translateX(14px)}
+.staff-card{padding:12px;border-radius:13px}.staff-card h2{margin-bottom:6px}.staff-card p{margin:6px 0}.staff-card button,.staff-edit-dialog button{min-height:32px;padding:4px 10px;border-radius:8px}.staff-card .wide{margin-top:8px}.staff-card .staff-row{padding:4px 0}.staff-card .staff-controls{margin-top:0;gap:6px}.staff-card .staff-tools{gap:4px}.staff-card .staff-tools button{padding:4px 10px}.staff-card .staff-tools .move{min-width:32px;padding:4px 0}.staff-card .participation-toggle{min-height:32px;gap:5px}.staff-card .participation-toggle input{width:36px;height:22px}.staff-card .participation-toggle input::before{width:14px;height:14px}.staff-card .participation-toggle input:checked::before{transform:translateX(14px)}
 .staff-dialog-shell{padding:16px;border-radius:14px;max-width:480px}.staff-edit-dialog .dialog-heading{gap:10px}.staff-edit-dialog .dialog-heading button{min-width:32px;padding:4px 8px}.staff-edit-dialog .field{margin:8px 0;gap:3px}.staff-edit-dialog .field input,.staff-edit-dialog .field select{min-height:34px;padding:5px 8px;line-height:1.25;border-radius:7px}.staff-edit-dialog .check{min-height:32px;margin:8px 0;gap:7px}.staff-edit-dialog .check input{width:18px;height:18px;flex-shrink:0}.staff-edit-dialog p{margin:6px 0}.staff-edit-dialog .wide{margin-top:8px}.staff-edit-dialog .field-heading{gap:7px}
 
 /* 希望一覧は職員と同じ2段、入力は同じ大きさのダイアログ。 */
@@ -222,4 +222,4 @@ footer{color:#8f9cc0;padding-bottom:160px}
 @media print{.screen-only{display:none!important}}
 
 /* 対象外の職員を一覧で控えめに表示する。 */
-.staff-card .not-in-period{opacity:.56}.staff-card .participation-badge{margin-left:6px;font-size:.75em}
+.staff-card .not-in-period{opacity:.56}.staff-card .participation-badge{flex-shrink:0;margin-left:0;font-size:.75em}
