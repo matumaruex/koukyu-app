@@ -18,6 +18,8 @@
       "Referrer-Policy": "same-origin"
     }, "continue": true},
     {"src": "/", "dest": "/public/index.html", "headers": {"Cache-Control": "no-cache"}},
+    {"src": "/api/(schedule|background)", "dest": "/api/$1.py"},
+    {"src": "/_py_workflows/(.*)", "dest": "/_py_workflows/$1"},
     {"handle": "filesystem"},
     {"src": "/(.*)", "dest": "/public/$1"}
   ]
