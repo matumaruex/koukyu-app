@@ -3,13 +3,14 @@ from datetime import timedelta
 from .input_data import normalize, SHIFTS, overtime_profile
 from .rest_blocks import ranges as rest_ranges, forbidden_ranges, balance_report as rest_balance_report
 from .night_remainder import report as night_remainder_report
+from .isolated_work import days as isolated_days
 
 SHORTFALL_CODES = ('coverage', 'sunday_limit')
 
 
 def is_rule_exception(p, error):
     """中間ルール（守ると表が作れないときだけ破れる）の違反か。p は正規化済みの入力。"""
-    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest', 'night_remainder', 'rest_balance'):
+    if error['code'] in ('consecutive', 'consecutive_plus_one', 'no_consecutive_rest', 'night_remainder', 'rest_balance', 'isolated_work'):
         return True
     if error['code'] == 'day_shift_eligibility':
         staff = next((st for st in p['staff'] if st['id'] == error['staff']), None)
@@ -21,7 +22,7 @@ def exception_count(p, errors):
     """計算側と同じ数え方：上限を超えた日数＋＋1の超過回数＋逆の日勤の日数。
     連休なしの例外は、最初に最少回数を証明して固定する別扱いなので、ここには数えない（rest_exception_count）。"""
     return sum(e.get('count', 1) for e in errors
-               if is_rule_exception(p, e) and e['code'] not in ('no_consecutive_rest', 'night_remainder', 'rest_balance'))
+               if is_rule_exception(p, e) and e['code'] not in ('no_consecutive_rest', 'night_remainder', 'rest_balance', 'isolated_work'))
 
 
 def rest_exception_count(errors):
@@ -126,6 +127,9 @@ def validate(raw, assignments):
         for block in forbidden_ranges(p, st, assignments[sid]):
             fail('no_consecutive_rest', sid, block['end'], '連休なしの職員に連休があります。')
             errors[-1].update(start=block['start'], end=block['end'], count=block['count'])
+        for day in isolated_days(p, st, assignments[sid]):
+            fail('isolated_work', sid, max(1, day), '公休に挟まれた1日だけの出勤があります。')
+            errors[-1]['workDay'] = day
         cap = overtime_profile(p, st)['cap']
         if values.count('overtime') > cap:
             fail('overtime_limit', sid, detail=f"{values.count('overtime')} > {cap}")

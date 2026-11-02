@@ -36,7 +36,7 @@ function fill(h,values){rows(h).all('select').forEach((s,i)=>{s.value=values[i];
  // 旧7日の表は当時の条件を残す。新規作成へ旧週上限の証明を流用しない。
  const old=harness(null,{current:raw});old.eval("schedule().assignments={a:{'1':'early'},b:{'1':'part'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',signature:inputData().signature};render()");
  const work=JSON.parse(old.values.get('koukyu_v4_work')),w=work.schedules['2026-10'];delete w.workSnapshot;
- w.workSignature=w.workSignature.replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace('rules-3.65:','rules-3.61:');w.meta.signature=w.workSignature;w.meta.optimizationPolicy='quality-first-16';
+ w.workSignature=w.workSignature.replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace('rules-3.72:','rules-3.61:');w.meta.signature=w.workSignature;w.meta.optimizationPolicy='quality-first-16';
  const restored=harness(null,{current:JSON.parse(old.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:JSON.stringify(work)}});
  assert(restored.get('hasTable()'));assert(restored.get('workChanged()'));assert.equal(restored.get('metadata()'),null);
  assert.deepEqual(restored.get('schedule().workSnapshot.schedule.history.a'),oldHistory);assert.deepEqual(restored.get('schedule().workSnapshot.schedule.requests.a'),[7]);

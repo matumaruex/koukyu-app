@@ -14,6 +14,7 @@ from .night_preferences import report as preference_report
 from .night_distribution import build as distribution_build, report as distribution_report, POLICY as DISTRIBUTION_POLICY
 from .overtime_distribution import build as overtime_distribution_build, report as overtime_distribution_report, POLICY as OVERTIME_DISTRIBUTION_POLICY
 from .quality_search import search as quality_search
+from .isolated_work import count as isolated_count, WORK_SHIFTS, POLICY as ISOLATED_POLICY
 from .rest_blocks import report as rest_report, user_fixed_off, balance_report as rest_balance_report
 from .overtime_cycles import eligible as cycle_eligible, carry_in, report as overtime_cycle_report
 from .night_remainder import plan as night_remainder_plan, report as night_remainder_report, max_nights
@@ -22,6 +23,7 @@ from .overtime_preference import offsets, score_bounds, active as preference_act
 
 # 連休なしの最少回数を確かめる計算の上限（1回の通信ごと）。確かめられなければ例外のある表は出さない。
 REST_PROOF_SECONDS = 20
+ISOLATED_PROOF_SECONDS = 20
 # 夜勤の端数：連勤などの例外を0件にした範囲で先に確かめる時間（残りは例外を許した範囲の確認に使う）。
 REMAINDER_STRICT_SECONDS = 5
 # 通常版の作成で並行して探す数（3.41）。2026年10月の測定で、4から8にすると残業の段階が最少に届く速さと確実さが上がった
@@ -131,6 +133,10 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if resume is not None and resume.get('historyPolicy') != p['historyPolicy']:
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
 
+    isolated_policy = ISOLATED_POLICY if any(st['avoidIsolatedWork'] for st in p['staff']) else None
+    if resume is not None and resume.get('isolatedWorkPolicy') != isolated_policy:
+        resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
+
     def rule_exception(e):
         return allow_rule_exceptions and is_rule_exception(p, e)
 
@@ -203,6 +209,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     rest_counts = []
     # 連休なしの人の、計算が作った連続した公休の組（前日・当日がともに公休）。
     rest_forbidden = []
+    isolated = []
     night_soft = allow_night_shortfall or relax_wishes
 
     def wish(expr, key, label, item):
@@ -382,6 +389,18 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 pair = model.new_bool_var(f'{sid}_rest_pair_{d}')
                 model.add(pair >= previous + x[sid, d, 'off'] - 1)
                 rest_forbidden.append(pair)
+        if st['avoidIsolatedWork']:
+            for d in range(-1, n - 1):
+                if d <= 0 and sid not in p['historyProvided']:
+                    continue
+                previous = value(sid, d - 1, 'off')
+                worked = sum(value(sid, d, k) for k in WORK_SHIFTS)
+                single = model.new_bool_var(f'{sid}_isolated_work_{d}')
+                model.add(single >= previous + worked + x[sid, d + 1, 'off'] - 2)
+                model.add(single <= previous)
+                model.add(single <= worked)
+                model.add(single <= x[sid, d + 1, 'off'])
+                isolated.append(single)
         if _holiday_actual_off is not None:
             model.add(off >= _holiday_actual_off[sid])
         ot = sum(x[sid, d, 'overtime'] for d in range(n))
@@ -525,6 +544,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     if rest_forbidden and not relax_wishes and (not allow_rule_exceptions or holiday_plan is not None):
         # 厳密な作成とおまかせでは、連休なしは必ず守る条件。
         required(sum(rest_forbidden) == 0, 'no_consecutive_rest', '連休なしの職員に連休を作らない')
+    if isolated and not relax_wishes and not allow_rule_exceptions:
+        required(sum(isolated) == 0, 'isolated_work', '公休に挟まれた1日だけの出勤を作らない')
     rest_spread_excess = None
     if len(rest_counts) >= 2:
         # 連休の回数の差が1回を超えた分。
@@ -545,7 +566,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         if _deadline is not None:
             seconds = max(.000001, min(seconds, _deadline - time.monotonic() - .15))
         # 理由調べでは、連休なしの例外も中間ルールと同じく最後に許す。
-        return _explain(model, dropped, night_missing, rule_violations + rest_forbidden + night_excess, len(p['staff']) * 4 * n, seconds, seed, rest_shortfalls)
+        return _explain(model, dropped, night_missing, rule_violations + rest_forbidden + night_excess + isolated, len(p['staff']) * 4 * n + len(isolated), seconds, seed, rest_shortfalls)
     overtime_range = 0
     if overtime_scaled:
         # 換算した回数の最大と最小の差。普通の人だけの月は「回数の差」そのもの。
@@ -756,6 +777,35 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'rest_balance_unconfirmed'},
                     'explanation': '連休の回数の差を1回以内にできるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
         seconds = max(.000001, seconds - balance_proof_seconds)
+    isolated_minimum = isolated_proof_seconds = None
+    isolated_scope = isolated_scope_value = None
+    if isolated and allow_rule_exceptions:
+        # 上位の例外数→連休差→1日だけの出勤を、人数不足を含めずに確かめる。
+        # 時間切れの正の値は採用しない。最少を証明した上位条件の範囲でのみ例外を許す。
+        isolated_unit = len(isolated) + 1
+        balance_term = rest_spread_excess if balance_weight else 0
+        isolated_scope = sum(rule_violations) * (n + 1) * isolated_unit + balance_term * isolated_unit + sum(isolated)
+        model.minimize(isolated_scope)
+        if initial_assignments is not None:
+            for (sid, d, shift), variable in x.items():
+                model.add_hint(variable, int(initial_assignments[sid][str(d + 1)] == shift))
+        proof = cp_model.CpSolver()
+        proof.parameters.max_time_in_seconds = max(.000001, min(ISOLATED_PROOF_SECONDS, seconds))
+        proof.parameters.random_seed = seed
+        proof.parameters.num_search_workers = SEARCH_WORKERS
+        proof_status = proof.solve(model)
+        model.clear_hints()
+        isolated_proof_seconds = proof.wall_time
+        if proof_status == cp_model.OPTIMAL or (proof_status == cp_model.FEASIBLE and proof.objective_value == 0):
+            isolated_scope_value = int(round(proof.objective_value))
+            isolated_minimum = int(proof.value(sum(isolated)))
+            model.add(isolated_scope <= isolated_scope_value)
+        elif proof_status != cp_model.INFEASIBLE:
+            return {'status': 'UNKNOWN', 'seconds': round(isolated_proof_seconds + (rest_proof_seconds or 0) + (night_proof_seconds or 0) + (balance_proof_seconds or 0), 3),
+                    'boundaryComplete': p['boundaryComplete'],
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'isolated_work_unconfirmed'},
+                    'explanation': '1日だけの出勤を避けられるか、時間内に確認できませんでした。不可能と判定したわけではありません。'}
+        seconds = max(.000001, seconds - isolated_proof_seconds)
     if has_priority:
         model.minimize(priority)
         if initial_priority is not None:
@@ -825,6 +875,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 quality_result['info']['resume']['overtimeDistributionPolicy'] = OVERTIME_DISTRIBUTION_POLICY
             if p['excludeNightFromConsecutive']:
                 quality_result['info']['resume']['nightConsecutivePolicy'] = 'exclude-night-1'
+            if isolated_policy:
+                quality_result['info']['resume']['isolatedWorkPolicy'] = isolated_policy
             if p['historyPolicy']:
                 quality_result['info']['resume']['historyPolicy'] = p['historyPolicy']
         solver, status = quality_result['solver'], quality_result['status']
@@ -911,7 +963,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         lower_bound = solver.best_objective_bound
     # 連休なし・夜勤端数・連休の回数の差の最少判定で使った時間も、通信をまたぐ累計予算へ返す。
     # 探索予算から引くだけでは、画面がその時間を数えず8分の上限を超えて続けてしまう。
-    elapsed += (rest_proof_seconds or 0) + (night_proof_seconds or 0) + (balance_proof_seconds or 0)
+    elapsed += (rest_proof_seconds or 0) + (night_proof_seconds or 0) + (balance_proof_seconds or 0) + (isolated_proof_seconds or 0)
     result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'historyVerification': p['historyVerification'], 'optimized': optimize}
     reason = ('early_return' if stopped_early else 'optimal' if status == cp_model.OPTIMAL
               else 'infeasible' if status == cp_model.INFEASIBLE
@@ -976,6 +1028,18 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                      seconds=round(balance_proof_seconds, 3) if balance_proof_seconds is not None else None)
         if balance['excess']:
             result['restBalanceExceptions'] = balance['excess']
+    singles = isolated_count(p, assignments)
+    if isolated_minimum is not None:
+        scope = (exceptions_of(errors) * (n + 1) * (len(isolated) + 1)
+                 + balance_of(assignments) * (len(isolated) + 1) + singles)
+        if scope != isolated_scope_value:
+            return {'status': 'UNKNOWN', 'seconds': result['seconds'], 'boundaryComplete': p['boundaryComplete'],
+                    'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None, 'reason': 'isolated_work_unconfirmed'},
+                    'explanation': '1日だけの出勤が最少と確認できない表は採用しません。'}
+        result['isolatedWork'] = {'minimum': isolated_minimum, 'count': singles, 'proven': True, 'policy': ISOLATED_POLICY,
+                                  'seconds': round(isolated_proof_seconds, 3)}
+    if singles:
+        result['isolatedWorkExceptions'] = singles
     cycles = overtime_cycle_report(p, assignments)
     if cycles is not None:
         # 1サイクルに2回目となったA残は、人数不足を減らすためだけに入る。条件段階の証明があれば、その人数不足での最少。
