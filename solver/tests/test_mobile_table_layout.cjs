@@ -25,14 +25,14 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  const roster=h.nodes.view.all('article').find(e=>e.id==='roster-result'),attention=roster.children.find(e=>cls(e,'result-attention'));
  assert(roster.children.indexOf(attention)<roster.children.indexOf(w));assert(attention.text.includes('4連勤目'));
 
- // 印刷用と横表示は操作ボタン・編集説明を出さず、独立した注意を表より上に残す。
+ // 印刷は注意を表の上へ、横表示は見出し横のボタンから開く。
  const printable=h.nodes.view.all('div').find(e=>e.className==='print-only'),printed=printable.all('div').find(e=>cls(e,'month-wrap'));
  assert.equal(printed.all('button').length,0);assert(!part(printed,'month-operations'));
  assert(printed.children.indexOf(part(printed,'month-notices'))<printed.children.indexOf(part(printed,'scroll')));
  assert(part(printed,'month-guide').text.includes('希望休の初日は'));
  const before=h.get('data'),signature=h.get('inputData().signature');heading.all('button')[0].click();assert(h.nodes.dialog.open);
  const viewer=h.nodes['dialog-body'];assert(!viewer.all('button').some(b=>b.text==='横画面で見る'));assert(!viewer.text.includes('表のマスを押すと'));
- const viewed=viewer.all('div').find(e=>cls(e,'month-wrap'));assert(viewed.children.indexOf(part(viewed,'month-notices'))<viewed.children.indexOf(part(viewed,'scroll')));
+ const viewed=viewer.all('div').find(e=>cls(e,'month-wrap'));assert(!part(viewed,'month-notices'));assert(part(viewed,'scroll'));const notice=viewer.all('section').find(e=>cls(e,'landscape-notice-panel'));assert(notice&&notice.hidden);assert(notice.text.includes('夜勤後にできなかった希望休'));assert(viewer.children[0].all('button').some(b=>b.text==='注意3件'));
  await h.click('閉じる');assert.deepEqual(h.get('data'),before);assert.equal(h.get('inputData().signature'),signature);assert.equal(h.calls.length,0);
 
  // 保存した表は、表のそばのボタンから保存時の職員・期間で開く。

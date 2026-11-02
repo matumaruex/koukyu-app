@@ -23,6 +23,7 @@ const body=h=>h.nodes['dialog-body'];
  const h=start(),before=h.get('data'),signature=h.get('inputData().signature'),stored=[...h.values];
  const originalRows=h.nodes.view.all('table')[0].all('tr').slice(2).map(r=>r.children.map(c=>c.text));
  open(h);assert(h.nodes.dialog.open);assert(h.nodes.dialog.className.includes('landscape-dialog'));
+ assert(!body(h).all('button').some(b=>b.text.startsWith('注意')));
  assert.equal(body(h).className,'landscape-body');assert(body(h).text.includes('作成時の職員A'));assert(body(h).text.includes('公休表'));
  assert(body(h).all('table').length===1);assert(body(h).all('td').every(td=>!td.onclick&&td.attributes.role!=='button'));
  assert.deepEqual(body(h).all('table')[0].all('tr').slice(2).map(r=>r.children.map(c=>c.text)),originalRows);
@@ -44,7 +45,7 @@ const body=h=>h.nodes['dialog-body'];
  const stale=start();stale.eval("data.staff[0].name='変更後の職員A';data.staff[0].monthlyDaysOff=10;save(true);render()");
  assert(stale.get('workChanged()'));const changed=stale.get('data'),old=stale.get('schedule().workSnapshot');
  open(stale);assert(body(stale).text.includes('作成時の職員A'));assert(!body(stale).text.includes('変更後の職員A'));
- assert(body(stale).text.includes('最新の条件とは異なる条件で作成した表です。'));await stale.click('閉じる');
+ assert(body(stale).text.includes('最新の条件とは異なる条件で作成した表です。'));await stale.click('注意1件');assert.equal(body(stale).all('section')[0].hidden,false);await stale.click('注意を閉じる');await stale.click('閉じる');
  assert.deepEqual(stale.get('data'),changed);assert.deepEqual(stale.get('schedule().workSnapshot'),old);assert.equal(stale.calls.length,0);
 
  // 保存した表は現在の期間・職員を使わず、保存時の内容で表示する。
@@ -57,7 +58,23 @@ const body=h=>h.nodes['dialog-body'];
  // 説明を省いても、注意は残す。
  const warning=start();warning.eval("schedule().meta={status:'DRAFT',signature:inputData().signature,ruleExceptions:[{code:'consecutive',staff:'s0',day:4,actual:4,limit:3}],historyVerification:{issues:[{staff:'s0',provided:5,required:6,reasons:['consecutive']}]},nightRestPreferences:{rule:'night-request-gap-1',unmet:[{staff:'s0',day:7}]}};render()");
  open(warning);for(const text of ['人数不足','勤務条件の例外：1件','前期をまたぐ条件の確認は未完了','夜勤後にできなかった希望休','作成時の職員A'])assert(body(warning).text.includes(text),text);
- assert(!body(warning).text.includes('記号・ルール'));await warning.click('閉じる');
+ assert(!body(warning).text.includes('記号・ルール'));
+ const warned=warning.get('data'),warnedStorage=[...warning.values],dialog=body(warning),table=dialog.all('table')[0],rows=table.all('tr').map(r=>r.children.map(c=>c.text)),panel=dialog.all('section')[0],toggle=dialog.all('button').find(b=>b.text==='注意4件');
+ assert(toggle);assert.equal(panel.hidden,true);assert.equal(toggle.attributes['aria-controls'],panel.id);assert.equal(toggle.attributes['aria-expanded'],'false');
+ const line=dialog.all('div').find(e=>e.className==='landscape-title-line');assert(line.children.includes(toggle));assert.equal(line.children[0].text,'公休表');
+ const wrap=dialog.all('div').find(e=>e.className==='month-wrap');assert(!wrap.children.some(e=>e.className==='month-notices'));assert(!wrap.text.includes('人数不足'));
+ let focused='';panel.all('button')[0].focus=()=>{focused='close';};toggle.focus=()=>{focused='toggle';};
+ await warning.click('注意4件');assert.equal(panel.hidden,false);assert.equal(toggle.attributes['aria-expanded'],'true');assert.equal(focused,'close');
+ await warning.click('文字を大きく');assert.equal(panel.hidden,false);assert(dialog.className.includes('landscape-enlarged'));
+ await warning.click('注意を閉じる');assert.equal(panel.hidden,true);assert.equal(focused,'toggle');assert.equal(toggle.attributes['aria-expanded'],'false');
+ await warning.click('注意4件');let prevented=false,stopped=false;panel.onkeydown({key:'Escape',preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});assert(prevented&&stopped);assert.equal(panel.hidden,true);assert(warning.nodes.dialog.open);
+ assert.equal(dialog.all('table')[0],table);assert.deepEqual(table.all('tr').map(r=>r.children.map(c=>c.text)),rows);await warning.click('閉じる');
+ assert.deepEqual(warning.get('data'),warned);assert.deepEqual([...warning.values],warnedStorage);assert.equal(warning.calls.length,0);
+ // 希望休の注意が長くても見出しは件数だけ、一覧は全日付を保持する。
+ const many=start();many.eval("schedule().meta.nightRestPreferences={rule:'night-request-gap-1',unmet:Array.from({length:31},(_,i)=>({staff:'s0',day:i+1}))};render()");const manyData=many.get('data');open(many);
+ await many.click('注意1件');const manyPanel=body(many).all('section')[0];assert(manyPanel.text.includes('10月16日'));assert(manyPanel.text.includes('11月15日'));assert(!body(many).children[0].text.includes('夜勤後にできなかった希望休'));await many.click('注意を閉じる');await many.click('閉じる');assert.deepEqual(many.get('data'),manyData);assert.equal(many.calls.length,0);
+ // 条件未確認や必須違反も消さずに見出しから開ける。
+ for(const [meta,text]of [[null,'この表の条件確認は未完了です'],[{status:'INVALID'},'条件に合わない勤務があります']]){const bad=start();bad.ctx.testMeta=meta;bad.eval('schedule().meta=testMeta;render()');open(bad);await bad.click('注意1件');assert(body(bad).all('section')[0].text.includes(text));await bad.click('閉じる');}
  // 28〜31日でも全日付・全職員・集計列を省かない。
  for(const [year,month,n]of [[2026,2,28],[2028,2,29],[2026,9,30],[2026,10,31]]){
   const days=start();days.ctx.testYear=year;days.ctx.testMonth=month;

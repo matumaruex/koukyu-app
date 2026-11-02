@@ -242,7 +242,7 @@ footer{color:#8f9cc0;padding-bottom:160px}
 .month-operations{margin:0 0 10px;font-size:13px;line-height:1.6}
 .month-notices{margin:6px 0 10px}.month-notices .legend{margin:0;font-size:13px;line-height:1.6}
 .month-guide{margin:12px 0 0;padding:10px 0 0;border-top:1px solid rgba(183,194,223,.22)}.month-guide-title{display:block;margin-bottom:6px;font-size:13px}.month-guide .legend{margin:6px 0;font-size:12px;line-height:1.65}
-.landscape-body .month-notices{flex-shrink:0;max-height:22%;overflow:auto;margin:0}.landscape-body .month-notices .legend{font-size:10px;line-height:1.35;color:#f2c55c}
+
 }
 
 /* 横表示はダイアログの中だけ。回転ロック中も、表そのものを横向きにできる。 */
@@ -251,7 +251,11 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .landscape-body{position:absolute;left:50%;top:50%;width:100vw;width:100dvw;height:100vh;height:100dvh;transform:translate(-50%,-50%);padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:6px;overflow:hidden}
 .landscape-body .dialog-heading{flex-shrink:0;gap:8px}.landscape-body .dialog-heading h2{margin:0 auto 0 0;min-width:0;font-size:16px}.landscape-body .dialog-heading button{flex-shrink:0;min-height:40px;padding:6px 12px;font-size:13px;white-space:nowrap}
 .landscape-period{display:block;font-size:11px;font-weight:400;letter-spacing:0;line-height:1.3}
-.landscape-body .landscape-hint{margin:0;font-size:11px;line-height:1.4;flex-shrink:0}
+.landscape-title{flex:1;min-width:0}.landscape-title-line{display:flex;align-items:center;gap:10px}.landscape-body .landscape-title-line h2{flex:0 0 auto;margin:0}
+.landscape-body .dialog-heading .landscape-notice-button{min-height:32px;padding:3px 10px;border-color:#f2c55c;background:#3d3010;color:#ffe198;font-size:12px}
+.landscape-notice-panel{position:absolute;inset:60px 12px 12px;z-index:10;display:flex;flex-direction:column;min-height:0;padding:12px 16px;border:1px solid #f2c55c;border-radius:10px;background:#13254f;box-shadow:0 8px 30px #0009}
+.landscape-notice-panel[hidden]{display:none}.landscape-notice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;margin-bottom:8px}.landscape-notice-heading h3{margin:0;font-size:16px}.landscape-notice-heading button{min-height:40px;padding:6px 12px;font-size:13px}
+.landscape-notice-panel .month-notices{min-height:0;margin:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.landscape-notice-panel .month-notices .legend{margin:0 0 10px;color:#ffe198;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
 .landscape-body .month-wrap{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;gap:4px}.landscape-body .legend{margin:0;font-size:10px;line-height:1.35}
 .landscape-body .scroll{flex:1;min-height:80px;min-width:0;overflow:auto;overscroll-behavior:contain;border-radius:6px;-webkit-overflow-scrolling:touch}
 .landscape-body .month-table{font-size:10px;font-size:clamp(8px,calc((max(100dvw,100dvh) - 70px)/78),11px);width:100%;min-width:calc(16.4em + 1.96em * var(--landscape-days,31) + 1px * var(--landscape-days,31));table-layout:fixed;letter-spacing:-.03em}
