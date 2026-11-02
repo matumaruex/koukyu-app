@@ -131,7 +131,7 @@ def validate(raw, assignments):
             fail('overtime_limit', sid, detail=f"{values.count('overtime')} > {cap}")
             errors[-1].update(actual=values.count('overtime'), limit=cap)
         first_monday = p['start'] - timedelta(days=p['start'].weekday())
-        for monday, count in weeks.items():
+        for monday, count in (weeks.items() if p['partWeeklyLimit'] else []):
             if monday >= first_monday and count > st['maxDaysPerWeek']:
                 fail('weekly', sid, detail=f'{monday}: {count} > {st["maxDaysPerWeek"]}')
 

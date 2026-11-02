@@ -128,6 +128,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
     if resume is not None and resume.get('nightConsecutivePolicy') != ('exclude-night-1' if p['excludeNightFromConsecutive'] else None):
         resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
+    if resume is not None and resume.get('historyPolicy') != p['historyPolicy']:
+        resume = dict(resume, stage='conditions', idle=0, proven={}, proofValues={})
 
     def rule_exception(e):
         return allow_rule_exceptions and is_rule_exception(p, e)
@@ -407,11 +409,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                     model.add(scaled == ot_scales[sid] * total_ot - offset)
                 overtime_scaled.append(scaled)
             overtime_squares.append(square)
-        if st['type'] == 'part':
+        if st['type'] == 'part' and p['partWeeklyLimit']:
             mondays = {d - (p['start'] + timedelta(days=d)).weekday() for d in range(n)}
             for monday in sorted(mondays):
                 required(sum(1 - value(sid, d, 'off') - value(sid, d, 'nightOff') for d in range(monday, min(n, monday + 7))) <= st['maxDaysPerWeek'], sid + '_weekly', label + f'の週{st["maxDaysPerWeek"]}日以内（月曜始まり）')
-        else:
+        elif st['type'] != 'part':
             if st['dayShiftType'] == 'both' and (optimize or allow_staffing_shortfall):
                 a = model.new_int_var(0, n, sid + '_a_total')
                 b = model.new_int_var(0, n, sid + '_b_total')
@@ -823,6 +825,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                 quality_result['info']['resume']['overtimeDistributionPolicy'] = OVERTIME_DISTRIBUTION_POLICY
             if p['excludeNightFromConsecutive']:
                 quality_result['info']['resume']['nightConsecutivePolicy'] = 'exclude-night-1'
+            if p['historyPolicy']:
+                quality_result['info']['resume']['historyPolicy'] = p['historyPolicy']
         solver, status = quality_result['solver'], quality_result['status']
         phase_candidate = quality_result['candidate']
         if status == cp_model.INFEASIBLE and phase_candidate is not None:
@@ -908,7 +912,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     # 連休なし・夜勤端数・連休の回数の差の最少判定で使った時間も、通信をまたぐ累計予算へ返す。
     # 探索予算から引くだけでは、画面がその時間を数えず8分の上限を超えて続けてしまう。
     elapsed += (rest_proof_seconds or 0) + (night_proof_seconds or 0) + (balance_proof_seconds or 0)
-    result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'optimized': optimize}
+    result = {'status': solver.status_name(status), 'seconds': round(elapsed, 3), 'boundaryComplete': p['boundaryComplete'], 'historyVerification': p['historyVerification'], 'optimized': optimize}
     reason = ('early_return' if stopped_early else 'optimal' if status == cp_model.OPTIMAL
               else 'infeasible' if status == cp_model.INFEASIBLE
               else 'time_limit' if elapsed >= requested_seconds - 0.1 else 'completed')

@@ -4,7 +4,7 @@ from .overtime_preference import offsets, score_bounds, ideal_balance as ideal_b
 from .night_distribution import bound as distribution_bound, report as distribution_report, WEIGHT as DISTRIBUTION_WEIGHT
 from .overtime_distribution import bound as overtime_distribution_bound, report as overtime_distribution_report, WEIGHT as OVERTIME_DISTRIBUTION_WEIGHT
 
-POLICY = 'quality-first-16'
+POLICY = 'quality-first-17'
 CHECKPOINTS = (420, 600, 1065)
 
 

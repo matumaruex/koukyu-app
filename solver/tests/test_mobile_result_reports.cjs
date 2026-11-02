@@ -8,7 +8,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[
  preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[0,0,0],maxReducedSundays:0}}};
 const exception={code:'consecutive',staff:'s0',day:4,actual:4,limit:3,plusOne:false};
 const coverage={code:'coverage',day:1,time:420,actual:1,required:2};
-const meta={status:'DRAFT',boundaryComplete:true,optimizationPolicy:'quality-first-16',
+const meta={status:'DRAFT',boundaryComplete:true,optimizationPolicy:'quality-first-17',
  unmetConditions:[coverage,Object.fromEntries(Object.entries(exception).reverse())],ruleExceptions:[exception],
  exceptionCount:1,exceptionsProvenMinimum:false,staffingShortfallTotal:1,shortfallProvenMinimum:false,
  nightRestPreferences:{rule:'night-request-gap-1',unmet:[{staff:'s0',day:7}],minimumUnmetProven:false},

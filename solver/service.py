@@ -23,7 +23,7 @@ def dispatch(payload, *, _deadline=None):
             raise ValueError('公休おまかせは終了しました。通常の公休表をご利用ください。')
         if payload.get('action') == 'validate':
             errors = validate(raw, payload.get('assignments'))
-            result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete']}
+            result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete'], 'historyVerification': p['historyVerification']}
             if not any(e['code'] == 'structure' for e in errors):
                 result['nightRestPreferences'] = report(p, payload['assignments'])
                 if any(st['minConsecutiveRest'] for st in p['staff']):
@@ -78,7 +78,7 @@ def dispatch(payload, *, _deadline=None):
 def check_resume(value, quality_first):
     if value is None:
         return None
-    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy', 'overtimeDistributionPolicy', 'nightConsecutivePolicy'}:
+    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy', 'overtimeDistributionPolicy', 'nightConsecutivePolicy', 'historyPolicy'}:
         raise ValueError('resume の形式を確認してください。')
     if value.get('stage') not in STAGES:
         raise ValueError('resume.stage を確認してください。')
@@ -109,11 +109,15 @@ def check_resume(value, quality_first):
     night_consecutive_policy = value.get('nightConsecutivePolicy')
     if night_consecutive_policy is not None and (not isinstance(night_consecutive_policy, str) or len(night_consecutive_policy) > 40):
         raise ValueError('resume.nightConsecutivePolicy を確認してください。')
+    history_policy = value.get('historyPolicy')
+    if history_policy is not None and (not isinstance(history_policy, str) or len(history_policy) > 40):
+        raise ValueError('resume.historyPolicy を確認してください。')
     return {'stage': value['stage'], 'idle': float(idle), 'proven': dict(proven),
             'proofValues': {name: list(values) for name, values in proof_values.items()},
             **({'restBalancePolicy': policy} if policy is not None else {}),
             **({'nightDistributionPolicy': distribution_policy} if distribution_policy is not None else {}),
             **({'overtimeDistributionPolicy': overtime_distribution_policy} if overtime_distribution_policy is not None else {}),
             **({'nightConsecutivePolicy': night_consecutive_policy} if night_consecutive_policy is not None else {}),
+            **({'historyPolicy': history_policy} if history_policy is not None else {}),
             **({'preservedCommonExtraDaysOff': extra} if 'preservedCommonExtraDaysOff' in value else {})}
 

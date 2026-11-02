@@ -7,6 +7,37 @@ SHIFTS = ('off', 'early', 'late', 'overtime', 'night', 'nightOff', 'part')
 OVERTIME_MONTHLY_LIMIT = 6
 
 
+def history_verification(p):
+    """5日で確定できる判定と、それ以前の実績が必要な判定を区別する。"""
+    provided = {st['id']: len(p['history'].get(st['id'], [])) for st in p['staff']}
+    issues = []
+    for st in p['staff']:
+        sid = st['id']
+        values = p['history'].get(sid, [])
+        if not values:
+            issues.append({'staff': sid, 'provided': 0, 'required': 5, 'reasons': ['missing']})
+            continue
+        if len(values) == 7:
+            continue
+        reasons, required = [], 5
+        resets = {'off', 'nightOff'} | ({'night'} if st['excludeNightFromConsecutive'] else set())
+        lookback = (st['maxConsecutive'] or 3) + int(st['allowConsecutivePlus1'])
+        if lookback > len(values) and not any(v in resets for v in values):
+            reasons.append('consecutive')
+            required = max(required, lookback)
+        if (p['partWeeklyLimit'] and st['type'] == 'part' and st['maxDaysPerWeek'] < 7
+                and p['start'].weekday() > len(values)):
+            reasons.append('weekly')
+            required = max(required, p['start'].weekday())
+        if (p['overtimeCycleLimit'] and st['type'] != 'part' and st['canOvertime']
+                and not any(v in ('off', 'nightOff', 'overtime') for v in values)):
+            reasons.append('overtime_cycle')
+            required = 7
+        if reasons:
+            issues.append({'staff': sid, 'provided': len(values), 'required': required, 'reasons': reasons})
+    return {'providedDays': provided, 'issues': issues}
+
+
 def overtime_profile(p, st):
     """出勤できる日数から、A残の上限を決める。
     出勤できる日数＝期間日数−max(公休の最低日数, 希望休の日数)。作る前に決まる値なので計算が重くならない。
@@ -36,6 +67,10 @@ def normalize(raw):
     if type(p['maxExtraOffSpread']) is not int or not 0 <= p['maxExtraOffSpread'] <= p['days']:
         raise ValueError('maxExtraOffSpread must be an integer from 0 to period length.')
     p['start'] = date(year, month, 16)
+    # 通常画面では週上限を使わない。項目がない旧入力は当時の判定を維持する。
+    p.setdefault('partWeeklyLimit', True)
+    if type(p['partWeeklyLimit']) is not bool:
+        raise ValueError('partWeeklyLimit must be boolean.')
     # 通常画面が自動で指定する。旧API・旧表の評価は、項目がなければ従来どおり。
     p.setdefault('nightDistribution', False)
     if type(p['nightDistribution']) is not bool:
@@ -165,13 +200,18 @@ def normalize(raw):
                 raise ValueError(f'{sid}: invalid locked shift.')
         p['locked'][sid] = {int(k): v for k, v in values.items()}
     for sid, history in p['history'].items():
-        if not isinstance(history, list) or len(history) != 7 or any(v not in SHIFTS for v in history):
-            raise ValueError(f'{sid}: history must contain exactly seven preceding days, oldest first.')
-    p['boundaryComplete'] = set(p['history']) == ids
+        if not isinstance(history, list) or len(history) not in (5, 7) or any(v not in SHIFTS for v in history):
+            raise ValueError(f'{sid}: history must contain five or seven preceding days, oldest first.')
+    p['historyVerification'] = history_verification(p)
+    p['boundaryComplete'] = not p['historyVerification']['issues']
     # 実際に前期の勤務が入力された職員。仮定の休み（下の補完）とは区別する。
     p['historyProvided'] = set(p['history'])
-    # 履歴がない職員の前期7日は試験上のみ休みと仮定する。実運用合格にはしない。
+    # 既存の計算用の添字は7日分を維持する。未入力部分の公休は計算上の仮定であり、
+    # 判定へ影響し得る場合は上の確認結果を未完了にする。元の入力は書き換えない。
     for sid in ids:
-        p['history'].setdefault(sid, ['off'] * 7)
+        values = p['history'].get(sid, [])
+        p['history'][sid] = ['off'] * (7 - len(values)) + values
+    p['historyPolicy'] = ('five-day-no-weekly-1' if not p['partWeeklyLimit'] else
+                          'five-day-history-1' if any(v == 5 for v in p['historyVerification']['providedDays'].values()) else None)
     return p
 
