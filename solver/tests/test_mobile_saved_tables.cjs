@@ -19,7 +19,7 @@ const clone=x=>JSON.parse(JSON.stringify(x));
  h.eval("data.staff[0].name='新名A';data.preferences.staffing.requiredStaff=[0,0,0];render();");
  assert.equal(h.get('hasTable()'),true);assert(h.get('workChanged()'));assert.deepEqual(h.get('data.savedTables.at(-1)'),saved);assert.deepEqual(h.get('history().a'),manual);
  h.eval('setTab("saved");');await h.click('開く','view');
- assert(h.nodes.view.text.includes('旧名A'));assert(!h.nodes.view.text.includes('新名A'));assert(h.nodes.view.text.includes('必要人数：朝4人'));
+ assert(h.nodes.view.text.includes('旧名A'));assert(!h.nodes.view.text.includes('新名A'));assert(!h.nodes.view.text.includes('必要人数：朝'));assert.deepEqual(h.get('data.preferences.staffing.requiredStaff'),[4,4,4]);
  assert(!h.nodes.view.text.includes('現在の条件と合わない'));assert.equal(h.calls.length,1);assert.equal(h.calls[0].action,'validate');assert.equal(h.get('state.tab'),'schedule');assert(h.nodes.view.text.includes('現在の公休表'));
  const restored=harness(null,{current:disk});assert.equal(restored.get('hasTable()'),false);assert.equal(restored.get('data.savedTables.length'),5);assert.deepEqual(restored.get('history().a'),manual);
  const roundtrip=h.get('checkBackup(RosterStorage.persisted(data))');assert.equal(roundtrip.savedTables.length,5);

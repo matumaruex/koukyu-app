@@ -360,6 +360,7 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 /* 一行の名前・希望・前期を同じ文字サイズで保ち、完了状態だけ短く添える。 */
 @media screen{
 .requests-card .request-heading{gap:6px}
+.requests-card .staff-controls{gap:clamp(16px,5vw,24px)}
 .requests-card .request-entry{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:5px 7px;white-space:nowrap}
 .requests-card .input-state{font-size:12px;font-weight:700}
 .requests-card .input-done{color:#63cbb8}.requests-card .input-progress{color:#f2c55c}.requests-card .input-pending{color:#b7c2df}
