@@ -231,7 +231,7 @@ footer{color:#8f9cc0;padding-bottom:160px}
 @media screen{
 .month-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 6px}
 .month-heading .month-title{flex:1;min-width:0;margin:0;font-size:16px;line-height:1.45}.month-period{display:block;font-size:13px;font-weight:400;overflow-wrap:anywhere}
-.month-landscape-button{flex-shrink:0;min-height:40px;padding:6px 10px;font-size:13px;white-space:nowrap}
+.month-landscape-button{flex-shrink:0;min-height:44px;padding:8px 20px;font-size:14px;white-space:nowrap}
 .month-operations{margin:0 0 10px;font-size:13px;line-height:1.6}
 .month-notices{margin:6px 0 10px}.month-notices .legend{margin:0;font-size:13px;line-height:1.6}
 
