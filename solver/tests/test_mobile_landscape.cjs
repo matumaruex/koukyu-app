@@ -102,7 +102,7 @@ const body=h=>h.nodes['dialog-body'];
  assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
  const legend=marks.nodes.view.text;for(const phrase of ['記号・ルールの説明','残 通し7:00','S 夜勤','ー 明け','公 公休'])assert(!legend.includes(phrase),phrase);
  open(marks);assert.deepEqual(symbols(body(marks).all('table')[0]),expected);await marks.click('閉じる');
- marks.eval('editHistory()');const historyOptions=body(marks).all('select')[1].all('option').map(e=>e.text);for(const label of ['残（通し）','S（夜勤）','ー（明け）','公（公休）'])assert(historyOptions.includes(label));await marks.click('閉じる');
+ marks.eval("editHistory('a')");const historyOptions=body(marks).all('select')[0].all('option').map(e=>e.text);for(const label of ['残（通し）','S（夜勤）','ー（明け）','公（公休）'])assert(historyOptions.includes(label));await marks.click('閉じる');
  marks.eval("editShift(data.staff[0],1)");assert(body(marks).all('option').some(e=>e.text==='残（通し）'));await marks.click('閉じる');
  marks.eval("editRequests('a')");const requestMarks=body(marks).all('span').filter(e=>e.className==='request-mark').map(e=>e.text);assert(requestMarks.includes('残'));assert(requestMarks.includes('S'));assert(requestMarks.includes('公'));await marks.click('閉じる');
  assert(marks.ctx.solverIssues(['職員1のA残の回数'],marks.get('inputData().map')).items[0].includes('作成時の職員Aの残の回数'));

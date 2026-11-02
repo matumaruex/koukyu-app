@@ -6,17 +6,18 @@ const raw={schemaVersion:4,savedTables:[],staff:[
  {id:'a',name:'職員A',type:'full',monthlyDaysOff:9,nightShiftType:'all',maxConsecutive:3},
  {id:'b',name:'職員B',type:'part',monthlyDaysOff:11,nightShiftType:'none',startTime:'09:00',endTime:'17:00',maxDaysPerWeek:1}],
  schedules:{'2026-10':{requests:{a:[7]},assignments:{},history:{a:oldHistory}}}};
-const rows=h=>h.nodes['dialog-body'].all('div').find(e=>e.className==='history-rows');
-const staffSelector=h=>h.nodes['dialog-body'].all('select')[0];
-function fill(h,values){rows(h).all('select').forEach((s,i)=>{s.value=values[i];s.onchange();});}
+const cells=h=>h.nodes['dialog-body'].all('button').filter(e=>e.attributes['data-history-day']!==undefined);
+const mode=h=>h.nodes['dialog-body'].all('select')[0];
+const marks={early:'A',late:'B',night:'S',nightOff:'ー',off:'公',overtime:'残',part:'P'};
+function paint(h,i,value){mode(h).value=value;mode(h).onchange();cells(h)[i].click();}
+function fill(h,values){values.forEach((value,i)=>{if(value&&cells(h)[i].all('span').at(-1).text!==marks[value])paint(h,i,value);});}
 (async()=>{
- const h=harness(null,{current:raw});h.ctx.editHistory();
- assert.equal(rows(h).all('select').length,5);
- assert.deepEqual(rows(h).all('select').map(s=>s.value),oldHistory.slice(-5));
- assert(rows(h).text.includes('10月11日'));assert(rows(h).text.includes('10月15日'));assert(!rows(h).text.includes('10月10日'));
- const first=rows(h).all('select')[0];first.value='late';first.onchange();
- staffSelector(h).value='b';staffSelector(h).onchange();
- fill(h,['off','part','off','part','off']);await h.click('入力した勤務を保存');
+ const h=harness(null,{current:raw});h.ctx.editHistory();assert.equal(h.get('state.tab'),'requests');assert(!h.nodes.dialog.open);h.ctx.editHistory('a');
+ assert.equal(cells(h).length,5);assert.equal(h.nodes['dialog-body'].all('select').length,1);
+ assert.deepEqual(cells(h).map(b=>b.all('span').at(-1).text),['公','A','S','ー','公']);
+ assert(cells(h)[0].attributes['aria-label'].includes('10月11日'));assert(cells(h)[4].attributes['aria-label'].includes('10月15日'));assert(!cells(h).some(b=>b.attributes['aria-label'].includes('10月10日')));
+ paint(h,0,'late');await h.click('入力完了');h.ctx.editHistory('b');
+ fill(h,['off','part','off','part','off']);await h.click('入力完了');
  assert.equal(h.nodes.dialog.open,false);
  assert.deepEqual(h.get('schedule().history.a'),['late','overtime','late','early','night','nightOff','off']);
  assert.deepEqual(h.get('schedule().history.b'),['off','part','off','part','off']);
@@ -24,14 +25,13 @@ function fill(h,values){rows(h).all('select').forEach((s,i)=>{s.value=values[i];
  assert.equal(h.get('inputData().p.partWeeklyLimit'),false);
  h.eval('editStaff(data.staff[1])');assert(!h.nodes['dialog-body'].text.includes('週の出勤上限'));
  h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});assert.equal(h.get('data.staff[1].maxDaysPerWeek'),1);
- const re=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data'))});re.ctx.editHistory();
- staffSelector(re).value='b';staffSelector(re).onchange();assert.deepEqual(rows(re).all('select').map(s=>s.value),['off','part','off','part','off']);
+ const re=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data'))});re.ctx.editHistory('b');assert.deepEqual(cells(re).map(b=>b.all('span').at(-1).text),['公','P','公','P','公']);
 
  // 途中入力は保存しない。保存失敗では元の前期実績を保ち、やり直せる。
- const partial=harness(null,{current:raw});partial.ctx.editHistory();staffSelector(partial).value='b';staffSelector(partial).onchange();fill(partial,['off','part','off','part','']);
- await partial.click('入力した勤務を保存');assert(partial.nodes['dialog-body'].text.includes('5日分をすべて選んでください'));assert.equal(partial.get('schedule().history.b??null'),null);
- const q=harness(null,{current:raw,quota:true}),before=q.get('schedule().history');q.ctx.editHistory();staffSelector(q).value='b';staffSelector(q).onchange();fill(q,['off','part','off','part','off']);
- await q.click('入力した勤務を保存');assert.deepEqual(q.get('schedule().history'),before);assert(q.nodes.dialog.open);assert(q.nodes['dialog-body'].text.includes('この端末に保存できませんでした'));
+ const partial=harness(null,{current:raw});partial.ctx.editHistory('b');fill(partial,['off','part','off','part','']);
+ await partial.click('入力完了');assert(partial.nodes['dialog-body'].text.includes('5日分をすべて選んでください'));assert.equal(partial.get('schedule().history.b??null'),null);
+ const q=harness(null,{current:raw,quota:true}),before=q.get('schedule().history');q.ctx.editHistory('b');fill(q,['off','part','off','part','off']);
+ await q.click('入力完了');assert.deepEqual(q.get('schedule().history'),before);assert(q.nodes.dialog.open);assert(q.nodes['dialog-body'].text.includes('この端末に保存できませんでした'));
 
  // 旧7日の表は当時の条件を残す。新規作成へ旧週上限の証明を流用しない。
  const old=harness(null,{current:raw});old.eval("schedule().assignments={a:{'1':'early'},b:{'1':'part'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',signature:inputData().signature};render()");
@@ -47,6 +47,7 @@ function fill(h,values){rows(h).all('select').forEach((s,i)=>{s.value=values[i];
  assert.equal(imported.history.a.length,7);assert.deepEqual(imported.history.b,['off','part','off','part','off']);
 
  // 5日で判定できない長い持ち越しを、確認済みと表示しない。
+ h.ctx.setTab('schedule');
  h.eval("schedule().assignments={a:{'1':'off'},b:{'1':'part'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',signature:inputData().signature,optimizationPolicy:OPTIMIZATION_POLICY,boundaryComplete:false,historyVerification:{issues:[{staff:'s0',provided:5,required:6,reasons:['consecutive']}]},allocation:{minimumOvertimeProven:true}};render()");
  assert(h.nodes.view.text.includes('前期をまたぐ条件の確認が未完了'));assert(h.nodes.view.text.includes('長い連勤の持ち越し'));
  assert(h.nodes.view.text.includes('入力5日／確認に必要6日'));assert(h.eval('allocationSummary()').text.includes('公休と仮定した範囲で'));

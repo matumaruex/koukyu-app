@@ -356,3 +356,14 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 /* 連休の比較を先頭で少し大きく示し、その下は職員順にそろえる。 */
 @media screen{.consecutive-rest-summary .rest-balance-summary{font-size:15px;font-weight:700;line-height:1.6;margin:0 0 10px}}
 @media print{.consecutive-rest-summary .rest-balance-summary{font-size:10px;font-weight:700}}
+
+/* 一行の名前・希望・前期を同じ文字サイズで保ち、完了状態だけ短く添える。 */
+@media screen{
+.requests-card .request-heading{gap:6px}
+.requests-card .request-entry{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:5px 7px;white-space:nowrap}
+.requests-card .input-state{font-size:12px;font-weight:700}
+.requests-card .input-done{color:#63cbb8}.requests-card .input-progress{color:#f2c55c}.requests-card .input-pending{color:#b7c2df}
+.history-edit-dialog .history-calendar{grid-template-columns:repeat(5,minmax(0,1fr))}
+.history-edit-dialog .history-calendar .history-entered{font-weight:700}
+.history-edit-dialog .history-calendar .history-entered[aria-pressed=false]{border-color:#8fa1c7}
+}

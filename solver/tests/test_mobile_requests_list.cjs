@@ -14,8 +14,8 @@ const leave=h=>h.nodes['dialog-body'].all('label').find(e=>e.text.startsWith('�
 const row=(h,id)=>h.nodes.view.all('div').find(e=>e.className?.startsWith('staff-row')&&e.text.includes('職員'+id));
 (async()=>{
  const h=start(),before=h.get('inputData()');
- assert.deepEqual(h.nodes.view.all('strong').map(e=>e.text),['職員B','職員A','職員C']);
- assert(row(h,'B').text.includes('入力済み'));assert(row(h,'A').text.includes('未確認'));assert(row(h,'C').text.includes('今期対象外'));assert.equal(h.nodes.view.all('input').length,0);assert(!h.nodes.view.text.includes('長期休暇'));
+ assert.deepEqual(h.nodes.view.all('strong').map(e=>e.text),['職員B','職員A','職員C']);for(const id of ['B','A','C'])assert.deepEqual(row(h,id).all('button').map(b=>b.attributes['data-input-kind']),['requests','history']);assert(row(h,'B').text.includes('前期済'));assert(row(h,'A').text.includes('前期未'));
+ assert(row(h,'B').text.includes('希望済'));assert(row(h,'A').text.includes('希望未'));assert(row(h,'C').text.includes('対象外'));assert.equal(h.nodes.view.all('input').length,0);assert(!h.nodes.view.text.includes('長期休暇'));
  h.ctx.editRequests('c');assert.equal(leave(h).checked,true);await h.click('閉じる');assert.deepEqual(h.get('inputData()'),before);
  assert.equal(h.nodes.view.all('select').length,0);assert(!h.nodes.view.text.includes('公休表を作る'));assert(!h.nodes.view.text.includes('希望休：'));
  // 3.41の追加ルール・時間を変えず、開く/閉じるだけでは条件も確認状態も変わらない。
@@ -26,20 +26,20 @@ const row=(h,id)=>h.nodes.view.all('div').find(e=>e.className?.startsWith('staff
  // 作業表は作成時の希望を残し、希望の編集後も勤務を保持する。
  h.eval("schedule().assignments={b:{1:'early',7:'off'},a:{1:'part'}};schedule().workSignature=inputData().signature;render()");
  const snapshot=h.get('schedule().workSnapshot'),assignments=h.get('schedule().assignments'),history=h.get('schedule().history');assert(snapshot);
- h.ctx.editRequests('b');day(h,10).click();assert(h.get('schedule().requests.b').includes(10));assert.equal(h.get('schedule().requestReviewed.b'),false);assert(row(h,'B').text.includes('入力中'));assert(h.nodes['dialog-body'].text.includes('希望休：2日'));
+ h.ctx.editRequests('b');day(h,10).click();assert(h.get('schedule().requests.b').includes(10));assert.equal(h.get('schedule().requestReviewed.b'),false);assert(row(h,'B').text.includes('希望中'));assert(h.nodes['dialog-body'].text.includes('希望休：2日'));
  // 希望の種類変更・置換・再クリック解除。すべての記号は種類にかかわらず表示する。
  mode(h).value='night';mode(h).onchange();day(h,10).click();assert(!h.get('schedule().requests.b').includes(10));assert.equal(h.get('schedule().shiftRequests.b[10]'),'night');assert(day(h,8).text.endsWith('A'));assert(h.nodes['dialog-body'].text.includes('希望夜勤：2日'));
  day(h,10).click();assert.equal(h.get('schedule().shiftRequests.b[10]??null'),null);
- await h.click('入力完了');assert.equal(h.nodes.dialog.open,false);assert(row(h,'B').text.includes('入力済み'));assert.equal(h.get('state.reqStaff'),'b');assert.deepEqual(h.get('schedule().assignments'),assignments);assert.deepEqual(h.get('schedule().workSnapshot'),snapshot);assert.deepEqual(h.get('schedule().history'),history);
+ await h.click('入力完了');assert.equal(h.nodes.dialog.open,false);assert(row(h,'B').text.includes('希望済'));assert.equal(h.get('state.reqStaff'),'b');assert.deepEqual(h.get('schedule().assignments'),assignments);assert.deepEqual(h.get('schedule().workSnapshot'),snapshot);assert.deepEqual(h.get('schedule().history'),history);
  // パートにA/夜勤を提示しない。未入力の完了は希望なし。
- h.ctx.editRequests('a');assert.deepEqual(mode(h).children.map(e=>e.value),['off','paidLeave','part']);await h.click('入力完了');assert(row(h,'A').text.includes('希望なし'));assert(h.nodes.view.text.includes('2 / 2人 確認済み'));
+ h.ctx.editRequests('a');assert.deepEqual(mode(h).children.map(e=>e.value),['off','paidLeave','part']);await h.click('入力完了');assert(row(h,'A').text.includes('希望済'));assert(h.nodes.view.text.includes('希望 2/2人'));
  assert(!h.nodes.view.text.includes('公休表を作る'));
  // 長期休暇は従来の公休比較設定だけを今期に保存する。
  h.ctx.editRequests('b');const beforeLeaveSnapshot=h.get('schedule().workSnapshot'),checkbox=leave(h);assert.equal(checkbox.checked,false);checkbox.checked=true;checkbox.onchange();assert.equal(checkbox.checked,true);assert.equal(h.get('schedule().requestReviewed.b'),true);assert.deepEqual(h.get('schedule().workSnapshot'),beforeLeaveSnapshot);assert.deepEqual(h.get('schedule().history'),history);assert.deepEqual(h.get('schedule().fairnessExcludedStaff'),['c','b']);assert.deepEqual(h.get('schedule().requests.b'),[7]);assert.deepEqual(h.get('schedule().excludedStaff'),['c']);
  checkbox.checked=false;checkbox.onchange();assert.deepEqual(h.get('schedule().fairnessExcludedStaff'),['c']);checkbox.checked=true;checkbox.onchange();await h.click('閉じる');h.ctx.editRequests('b');assert.equal(leave(h).checked,true);await h.click('閉じる');
  // 対象外の人も編集可能だが、参加を勝手に変えない。
  h.ctx.editRequests('c');day(h,12).click();await h.click('入力完了');assert.deepEqual(h.get('schedule().requests.c'),[12]);assert.deepEqual(h.get('schedule().excludedStaff'),['c']);
- const reopen=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work')}});reopen.eval("setTab('requests')");assert(row(reopen,'B').text.includes('入力済み'));assert(row(reopen,'A').text.includes('希望なし'));assert.deepEqual(reopen.get('schedule().assignments'),assignments);
+ const reopen=harness(null,{current:JSON.parse(h.values.get('koukyu_v4_data')),stored:{koukyu_v4_work:h.values.get('koukyu_v4_work')}});reopen.eval("setTab('requests')");assert(row(reopen,'B').text.includes('希望済'));assert(row(reopen,'A').text.includes('希望済'));assert.deepEqual(reopen.get('schedule().assignments'),assignments);
  reopen.ctx.editRequests('b');assert.equal(leave(reopen).checked,true);await reopen.click('閉じる');
  reopen.ctx.changePeriod(1);assert.deepEqual(reopen.get('schedule().fairnessExcludedStaff||[]'),[]);assert.deepEqual(reopen.get('schedule().requests'),{});
  // 古い入力画面の操作は別の期へ書き込めない。
