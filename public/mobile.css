@@ -232,6 +232,19 @@ footer{color:#8f9cc0;padding-bottom:160px}
 }
 @media screen and (max-width:359px){.staff-card .staff-setting-row{gap:6px}.staff-days-off{font-size:12px;padding:3px 6px}}
 
+/* 表本体の直前に操作、直後に記号とルールをまとめる。 */
+@media screen{
+.month-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 6px}
+.month-heading .month-title{flex:1;min-width:0;margin:0;font-size:16px;line-height:1.45}.month-period{display:block;font-size:13px;font-weight:400;overflow-wrap:anywhere}
+.month-landscape-button{flex-shrink:0;min-height:40px;padding:6px 10px;font-size:13px;white-space:nowrap}
+.month-operations{margin:0 0 10px;font-size:13px;line-height:1.6}
+.month-notices{margin:6px 0 10px}.month-notices .legend{margin:0;font-size:13px;line-height:1.6}
+.month-guide{margin:12px 0 0;padding:10px 0 0;border-top:1px solid rgba(183,194,223,.22)}.month-guide-title{display:block;margin-bottom:6px;font-size:13px}.month-guide .legend{margin:6px 0;font-size:12px;line-height:1.65}
+.landscape-body .month-heading{margin:0;flex-shrink:0}.landscape-body .month-heading .month-title{font-size:14px}.landscape-body .month-period{display:inline;font-size:inherit}
+.landscape-body .month-notices{flex-shrink:0;max-height:22%;overflow:auto;margin:0}.landscape-body .month-notices .legend{font-size:10px;line-height:1.35}
+.landscape-body .month-guide{flex-shrink:0;max-height:28%;overflow:auto;margin:0;padding-top:4px}.landscape-body .month-guide-title{font-size:10px;margin:0}.landscape-body .month-guide .legend{font-size:10px;line-height:1.35;margin:3px 0}
+}
+
 /* 横表示はダイアログの中だけ。回転ロック中も、表そのものを横向きにできる。 */
 @media screen{
 dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw;height:100vh;height:100dvh;max-width:none;max-height:none;padding:0;border:0;border-radius:0;overflow:hidden;overscroll-behavior:contain}
@@ -266,3 +279,5 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .consecutive-rest-summary{margin:12px 0;padding:12px 14px;border:1px solid rgba(183,194,223,.28);border-left:3px solid #718ab7;border-radius:10px;background:#13254f;font-size:13px;line-height:1.6}
 .consecutive-rest-summary>strong{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:8px}.consecutive-rest-summary p{margin:7px 0;font-size:13px;line-height:1.6}.consecutive-rest-summary .ok-line{gap:7px}.consecutive-rest-summary .ok-line::before{width:19px;height:19px;font-size:14px}
 }
+
+@media print{.month-guide .legend{margin:2px 0}}
