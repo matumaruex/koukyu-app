@@ -224,6 +224,14 @@ footer{color:#8f9cc0;padding-bottom:160px}
 /* 対象外の職員を一覧で控えめに表示する。 */
 .staff-card .not-in-period{opacity:.56}.staff-card .participation-badge{flex-shrink:0;margin-left:0;font-size:.75em}
 
+/* 職員一覧は名前・公休設定・操作を1行にそろえる。 */
+@media screen{
+.staff-card .staff-setting-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px}
+.staff-identity{display:flex;align-items:center;gap:6px;min-width:0}
+.staff-days-off{padding:3px 7px;border:1px solid rgba(183,194,223,.22);border-radius:6px;background:#1c3263;color:#c4cee8;font-size:13px;line-height:1.5;white-space:nowrap}
+}
+@media screen and (max-width:359px){.staff-card .staff-setting-row{gap:6px}.staff-days-off{font-size:12px;padding:3px 6px}}
+
 /* 横表示はダイアログの中だけ。回転ロック中も、表そのものを横向きにできる。 */
 @media screen{
 dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw;height:100vh;height:100dvh;max-width:none;max-height:none;padding:0;border:0;border-radius:0;overflow:hidden;overscroll-behavior:contain}
