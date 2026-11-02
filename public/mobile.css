@@ -158,34 +158,25 @@ legend{color:#f2c55c}
 .request-calendar .wish-night{background:#0a1430;color:#f2c55c;box-shadow:inset 0 0 0 1.5px #e2b23c}
 .request-calendar .wish-part{background:#24396b;color:#dfe6f7}
 
-/* 1か月の表：勤務は宝石の色（金・トルコ石・赤めのう・ばら色）、夜勤は黒地に金 */
-.scroll{border-color:rgba(226,178,60,.35)}
-.month-table td,.month-table th{border-color:rgba(183,194,223,.16)}
-.month-table th{background:#13254f;color:#f3e6c4}
-.month-table .name{background:#13254f;color:#f3e6c4;font-family:"Zen Antique",serif;font-weight:400}
-.month-table th.sun{color:#ff9f86}
-.month-table th.sat{color:#8fbcff}
-.month-table td{color:#f3e6c4}
-.month-table td.early{background:linear-gradient(160deg,#f0c75a,#d39f2a);color:#2b1d00;font-weight:700}
-.month-table td.late{background:linear-gradient(160deg,#55c7b8,#2f9e90);color:#052a25;font-weight:700}
-.month-table td.overtime{background:linear-gradient(160deg,#d0623f,#b24a30);color:#fff}
-.month-table td.night{background:#0a1430;color:#f2c55c;box-shadow:inset 0 0 0 1.5px #e2b23c}
-.month-table td.nightOff{background:linear-gradient(160deg,#ebb6a5,#d79483);color:#2e120a;font-weight:700}
-.month-table td.off{background:#172a55;color:#9fb0d6}
-.month-table td.part{background:#24396b;color:#dfe6f7}
-.month-table td.total{color:#f3e6c4;background:#13254f}
-.month-table .count-night{background:#0a1430;color:#f2c55c}
-.month-table .count-early{background:rgba(226,178,60,.18);color:#f2c55c}
-.month-table .count-late{background:rgba(64,181,166,.18);color:#9eece2}
-.month-table .count-row td{background:#13254f;color:#f3e6c4}
-.month-table .count-row.first>*{border-top:2px solid rgba(226,178,60,.6)}
-.month-table td.short{background:#5a1f16;color:#ffd6c9}
-.month-table td.relaxed{background:rgba(226,178,60,.22);color:#f2c55c}
-.month-table td.locked{box-shadow:inset 0 0 0 2.5px #f2c55c}
-.month-table td.exception{outline-color:#ffb27a}
-.month-table td.editable:hover{outline-color:#f2c55c}
-.month-table td.wished{position:relative}
-.month-table td.wished::after{content:'';position:absolute;top:1px;right:1px;width:9px;height:8px;background:#f2c55c;clip-path:polygon(50% 0,100% 100%,0 100%)}
+/* 表は単色の背景と白文字にし、希望だけ赤文字で示す。 */
+.scroll{border-color:#46515f}
+.month-table{background:#1c2430;color:#fff}
+.month-table td,.month-table th{border-color:#414c5b;color:#fff}
+.month-table th,.month-table .name{background:#283240;color:#fff}
+.month-table .name{font-family:inherit;font-weight:600}
+.month-table th.sun,.month-table th.sat{color:#fff}
+.month-table td{background:#1c2430;font-weight:500}
+.month-table td:is(.early,.late,.overtime,.night,.nightOff,.off,.part){background:#1c2430;color:#fff;box-shadow:none;font-weight:500}
+.month-table td.total,.month-table .count-night,.month-table .count-early,.month-table .count-late{background:#283240;color:#fff;font-weight:700}
+.month-table .count-row td{background:#283240;color:#fff}
+.month-table .count-row.first>*{border-top:2px solid #7c899a}
+.month-table td.short{background:#283240;color:#fff;font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.month-table td.relaxed{background:#283240;color:#fff;text-decoration:underline dotted;text-underline-offset:3px}
+.month-table td.locked{box-shadow:inset 0 0 0 2.5px #fff}
+.month-table td.exception{outline:2px dashed #fff;outline-offset:-4px}
+.month-table td.editable:hover{outline-color:#fff}
+.month-table td.editable:focus-visible{outline-color:#fff}
+.month-table td.wished{color:#ff8585;font-weight:700}
 .month-title{color:#f2c55c}
 
 /* まとめの数字は金で大きく、守れている項目にはアンクの印 */
@@ -300,4 +291,14 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .explanation-line.ok-line{display:block}.explanation-line.ok-line::before{display:none}
 .result-report ul.explanation-list{padding-left:0;list-style:none}
 .consecutive-rest-summary>strong.explanation-line{display:block;padding-right:54px}.consecutive-rest-summary>strong.explanation-line>.result-report-status{position:absolute;top:0;right:0}
+}
+
+/* 紙では白地に黒文字を使い、希望は画面と同じく赤で区別する。 */
+@media print{
+.month-table th,.month-table td{background:#fff!important;color:#111!important;border-color:#aaa}
+.month-table td.wished{color:#bf2028!important;font-weight:700}
+.month-table td.short{font-weight:700;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+.month-table td.relaxed{text-decoration:underline dotted;text-underline-offset:2px}
+.month-table td.locked{box-shadow:inset 0 0 0 2px #111}
+.month-table td.exception{outline:1px dashed #111;outline-offset:-2px}
 }

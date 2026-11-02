@@ -27,7 +27,7 @@ const body=h=>h.nodes['dialog-body'];
  assert.equal(body(h).className,'landscape-body');assert(body(h).text.includes('作成時の職員A'));assert(body(h).text.includes('公休表'));
  assert(body(h).all('table').length===1);assert(body(h).all('td').every(td=>!td.onclick&&td.attributes.role!=='button'));
  assert.deepEqual(body(h).all('table')[0].all('tr').slice(2).map(r=>r.children.map(c=>c.text)),originalRows);
- for(const text of ['記号・ルールの説明','金の三角','A 早出7:00','表は上下左右にスクロールできます。','連休の確認'])assert(!body(h).text.includes(text),text);
+ for(const text of ['記号・ルールの説明','赤い文字','A 早出7:00','表は上下左右にスクロールできます。','連休の確認'])assert(!body(h).text.includes(text),text);
  assert(!body(h).all('div').some(e=>e.className==='month-heading'||e.className==='month-guide'));
  assert(!body(h).all('button').some(b=>b.text.includes('保存')||b.text.includes('変更')));
  await h.click('文字を大きく');assert(body(h).className.includes('landscape-enlarged'));

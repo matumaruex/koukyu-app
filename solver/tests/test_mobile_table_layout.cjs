@@ -18,10 +18,10 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  assert.equal(heading.all('button').filter(b=>b.text==='横画面で見る').length,1);
  assert.equal(h.nodes.view.all('button').filter(b=>b.text==='横画面で見る').length,1);
  assert(operations.text.includes('表のマスを押すと、その日の勤務を変更できます。'));assert(!operations.text.includes('太枠'));
- for(const text of ['金の三角','点線枠','太枠','A 早出7:00','人数欄は実際/必要','必要人数：','希望休の初日は'])assert(guide.text.includes(text),text);
+ for(const text of ['赤い文字','点線枠','太枠','A 早出7:00','人数欄は実際/必要','必要人数：','希望休の初日は'])assert(guide.text.includes(text),text);
  assert(!guide.text.includes('表のマスを押すと'));assert(!guide.text.includes('夜勤後にできなかった希望休'));
  const text=visible(h.nodes.view);assert.equal(text.split('夜勤後にできなかった希望休').length-1,1);assert.equal(text.split('希望休の初日は').length-1,1);
- assert.equal(guide.text.split('赤は人数不足').length-1,1);assert(!text.includes('赤い人数欄は人数不足・夜勤未配置です。'));
+ assert.equal(guide.text.split('実線の下線は人数不足').length-1,1);assert(!text.includes('赤い人数欄は人数不足・夜勤未配置です。'));
  const roster=h.nodes.view.all('article').find(e=>e.id==='roster-result'),attention=roster.children.find(e=>cls(e,'result-attention'));
  assert(roster.children.indexOf(attention)<roster.children.indexOf(w));assert(attention.text.includes('4連勤目'));
 
@@ -41,5 +41,16 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  assert.equal(visible(saved.nodes.view).split('夜勤後にできなかった希望休').length-1,1);
  const snapshot=saved.get('data');part(sw,'month-heading').all('button')[0].click();assert(saved.nodes['dialog-body'].text.includes('作成時の職員A'));assert(!saved.nodes['dialog-body'].text.includes('現在の別名'));await saved.click('閉じる');assert.deepEqual(saved.get('data'),snapshot);
  const stale=start();stale.eval("data.staff[0].monthlyDaysOff=10;save(true);render()");assert(stale.get('workChanged()'));assert(!part(wrap(stale),'month-operations'));assert(part(wrap(stale),'month-heading').all('button').some(b=>b.text==='横画面で見る'));
+ // 赤文字にする対象は希望休・希望勤務だけ。自動の明け・公休や、希望のない固定は通常表示。
+ const color=start();color.eval("schedule().shiftRequests={a:{'2':'overtime'},b:{'1':'night'}};schedule().locked.a['2']='overtime';schedule().workSignature=inputData().signature;schedule().meta.signature=inputData().signature;");
+ const colorData=color.get('data'),colorSignature=color.get('inputData().signature'),colorStorage=[...color.values];
+ color.eval("const originalCreate=document.createElement;document.createElement=tag=>{const node=originalCreate(tag);node.classList.add=(...names)=>{node.className=[...new Set([...(node.className||'').split(' ').filter(Boolean),...names])].join(' ');};return node;};const painted=[monthTable(true),monthTable(false),monthTable(false,{landscape:true}),withSavedTable(RosterStorage.capture(data,key(),'配色確認','colors'),()=>monthTable(false))];document.createElement=originalCreate;");
+ const painted=color.eval('painted');for(const table of painted){
+  const rows=table.all('table')[0].all('tr').slice(2,4),wishes=[];
+  rows.forEach((r,i)=>r.children.slice(6).forEach((cell,d)=>{if(cls(cell,'wished'))wishes.push(`${i}:${d+1}`);}));
+  assert.deepEqual(wishes,['0:2','0:7','1:1']);assert(!cls(rows[0].children[6],'wished'));assert(!cls(rows[1].children[7],'wished'));assert(!cls(rows[1].children[8],'wished'));
+ }
+ const editable=painted[0].all('table')[0].all('tr')[2];assert(cls(editable.children[7],'locked')&&cls(editable.children[7],'wished'));assert(cls(editable.children[9],'exception'));assert(!cls(editable.children[9],'wished'));
+ assert.deepEqual(color.get('data'),colorData);assert.equal(color.get('inputData().signature'),colorSignature);assert.deepEqual([...color.values],colorStorage);assert.equal(color.calls.length,0);
  console.log('PASS: 横表示ボタンと操作を表の直前へ・凡例とルールを表の下へ・注意を上に保持・重複整理・印刷/保存表/旧表の保持');
 })().catch(e=>{console.error(e);process.exitCode=1;});
