@@ -77,7 +77,7 @@ const body=h=>h.nodes['dialog-body'];
  for(const [meta,text]of [[null,'この表の条件確認は未完了です'],[{status:'INVALID'},'条件に合わない勤務があります']]){const bad=start();bad.ctx.testMeta=meta;bad.eval('schedule().meta=testMeta;render()');open(bad);await bad.click('注意1件');assert(body(bad).all('section')[0].text.includes(text));await bad.click('閉じる');}
  // 同じ勤務を通常・印刷・横表示・保存表で新しい記号にそろえ、値と入力署名を維持する。
  const marks=start();marks.eval("data.staff[0].canOvertime=true;schedule().assignments.a={'1':'overtime','2':'night','3':'nightOff','4':'off'};schedule().shiftRequests={a:{'1':'overtime','2':'night'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
- const expected=['残','S','ー','公','・'],symbols=table=>table.all('tr')[2].children.slice(6,11).map(e=>e.text),markData=marks.get('data'),markSignature=marks.get('inputData().signature'),markStorage=[...marks.values];
+ const expected=['残','S','ー','公','・'],symbols=table=>table.all('tr').find(r=>r.className==='roster-staff-row').children.slice(6,11).map(e=>e.text),markData=marks.get('data'),markSignature=marks.get('inputData().signature'),markStorage=[...marks.values];
  assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
  const legend=marks.nodes.view.text;for(const phrase of ['残 通し7:00','S 夜勤','ー 明け','公 公休'])assert(legend.includes(phrase),phrase);
  open(marks);assert.deepEqual(symbols(body(marks).all('table')[0]),expected);await marks.click('閉じる');

@@ -46,11 +46,11 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  const colorData=color.get('data'),colorSignature=color.get('inputData().signature'),colorStorage=[...color.values];
  color.eval("const originalCreate=document.createElement;document.createElement=tag=>{const node=originalCreate(tag);node.classList.add=(...names)=>{node.className=[...new Set([...(node.className||'').split(' ').filter(Boolean),...names])].join(' ');};return node;};const painted=[monthTable(true),monthTable(false),monthTable(false,{landscape:true}),withSavedTable(RosterStorage.capture(data,key(),'配色確認','colors'),()=>monthTable(false))];document.createElement=originalCreate;");
  const painted=color.eval('painted');for(const table of painted){
-  const rows=table.all('table')[0].all('tr').slice(2,4),wishes=[];
+  const rows=table.all('table')[0].all('tr').filter(r=>r.className==='roster-staff-row'),wishes=[];
   rows.forEach((r,i)=>r.children.slice(6).forEach((cell,d)=>{if(cls(cell,'wished'))wishes.push(`${i}:${d+1}`);}));
   assert.deepEqual(wishes,['0:2','0:7','1:1']);assert(!cls(rows[0].children[6],'wished'));assert(!cls(rows[1].children[7],'wished'));assert(!cls(rows[1].children[8],'wished'));
  }
- const editable=painted[0].all('table')[0].all('tr')[2];assert(cls(editable.children[7],'locked')&&cls(editable.children[7],'wished'));assert(cls(editable.children[9],'exception'));assert(!cls(editable.children[9],'wished'));
+ const editable=painted[0].all('table')[0].all('tr').find(r=>r.className==='roster-staff-row');assert(cls(editable.children[7],'locked')&&cls(editable.children[7],'wished'));assert(cls(editable.children[9],'exception'));assert(!cls(editable.children[9],'wished'));
  assert.deepEqual(color.get('data'),colorData);assert.equal(color.get('inputData().signature'),colorSignature);assert.deepEqual([...color.values],colorStorage);assert.equal(color.calls.length,0);
  console.log('PASS: 横表示ボタンと操作を表の直前へ・凡例とルールを表の下へ・注意を上に保持・重複整理・印刷/保存表/旧表の保持');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -306,3 +306,9 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .month-table td.locked{box-shadow:inset 0 0 0 2px #111}
 .month-table td.exception{outline:1px dashed #111;outline-offset:-2px}
 }
+
+/* チーム名は表の中で区切り、横にスクロールしても左端に残す。 */
+.month-table .roster-team-row>th{background:#e7edf3;color:#111;border-top:2px solid #8291a3;text-align:left;padding:4px 6px;font-weight:700}
+.roster-team-label{position:sticky;left:6px;display:inline-block;max-width:24em;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.landscape-body .month-table .roster-team-row>th{height:18px;padding:1px 4px}
+@media print{.month-table .roster-team-row>th{background:#e7edf3!important;padding:2px 4px;break-after:avoid}.roster-team-label{position:static;max-width:none;overflow:visible}}
