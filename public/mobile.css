@@ -330,9 +330,6 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .month-table td[data-weekday=sun]{background:#fbe2eb!important}
 }
 
-/* 勤務記号の描画だけを拡大・太字化し、マスの寸法と文字の配置幅は変えない。 */
-.month-table .shift-mark{display:inline-block;transform:scale(1.15);transform-origin:center;-webkit-text-stroke:.25px currentColor;paint-order:stroke fill}
-
 @media screen{
 .landscape-notice-panel .result-report{margin:0 0 12px;padding:10px 12px;border-left-width:2px}
 .landscape-notice-panel .result-report:last-child{margin-bottom:0}

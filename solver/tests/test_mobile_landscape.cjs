@@ -44,10 +44,10 @@ const body=h=>h.nodes['dialog-body'];
  // 横表示だけ名前の空白と集計見出しを圧縮し、登録名・値・読み上げを保持する。
  const compact=start();compact.eval("data.staff[0].name='久 木　山';data.staff[1].name='松　井';render()");
  const compactData=compact.get('data'),compactStorage=[...compact.values],compactSignature=compact.get('inputData().signature'),normal=compact.nodes.view.all('table')[0];
- assert.deepEqual(normal.all('tr')[0].children.slice(1,6).map(c=>c.text),['公休','残業','夜勤','A','B']);
+ assert.deepEqual(normal.all('tr')[0].children.slice(-5).map(c=>c.text),['公休','残業','夜勤','A','B']);
  assert.equal(normal.all('tr').find(r=>r.className==='roster-staff-row').children[0].text,'久 木　山');
  open(compact);const narrow=body(compact).all('table')[0],narrowRows=narrow.all('tr').filter(r=>r.className==='roster-staff-row');
- assert.deepEqual(narrow.all('tr')[0].children.slice(1,6).map(c=>c.text),['休','残','夜','A','B']);
+ assert.deepEqual(narrow.all('tr')[0].children.slice(-5).map(c=>c.text),['休','残','夜','A','B']);
  assert.deepEqual(narrowRows.map(r=>r.children[0].text),['久木山','松井']);assert.equal(narrowRows[0].children[0].attributes.title,'久 木　山');assert(narrowRows[0].children[0].attributes['aria-label'].includes('久 木　山'));
  assert.deepEqual(narrowRows.map(r=>r.children.slice(1).map(c=>c.text)),normal.all('tr').filter(r=>r.className==='roster-staff-row').map(r=>r.children.slice(1).map(c=>c.text)));
  await compact.click('閉じる');assert.deepEqual(compact.get('data'),compactData);assert.deepEqual([...compact.values],compactStorage);assert.equal(compact.get('inputData().signature'),compactSignature);assert.equal(compact.calls.length,0);
@@ -98,7 +98,7 @@ const body=h=>h.nodes['dialog-body'];
  for(const [meta,text]of [[null,'この表の条件確認は未完了です'],[{status:'INVALID'},'条件に合わない勤務があります']]){const bad=start();bad.ctx.testMeta=meta;bad.eval('schedule().meta=testMeta;render()');open(bad);await bad.click('注意1件');assert(body(bad).all('section')[0].text.includes(text));await bad.click('閉じる');}
  // 同じ勤務を通常・印刷・横表示・保存表で新しい記号にそろえ、値と入力署名を維持する。
  const marks=start();marks.eval("data.staff[0].canOvertime=true;schedule().assignments.a={'1':'overtime','2':'night','3':'nightOff','4':'off'};schedule().shiftRequests={a:{'1':'overtime','2':'night'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
- const expected=['残','S','ー','公','・'],symbols=table=>table.all('tr').find(r=>r.className==='roster-staff-row').children.slice(6,11).map(e=>e.text),markData=marks.get('data'),markSignature=marks.get('inputData().signature'),markStorage=[...marks.values];
+ const expected=['残','S','ー','公','・'],symbols=table=>table.all('tr').find(r=>r.className==='roster-staff-row').children.slice(1,6).map(e=>e.text),markData=marks.get('data'),markSignature=marks.get('inputData().signature'),markStorage=[...marks.values];
  assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
  const legend=marks.nodes.view.text;for(const phrase of ['記号・ルールの説明','残 通し7:00','S 夜勤','ー 明け','公 公休'])assert(!legend.includes(phrase),phrase);
  open(marks);assert.deepEqual(symbols(body(marks).all('table')[0]),expected);await marks.click('閉じる');
@@ -114,13 +114,15 @@ const body=h=>h.nodes['dialog-body'];
   days.eval("state.year=testYear;state.month=testMonth;schedule().assignments=Object.fromEntries(data.staff.map(st=>[st.id,Object.fromEntries(Array.from({length:days()},(_,i)=>[String(i+1),i%2?'early':'off']))]));schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
   const all=days.nodes.view.all('table')[0].all('tr').map(r=>r.children.map(c=>c.text));open(days);
   const viewed=body(days).all('table')[0].all('tr');assert.equal(viewed[0].children.length,n+6);assert.deepEqual(viewed.slice(2).map(r=>r.children.map(c=>c.text)),all.slice(2));
+  assert.equal(viewed[0].children[0].text,'職員');assert.equal(viewed[0].children.slice(1,-5).length,n);assert.deepEqual(viewed[0].children.slice(-5).map(c=>c.text),['休','残','夜','A','B']);
+  for(const r of viewed.slice(2)){assert.equal(r.children.reduce((sum,c)=>sum+(c.colSpan||1),0),n+6);if(r.className==='roster-staff-row'){assert(r.children.slice(-5).every(c=>c.className.startsWith('total count-')));}else{assert.equal(r.children[0].text,'');assert(r.children[0].attributes['aria-label'].includes('の人数'));assert.equal(r.children.at(-1).colSpan,5);assert.equal(r.children.at(-1).text,'');}}
   // 16日始まり・月またぎ・うるう年でも、土日の列が勤務・人数欄の最下段まで合う。
   // 保存表・印刷用にも同じ日付を使い、名前と個人集計には曜日色を付けない。
   const archived=days.eval("withSavedTable(RosterStorage.capture(data,key(),'曜日確認','weekends'),()=>monthTable(false))").all('table')[0];
   for(const table of [...days.nodes.view.all('table'),body(days).all('table')[0],archived]){
    const rs=table.all('tr');
-   for(let d=1;d<=n;d++){const weekday=new Date(Date.UTC(year,month-1,15+d)).getUTCDay(),cls=weekday===6?'sat':weekday===0?'sun':'';assert.equal(rs[0].children[d+5].className||'',cls);assert.equal(rs[1].children[d-1].className||'',cls);
-    for(const r of rs.slice(2)){const offset=r.className==='roster-staff-row'?6:1;assert.equal(r.children[d+offset-1].attributes['data-weekday']||'',cls);assert(r.children.slice(0,offset).every(c=>!c.attributes['data-weekday']));}
+   for(let d=1;d<=n;d++){const weekday=new Date(Date.UTC(year,month-1,15+d)).getUTCDay(),cls=weekday===6?'sat':weekday===0?'sun':'';assert.equal(rs[0].children[d].className||'',cls);assert.equal(rs[1].children[d-1].className||'',cls);
+    for(const r of rs.slice(2)){const offset=1;assert.equal(r.children[d+offset-1].attributes['data-weekday']||'',cls);assert(r.children.slice(0,offset).every(c=>!c.attributes['data-weekday']));}
    }
   }
   await days.click('閉じる');assert(!days.nodes.view.text.includes('記号・ルールの説明'));

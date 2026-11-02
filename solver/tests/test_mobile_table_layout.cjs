@@ -51,10 +51,10 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  color.eval("const originalCreate=document.createElement;document.createElement=tag=>{const node=originalCreate(tag);node.classList.add=(...names)=>{node.className=[...new Set([...(node.className||'').split(' ').filter(Boolean),...names])].join(' ');};return node;};const painted=[monthTable(true),monthTable(false),monthTable(false,{landscape:true}),withSavedTable(RosterStorage.capture(data,key(),'配色確認','colors'),()=>monthTable(false))];document.createElement=originalCreate;");
  const painted=color.eval('painted');for(const table of painted){
   const rows=table.all('table')[0].all('tr').filter(r=>r.className==='roster-staff-row'),wishes=[];
-  rows.forEach((r,i)=>r.children.slice(6).forEach((cell,d)=>{if(cls(cell,'wished'))wishes.push(`${i}:${d+1}`);}));
-  assert.deepEqual(wishes,['0:2','0:7','1:1']);assert(!cls(rows[0].children[6],'wished'));assert(!cls(rows[1].children[7],'wished'));assert(!cls(rows[1].children[8],'wished'));
+  rows.forEach((r,i)=>r.children.slice(1,-5).forEach((cell,d)=>{if(cls(cell,'wished'))wishes.push(`${i}:${d+1}`);}));
+  assert.deepEqual(wishes,['0:2','0:7','1:1']);assert(!cls(rows[0].children[1],'wished'));assert(!cls(rows[1].children[2],'wished'));assert(!cls(rows[1].children[3],'wished'));
  }
- const editable=painted[0].all('table')[0].all('tr').find(r=>r.className==='roster-staff-row');assert(cls(editable.children[7],'locked')&&cls(editable.children[7],'wished'));assert(cls(editable.children[9],'exception'));assert(!cls(editable.children[9],'wished'));
+ const editable=painted[0].all('table')[0].all('tr').find(r=>r.className==='roster-staff-row');assert(cls(editable.children[2],'locked')&&cls(editable.children[2],'wished'));assert(cls(editable.children[4],'exception'));assert(!cls(editable.children[4],'wished'));
  assert.deepEqual(color.get('data'),colorData);assert.equal(color.get('inputData().signature'),colorSignature);assert.deepEqual([...color.values],colorStorage);assert.equal(color.calls.length,0);
  // 日数と背景は共通で、色分けの要素には「固定／以上」だけを入れる。
  const settings=start();settings.eval("data.staff[0].fixedDaysOff=true;data.staff[1].fixedDaysOff=false;setTab('staff')");const badges=settings.nodes.view.all('span').filter(e=>cls(e,'staff-days-off'));assert.equal(badges.length,2);assert.deepEqual(badges.map(b=>b.text),['公休9日固定','公休9日以上']);assert(badges.every(b=>b.className==='staff-days-off'));assert.deepEqual(badges.map(b=>b.children[0].text),['公休9日','公休9日']);assert.deepEqual(badges.map(b=>b.children[1].text),['固定','以上']);assert(cls(badges[0].children[1],'staff-days-off-fixed'));assert(cls(badges[1].children[1],'staff-days-off-minimum'));
