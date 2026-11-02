@@ -23,10 +23,10 @@ const every=node=>[node,...node.children.filter(v=>v&&typeof v==='object').flatM
 
  // 画面と版：読み込みの番号をそろえ、下の4つの画面と設定・期間の部品を残す。
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),versions=[...html.matchAll(/\?v=(\d+)/g)].map(m=>m[1]);
- assert(versions.length>=10);assert.equal(new Set(versions).size,1);assert.equal(versions[0],'93');
+ assert(versions.length>=10);assert.equal(new Set(versions).size,1);assert.equal(versions[0],'94');
  assert.deepEqual([...html.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]),['schedule','requests','staff','saved']);
  for(const id of ['settings','previous','next','month','period-label','notice','view','toast','dialog','dialog-body','import'])assert(html.includes(`id="${id}"`),id);
- assert(html.includes('<footer>公休表 3.80</footer>'));
+ assert(html.includes('<footer>公休表 3.81</footer>'));
  // 暗い配色は画面だけ（@media screen の中）。印刷の規則には入れない。
  const css=fs.readFileSync(path.join(root,'mobile.css'),'utf8'),start=css.indexOf('@media screen{'),theme=css.slice(start);
  assert(start>0);assert(theme.includes('.month-table td.wished{color:#bf2028;'));
