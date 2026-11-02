@@ -23,12 +23,12 @@ const said=h=>h.nodes.view.text.match(/作り直す前[^。]*。/)?.[0];
  const impossible=harness(raw,{response:async()=>({status:'INFEASIBLE',seconds:.1,diagnosis:{status:'EXPLAINED',proven:true,missingNights:[3],droppedWishes:[]}})});
  await impossible.ctx.generate();
  assert(impossible.nodes.view.text.includes('連勤上限・日勤の種類（許可した人）・連休なし・夜勤の端数・連休の回数の差は、守ると作れないときだけ最小限破って表に表示します。'));
- // 希望休の夜勤後配置の説明は、表がないときは作成の欄、表があるときは表の下に1回だけ。
+ // 希望休の夜勤後配置の説明は、表がないときは作成の欄、表があるときは記号・ルールの説明ごと表示しない。
  // 画面に見える部分だけ数える（印刷用に隠している表の写しは除く）。
  const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>typeof c==='object'&&c.children?visible(c):String(c)).join('');
  const count=h=>visible(h.nodes.view).split('希望休の初日は、夜勤→明け→希望休').length-1;
  const empty=harness(raw);empty.eval('render()');assert.equal(count(empty),1);
  const table=harness(raw);table.eval("schedule().assignments={a:{'1':'early','2':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature,allocation:{overtimeTotal:0,nightSpread:0}};render()");
- assert.equal(count(table),1);
+ assert.equal(count(table),0);
  console.log('PASS: 作り直す前との比較（押す前の表が基準・新規では出さない）、読み込めないファイルの案内、中間ルールの説明、説明文を1回だけ');
 })().catch(e=>{console.error(e);process.exitCode=1;});

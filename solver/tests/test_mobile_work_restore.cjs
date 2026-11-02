@@ -76,11 +76,11 @@ const reopen=(from,extra={})=>harness(null,{current:{...JSON.parse(from.values.g
  lock.eval('editShift(data.staff[0],1)');
  assert.equal(lock.nodes['dialog-body'].all('input').find(e=>e.type==='checkbox').checked,false);
 
- // 表の固定マスには印と読み上げ用の「固定」が付き、凡例も出る。
+ // 表の固定マスには印と読み上げ用の「固定」が付き、凡例は出さない。
  lock.eval('state.tab="schedule";render();');
  const labels=lock.nodes.view.all('td').map(td=>td.attributes['aria-label']||'');
  assert.equal(labels.filter(t=>t.includes('（固定）')).length,1);
  assert(labels.some(t=>t.startsWith('職員A')&&t.includes('（固定）')));
- assert(lock.nodes.view.text.includes('太枠のマスは固定した勤務'));
+ assert(!lock.nodes.view.text.includes('太枠のマスは固定した勤務'));
  console.log('PASS: 作業中の表を開き直しても復元、条件変更後も保持、条件を復元できない旧データと壊れたデータは使わない、容量不足でも継続、固定マスのチェックと印');
 })().catch(e=>{console.error(e);process.exitCode=1;});

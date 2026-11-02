@@ -15,18 +15,18 @@ const every=node=>[node,...node.children.filter(v=>v&&typeof v==='object').flatM
  // 守れている項目に印のクラス。
  assert(find(h.nodes.view,e=>(e.className||'').split(' ').includes('ok-line')).some(p=>p.textContent==='残の1サイクル1回：守れています'));
 
- // 希望を入れた日の説明は、希望があるときだけ。印刷でも説明を残す。
+ // 記号とルールの説明は、希望がある表でも画面・印刷に表示しない。
  assert(!h.nodes.view.text.includes('赤い文字は、希望を入れた日です。'));
  h.eval("schedule().requests={a:[3]};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
  const legend=find(h.nodes.view,e=>e.textContent==='赤い文字は、希望を入れた日です。');
- assert(legend.length>=1);assert(legend.every(p=>p.className.split(' ').includes('legend')&&!p.className.split(' ').includes('screen-only')));
+ assert.equal(legend.length,0);assert(!h.nodes.view.text.includes('記号・ルールの説明'));
 
  // 画面と版：読み込みの番号をそろえ、下の4つの画面と設定・期間の部品を残す。
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),versions=[...html.matchAll(/\?v=(\d+)/g)].map(m=>m[1]);
- assert(versions.length>=10);assert.equal(new Set(versions).size,1);assert.equal(versions[0],'98');
+ assert(versions.length>=10);assert.equal(new Set(versions).size,1);assert.equal(versions[0],'99');
  assert.deepEqual([...html.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]),['schedule','requests','staff','saved']);
  for(const id of ['settings','previous','next','month','period-label','notice','view','toast','dialog','dialog-body','import'])assert(html.includes(`id="${id}"`),id);
- assert(html.includes('<footer>公休表 3.85</footer>'));
+ assert(html.includes('<footer>公休表 3.86</footer>'));
  // 暗い配色は画面だけ（@media screen の中）。印刷の規則には入れない。
  const css=fs.readFileSync(path.join(root,'mobile.css'),'utf8'),start=css.indexOf('@media screen{'),theme=css.slice(start);
  assert(start>0);assert(theme.includes('.month-table td.wished{color:#bf2028;'));

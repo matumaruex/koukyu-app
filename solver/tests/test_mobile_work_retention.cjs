@@ -28,7 +28,7 @@ function response(p){return {status:'FEASIBLE',seconds:.1,boundaryComplete:true,
   assert(h.get('hasTable()'));assert(h.get('workChanged()'));assert.equal(h.get('metadata()'),null);
   assert.deepEqual(h.get('schedule().assignments'),rows);assert.deepEqual(h.get('schedule().workSnapshot'),original);
   assert(h.nodes.view.text.includes(notice));assert(h.nodes.view.text.includes('以前の職員B'));
-  assert(h.nodes.view.text.includes('以前の職員A'));assert(h.nodes.view.text.includes('必要人数：朝4人'));
+  assert(h.nodes.view.text.includes('以前の職員A'));assert(h.nodes.view.all('td').some(td=>(td.attributes['aria-label']||'').includes('必要4人')));
   assert(h.nodes.view.text.includes('この表の残業：合計1回'));assert(!h.nodes.view.text.includes('さらに改善する'));
   assert.deepEqual(h.get('inputData().p.staff.map(st=>st.id)'),['s0','s1']);assert.equal(h.get('inputData().map.s1'),'c');
   const callCount=h.calls.length;await h.ctx.validateCurrent();assert.equal(h.calls.length,callCount);

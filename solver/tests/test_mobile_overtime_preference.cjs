@@ -31,7 +31,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert(text.includes('職員B：3回 ／ 通常'));assert(text.includes('まだ確認できていません'));
  assert(!text.includes('これ以上均等にできない'));
  h.eval("schedule().meta={status:'FEASIBLE',optimizationPolicy:OvertimePreference.POLICY,overtimeFairness:{total:11,byStaff:{s0:5,s1:3,s2:3},preferenceByStaff:{s0:2,s1:0,s2:0},preferenceApplied:true,minimumSpreadProven:true}};");
- assert(h.eval('allocationSummary()').text.includes('歓迎の目安からの配分差が最少'));
+ assert(h.eval('allocationSummary()').text.includes('希望する残業配分との差が最少'));
  // 回数や歓迎設定が一致しない証明は表示しない。
  h.eval("schedule().meta.overtimeFairness.preferenceByStaff.s0=1;");
  assert(h.eval('allocationSummary()').text.includes('まだ確認できていません'));
@@ -61,6 +61,6 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert(flow.compare(quality(22,0,2),quality(22,1,1))<0);
  assert(flow.compare(quality(23,0,2),quality(22,4,4))>0);
  const progress=h.eval("progressText({allocation:{overtimeTotal:22,overtimeSpread:1}},{allocation:{overtimeTotal:22,overtimeSpread:2,overtimePreferred:true},search:{resume:{stage:'overtime_fairness'}}})");
- assert(progress.includes('残業歓迎の目安に合わせた配分'));assert(!progress.includes('残業の差'));
+ assert(progress.includes('残業の希望に合わせた配分'));assert(!progress.includes('歓迎'));assert(!h.eval('allocationSummary()').text.includes('歓迎'));assert(!progress.includes('残業の差'));
  console.log('PASS: 残業配分の設定・通常だけの送信・おまかせと旧表の維持・目安と証明・編集後の再集計・保存とコピー・前期保持・比率と合計優先');
 })().catch(e=>{console.error(e);process.exit(1);});

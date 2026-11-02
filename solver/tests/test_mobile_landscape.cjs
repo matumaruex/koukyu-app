@@ -100,7 +100,7 @@ const body=h=>h.nodes['dialog-body'];
  const marks=start();marks.eval("data.staff[0].canOvertime=true;schedule().assignments.a={'1':'overtime','2':'night','3':'nightOff','4':'off'};schedule().shiftRequests={a:{'1':'overtime','2':'night'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
  const expected=['残','S','ー','公','・'],symbols=table=>table.all('tr').find(r=>r.className==='roster-staff-row').children.slice(6,11).map(e=>e.text),markData=marks.get('data'),markSignature=marks.get('inputData().signature'),markStorage=[...marks.values];
  assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
- const legend=marks.nodes.view.text;for(const phrase of ['残 通し7:00','S 夜勤','ー 明け','公 公休'])assert(legend.includes(phrase),phrase);
+ const legend=marks.nodes.view.text;for(const phrase of ['記号・ルールの説明','残 通し7:00','S 夜勤','ー 明け','公 公休'])assert(!legend.includes(phrase),phrase);
  open(marks);assert.deepEqual(symbols(body(marks).all('table')[0]),expected);await marks.click('閉じる');
  marks.eval('editHistory()');const historyOptions=body(marks).all('select')[1].all('option').map(e=>e.text);for(const label of ['残（通し）','S（夜勤）','ー（明け）','公（公休）'])assert(historyOptions.includes(label));await marks.click('閉じる');
  marks.eval("editShift(data.staff[0],1)");assert(body(marks).all('option').some(e=>e.text==='残（通し）'));await marks.click('閉じる');
@@ -123,7 +123,7 @@ const body=h=>h.nodes['dialog-body'];
     for(const r of rs.slice(2)){const offset=r.className==='roster-staff-row'?6:1;assert.equal(r.children[d+offset-1].attributes['data-weekday']||'',cls);assert(r.children.slice(0,offset).every(c=>!c.attributes['data-weekday']));}
    }
   }
-  await days.click('閉じる');assert(days.nodes.view.text.includes('記号・ルールの説明'));
+  await days.click('閉じる');assert(!days.nodes.view.text.includes('記号・ルールの説明'));
  }
  console.log('PASS: 公休表の横表示・拡大・閉じる・別画面への復帰、旧作業表と保存表の参照、入力と表の保持');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -12,19 +12,18 @@ const wrap=h=>h.nodes.view.all('div').find(e=>cls(e,'month-wrap'));
 const part=(w,c)=>w.children.find(e=>e&&cls(e,c));
 const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>typeof c==='object'&&c.children?visible(c):String(c)).join('');
 (async()=>{
- const h=start(),w=wrap(h),heading=part(w,'month-heading'),operations=part(w,'month-operations'),scroll=part(w,'scroll'),guide=part(w,'month-guide');
- assert(heading&&operations&&scroll&&guide);assert(w.children.indexOf(heading)<w.children.indexOf(operations));assert(w.children.indexOf(operations)<w.children.indexOf(scroll));assert(w.children.indexOf(scroll)<w.children.indexOf(guide));
+ const h=start(),w=wrap(h),heading=part(w,'month-heading'),operations=part(w,'month-operations'),scroll=part(w,'scroll');
+ assert(heading&&operations&&scroll);assert(w.children.indexOf(heading)<w.children.indexOf(operations));assert(w.children.indexOf(operations)<w.children.indexOf(scroll));
  const restFold=part(w,'report-fold');assert(restFold&&restFold.tagName==='DETAILS'&&!restFold.open);assert.equal(restFold.all('summary')[0].text,'連休の確認');assert(restFold.text.includes('作成時の職員A'));assert(w.children.indexOf(restFold)<w.children.indexOf(heading));
  assert.equal(heading.all('button').filter(b=>b.text==='横画面で見る').length,1);
  assert.equal(h.nodes.view.all('button').filter(b=>b.text==='横画面で見る').length,1);
  assert(operations.text.includes('表のマスを押すと、その日の勤務を変更できます。'));assert(!operations.text.includes('太枠'));
- for(const text of ['赤い文字','点線枠','太枠','A 早出7:00','人数欄は実際/必要','必要人数：','希望休の初日は'])assert(guide.text.includes(text),text);
- assert(!guide.text.includes('表のマスを押すと'));assert(!guide.text.includes('夜勤後にできなかった希望休'));
- const text=visible(h.nodes.view);assert.equal(text.split('夜勤後にできなかった希望休').length-1,1);assert.equal(text.split('希望休の初日は').length-1,1);
- assert.equal(guide.text.split('実線の下線は人数不足').length-1,1);assert(!text.includes('赤い人数欄は人数不足・夜勤未配置です。'));
+ for(const text of ['記号・ルールの説明','赤い文字は、希望','太い点線枠と角の印','A 早出7:00','人数欄は実際/必要','希望休の初日は'])assert(!w.text.includes(text),text);assert(!part(w,'month-guide'));
+ const text=visible(h.nodes.view);assert.equal(text.split('夜勤後にできなかった希望休').length-1,1);assert.equal(text.split('希望休の初日は').length-1,0);
+ assert(!text.includes('赤い人数欄は人数不足・夜勤未配置です。'));
  const roster=h.nodes.view.all('article').find(e=>e.id==='roster-result'),attention=roster.children.find(e=>cls(e,'result-attention'));
  assert(roster.children.indexOf(attention)<roster.children.indexOf(w));assert(attention.text.includes('4連勤目'));
- const actions=part(w,'month-table-actions');assert(actions);assert.equal(w.children.indexOf(actions),w.children.indexOf(scroll)+1);assert(w.children.indexOf(actions)<w.children.indexOf(guide));assert.deepEqual(actions.all('button').map(b=>b.text),['この表を保存','印刷する（A4横）']);assert.equal(h.nodes.view.all('button').filter(b=>b.text==='この表を保存').length,1);for(const removed of ['現在の入力条件から','正本','この表は自動保存され、'])assert(!text.includes(removed));
+ const actions=part(w,'month-table-actions');assert(actions);assert.equal(w.children.indexOf(actions),w.children.indexOf(scroll)+1);assert.equal(w.children.at(-1),actions);assert.deepEqual(actions.all('button').map(b=>b.text),['この表を保存','印刷する（A4横）']);assert.equal(h.nodes.view.all('button').filter(b=>b.text==='この表を保存').length,1);for(const removed of ['現在の入力条件から','正本','この表は自動保存され、'])assert(!text.includes(removed));
  // 折りたたみの開閉は見た目だけを変え、注意・表・保存を変更しない。
  const foldData=h.get('data'),foldStorage=[...h.values],foldSignature=h.get('inputData().signature'),foldRows=scroll.all('tr').map(r=>r.children.map(c=>c.text));for(const fold of roster.all('details').filter(d=>cls(d,'report-fold'))){assert(!fold.open);fold.open=true;fold.open=false;}assert.deepEqual(h.get('data'),foldData);assert.deepEqual([...h.values],foldStorage);assert.equal(h.get('inputData().signature'),foldSignature);assert.deepEqual(scroll.all('tr').map(r=>r.children.map(c=>c.text)),foldRows);assert(attention.text.includes('4連勤目'));
  // 表直下の保存・印刷は従来どおり動く。
@@ -34,7 +33,7 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  const printable=h.nodes.view.all('div').find(e=>e.className==='print-only'),printed=printable.all('div').find(e=>cls(e,'month-wrap'));
  assert.equal(printed.all('button').length,0);assert(!part(printed,'month-operations'));
  assert(printed.children.indexOf(part(printed,'month-notices'))<printed.children.indexOf(part(printed,'scroll')));
- assert(part(printed,'month-guide').text.includes('希望休の初日は'));assert(!printed.all('details').some(d=>cls(d,'report-fold')));assert(printed.all('div').some(d=>cls(d,'consecutive-rest-summary')));
+ assert(!part(printed,'month-guide'));assert(!printed.text.includes('記号・ルールの説明'));assert(!printed.all('details').some(d=>cls(d,'report-fold')));assert(printed.all('div').some(d=>cls(d,'consecutive-rest-summary')));
  const before=h.get('data'),signature=h.get('inputData().signature');heading.all('button')[0].click();assert(h.nodes.dialog.open);
  const viewer=h.nodes['dialog-body'];assert(!viewer.all('button').some(b=>b.text==='横画面で見る'));assert(!viewer.text.includes('表のマスを押すと'));
  const viewed=viewer.all('div').find(e=>cls(e,'month-wrap'));assert(!part(viewed,'month-notices'));assert(part(viewed,'scroll'));const notice=viewer.all('section').find(e=>cls(e,'landscape-notice-panel'));assert(notice&&notice.hidden);assert(notice.text.includes('夜勤後にできなかった希望休'));assert(viewer.children[0].all('button').some(b=>b.text==='注意3件'));
@@ -59,5 +58,5 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  assert.deepEqual(color.get('data'),colorData);assert.equal(color.get('inputData().signature'),colorSignature);assert.deepEqual([...color.values],colorStorage);assert.equal(color.calls.length,0);
  // 日数と背景は共通で、色分けの要素には「固定／以上」だけを入れる。
  const settings=start();settings.eval("data.staff[0].fixedDaysOff=true;data.staff[1].fixedDaysOff=false;setTab('staff')");const badges=settings.nodes.view.all('span').filter(e=>cls(e,'staff-days-off'));assert.equal(badges.length,2);assert.deepEqual(badges.map(b=>b.text),['公休9日固定','公休9日以上']);assert(badges.every(b=>b.className==='staff-days-off'));assert.deepEqual(badges.map(b=>b.children[0].text),['公休9日','公休9日']);assert.deepEqual(badges.map(b=>b.children[1].text),['固定','以上']);assert(cls(badges[0].children[1],'staff-days-off-fixed'));assert(cls(badges[1].children[1],'staff-days-off-minimum'));
- console.log('PASS: 横表示ボタンと操作を表の直前へ・凡例とルールを表の下へ・注意を上に保持・重複整理・印刷/保存表/旧表の保持');
+ console.log('PASS: 横表示ボタンと操作を表の直前へ・記号とルールの説明を削除・注意を上に保持・重複整理・印刷/保存表/旧表の保持');
 })().catch(e=>{console.error(e);process.exitCode=1;});
