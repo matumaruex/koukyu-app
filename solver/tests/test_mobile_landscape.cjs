@@ -41,6 +41,17 @@ const body=h=>h.nodes['dialog-body'];
  open(h);assert.equal(body(h).className,'landscape-body');await h.click('閉じる');
  h.eval('state.busy=true');h.ctx.openLandscapeTable();assert(!h.nodes.dialog.open);h.eval('state.busy=false');
 
+ // 横表示だけ名前の空白と集計見出しを圧縮し、登録名・値・読み上げを保持する。
+ const compact=start();compact.eval("data.staff[0].name='久 木　山';data.staff[1].name='松　井';render()");
+ const compactData=compact.get('data'),compactStorage=[...compact.values],compactSignature=compact.get('inputData().signature'),normal=compact.nodes.view.all('table')[0];
+ assert.deepEqual(normal.all('tr')[0].children.slice(1,6).map(c=>c.text),['公休','残業','夜勤','A','B']);
+ assert.equal(normal.all('tr').find(r=>r.className==='roster-staff-row').children[0].text,'久 木　山');
+ open(compact);const narrow=body(compact).all('table')[0],narrowRows=narrow.all('tr').filter(r=>r.className==='roster-staff-row');
+ assert.deepEqual(narrow.all('tr')[0].children.slice(1,6).map(c=>c.text),['休','残','夜','A','B']);
+ assert.deepEqual(narrowRows.map(r=>r.children[0].text),['久木山','松井']);assert.equal(narrowRows[0].children[0].attributes.title,'久 木　山');assert(narrowRows[0].children[0].attributes['aria-label'].includes('久 木　山'));
+ assert.deepEqual(narrowRows.map(r=>r.children.slice(1).map(c=>c.text)),normal.all('tr').filter(r=>r.className==='roster-staff-row').map(r=>r.children.slice(1).map(c=>c.text)));
+ await compact.click('閉じる');assert.deepEqual(compact.get('data'),compactData);assert.deepEqual([...compact.values],compactStorage);assert.equal(compact.get('inputData().signature'),compactSignature);assert.equal(compact.calls.length,0);
+
  // 条件を変更済みの作業表も、当時の職員と希望で表示し、新しい入力へ混ぜない。
  const stale=start();stale.eval("data.staff[0].name='変更後の職員A';data.staff[0].monthlyDaysOff=10;save(true);render()");
  assert(stale.get('workChanged()'));const changed=stale.get('data'),old=stale.get('schedule().workSnapshot');
@@ -57,19 +68,29 @@ const body=h=>h.nodes['dialog-body'];
  assert.deepEqual(saved.get('data'),current);assert.deepEqual(saved.get('[state.year,state.month]'),period);assert.equal(saved.calls.length,0);
  // 説明を省いても、注意は残す。
  const warning=start();warning.eval("schedule().meta={status:'DRAFT',signature:inputData().signature,ruleExceptions:[{code:'consecutive',staff:'s0',day:4,actual:4,limit:3}],historyVerification:{issues:[{staff:'s0',provided:5,required:6,reasons:['consecutive']}]},nightRestPreferences:{rule:'night-request-gap-1',unmet:[{staff:'s0',day:7}]}};render()");
- open(warning);for(const text of ['人数不足','勤務条件の例外：1件','前期をまたぐ条件の確認は未完了','夜勤後にできなかった希望休','作成時の職員A'])assert(body(warning).text.includes(text),text);
+ open(warning);for(const text of ['人数不足','勤務条件の例外：1件','前期をまたぐ条件の確認が未完了','夜勤後にできなかった希望休','作成時の職員A'])assert(body(warning).text.includes(text),text);
  assert(!body(warning).text.includes('記号・ルール'));
  const warned=warning.get('data'),warnedStorage=[...warning.values],dialog=body(warning),table=dialog.all('table')[0],rows=table.all('tr').map(r=>r.children.map(c=>c.text)),panel=dialog.all('section')[0],toggle=dialog.all('button').find(b=>b.text==='注意4件');
  assert(toggle);assert.equal(panel.hidden,true);assert.equal(toggle.attributes['aria-controls'],panel.id);assert.equal(toggle.attributes['aria-expanded'],'false');
  const line=dialog.all('div').find(e=>e.className==='landscape-title-line');assert(line.children.includes(toggle));assert.equal(line.children[0].text,'公休表');
  const wrap=dialog.all('div').find(e=>e.className==='month-wrap');assert(!wrap.children.some(e=>e.className==='month-notices'));assert(!wrap.text.includes('人数不足'));
  let focused='';panel.all('button')[0].focus=()=>{focused='close';};toggle.focus=()=>{focused='toggle';};
- await warning.click('注意4件');assert.equal(panel.hidden,false);assert.equal(toggle.attributes['aria-expanded'],'true');assert.equal(focused,'close');
+ await warning.click('注意4件');assert.equal(panel.hidden,false);assert.equal(toggle.attributes['aria-expanded'],'true');assert.equal(focused,'close');assert(panel.text.includes('作成時の職員A 10月19日（月）：4連勤目（上限3日）'));assert(panel.text.includes('入力5日／確認に必要6日'));
  await warning.click('文字を大きく');assert.equal(panel.hidden,false);assert(dialog.className.includes('landscape-enlarged'));
  await warning.click('注意を閉じる');assert.equal(panel.hidden,true);assert.equal(focused,'toggle');assert.equal(toggle.attributes['aria-expanded'],'false');
  await warning.click('注意4件');let prevented=false,stopped=false;panel.onkeydown({key:'Escape',preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});assert(prevented&&stopped);assert.equal(panel.hidden,true);assert(warning.nodes.dialog.open);
  assert.equal(dialog.all('table')[0],table);assert.deepEqual(table.all('tr').map(r=>r.children.map(c=>c.text)),rows);await warning.click('閉じる');
  assert.deepEqual(warning.get('data'),warned);assert.deepEqual([...warning.values],warnedStorage);assert.equal(warning.calls.length,0);
+ // 例外の種類・名前・日付・上限を省かず、8件超でも注意内で全件を読める。
+ const detail=start();detail.eval("schedule().meta={status:'VALID',signature:inputData().signature,optimizationPolicy:OPTIMIZATION_POLICY,ruleExceptions:[{code:'consecutive',staff:'s0',day:4,actual:4,limit:3},{code:'consecutive_plus_one',staff:'s1',actual:2},{code:'day_shift_eligibility',staff:'s0',day:5,allowed:'early',actual:'late'},{code:'night_remainder',staff:'s1',actual:6,fair:5,priority:false},{code:'no_consecutive_rest',staff:'s0',start:7,end:8},{code:'rest_balance',high:3,low:1,counts:{s0:3,s1:1}},{code:'isolated_work',staff:'s0',day:10,workDay:10},{code:'rest_streak',staff:'s1',day:15,start:12,end:15,count:1},{code:'consecutive',staff:'s1',day:31,actual:5,limit:3}]};render()");
+ const detailData=detail.get('data'),detailStored=[...detail.values];open(detail);await detail.click('注意1件');const dp=body(detail).all('section')[0];
+ for(const text of ['勤務条件の例外：9件','4連勤目（上限3日）','上限＋1日の連勤が2回','Aのみ（早出）の設定ですが「B（遅出）','夜勤6回','連休なしの設定','連休の回数の差が2回','1日だけの出勤','4連休（3日まで','11月15日（日）：5連勤目'])assert(dp.text.includes(text),text);
+ assert.equal(dp.all('li').length,9);assert.equal(dp.all('details').length,0);await detail.click('閉じる');assert.deepEqual(detail.get('data'),detailData);assert.deepEqual([...detail.values],detailStored);assert.equal(detail.calls.length,0);
+ // 保存時の名前と期間で詳細を作り、後の入力変更を混ぜない。
+ detail.eval("data.savedTables.push(RosterStorage.capture(data,key(),'注意確認','notice-saved'));data.staff[0].name='変更後';data.staff[0].monthlyDaysOff=10;render()");open(detail);await detail.click('注意2件');assert(body(detail).all('section')[0].text.includes('作成時の職員A 10月19日'));assert(!body(detail).all('section')[0].text.includes('変更後'));await detail.click('閉じる');
+ // 人数不足と必須違反も、見出しに続いて該当日と内容を示す。
+ const shortages=start();shortages.eval("schedule().meta={status:'DRAFT',signature:inputData().signature,boundaryComplete:true,unmetConditions:[{code:'coverage',day:1,time:420,actual:1,required:4}]};render()");open(shortages);await shortages.click('注意1件');assert(body(shortages).all('section')[0].text.includes('10月16日（金） 朝7:00：1人／必要4人（3人不足）'));await shortages.click('閉じる');
+ const invalid=start();invalid.eval("schedule().meta={status:'INVALID',signature:inputData().signature,validationErrors:[{code:'shift_request',staff:'s0',day:4,requested:'early',actual:'late'}]};render()");open(invalid);await invalid.click('注意1件');for(const text of ['作成時の職員A','10月19日（月）','希望は「A（早出）','表は「B（遅出）'])assert(body(invalid).all('section')[0].text.includes(text),text);await invalid.click('閉じる');
  // 希望休の注意が長くても見出しは件数だけ、一覧は全日付を保持する。
  const many=start();many.eval("schedule().meta.nightRestPreferences={rule:'night-request-gap-1',unmet:Array.from({length:31},(_,i)=>({staff:'s0',day:i+1}))};render()");const manyData=many.get('data');open(many);
  await many.click('注意1件');const manyPanel=body(many).all('section')[0];assert(manyPanel.text.includes('10月16日'));assert(manyPanel.text.includes('11月15日'));assert(!body(many).children[0].text.includes('夜勤後にできなかった希望休'));await many.click('注意を閉じる');await many.click('閉じる');assert.deepEqual(many.get('data'),manyData);assert.equal(many.calls.length,0);
