@@ -26,7 +26,7 @@ const reopen=(from,extra={})=>harness(null,{current:{...JSON.parse(from.values.g
 
  // 希望休の達成基準が変わるため旧作業表を無効化。入力・固定・保存表は保持する。
  const legacy=JSON.parse(JSON.stringify(work));legacy.version=1;delete legacy.schedules['2026-10'].workSnapshot;
- legacy.schedules['2026-10'].workSignature=legacy.schedules['2026-10'].workSignature.replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.72:','rules-3.30:');
+ legacy.schedules['2026-10'].workSignature=legacy.schedules['2026-10'].workSignature.replace(/,"maxConsecutiveOff":3}(?=\|staff:|$)/,'}').replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.73:','rules-3.30:');
  legacy.schedules['2026-10'].meta.signature=legacy.schedules['2026-10'].workSignature;
  legacy.schedules['2026-10'].meta.optimizationPolicy='quality-first-4';
  const current=JSON.parse(h.values.get('koukyu_v4_data'));

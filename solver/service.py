@@ -6,6 +6,7 @@ from .night_preferences import report
 from .quality_search import STAGES
 from .rest_blocks import report as rest_report
 from .isolated_work import count as isolated_count, POLICY as ISOLATED_POLICY
+from .rest_streak import count as streak_count, POLICY as STREAK_POLICY
 
 ADAPTIVE_MIN_SECONDS = 15
 ADAPTIVE_AFTER_FIRST = 10
@@ -27,6 +28,9 @@ def dispatch(payload, *, _deadline=None):
             result = {'status': 'INVALID' if errors else 'VALID', 'validationErrors': errors, 'boundaryComplete': p['boundaryComplete'], 'historyVerification': p['historyVerification']}
             if not any(e['code'] == 'structure' for e in errors):
                 result['nightRestPreferences'] = report(p, payload['assignments'])
+                if p['maxConsecutiveOff']:
+                    count = streak_count(p, payload['assignments'])
+                    result['restStreak'] = {'limit': 3, 'count': count, 'proven': count == 0, 'policy': STREAK_POLICY}
                 if any(st['avoidIsolatedWork'] for st in p['staff']):
                     count = isolated_count(p, payload['assignments'])
                     result['isolatedWork'] = {'count': count, 'proven': count == 0, 'policy': ISOLATED_POLICY}
@@ -82,7 +86,7 @@ def dispatch(payload, *, _deadline=None):
 def check_resume(value, quality_first):
     if value is None:
         return None
-    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy', 'overtimeDistributionPolicy', 'nightConsecutivePolicy', 'historyPolicy', 'isolatedWorkPolicy'}:
+    if not quality_first or not isinstance(value, dict) or set(value) - {'stage', 'idle', 'proven', 'proofValues', 'preservedCommonExtraDaysOff', 'restBalancePolicy', 'nightDistributionPolicy', 'overtimeDistributionPolicy', 'nightConsecutivePolicy', 'historyPolicy', 'isolatedWorkPolicy', 'restStreakPolicy'}:
         raise ValueError('resume の形式を確認してください。')
     if value.get('stage') not in STAGES:
         raise ValueError('resume.stage を確認してください。')
@@ -119,6 +123,9 @@ def check_resume(value, quality_first):
     isolated_policy = value.get('isolatedWorkPolicy')
     if isolated_policy is not None and (not isinstance(isolated_policy, str) or len(isolated_policy) > 40):
         raise ValueError('resume.isolatedWorkPolicy を確認してください。')
+    streak_policy = value.get('restStreakPolicy')
+    if streak_policy is not None and (not isinstance(streak_policy, str) or len(streak_policy) > 40):
+        raise ValueError('resume.restStreakPolicy を確認してください。')
     return {'stage': value['stage'], 'idle': float(idle), 'proven': dict(proven),
             'proofValues': {name: list(values) for name, values in proof_values.items()},
             **({'restBalancePolicy': policy} if policy is not None else {}),
@@ -127,5 +134,6 @@ def check_resume(value, quality_first):
             **({'nightConsecutivePolicy': night_consecutive_policy} if night_consecutive_policy is not None else {}),
             **({'historyPolicy': history_policy} if history_policy is not None else {}),
             **({'isolatedWorkPolicy': isolated_policy} if isolated_policy is not None else {}),
+            **({'restStreakPolicy': streak_policy} if streak_policy is not None else {}),
             **({'preservedCommonExtraDaysOff': extra} if 'preservedCommonExtraDaysOff' in value else {})}
 

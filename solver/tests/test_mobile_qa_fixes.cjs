@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
 const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',monthlyDaysOff:9,nightShiftType:'all',canOvertime:true}],schedules:{'2026-10':{requests:{},assignments:{},history:{}}},preferences:{maxExtraOffSpread:1,staffing:{requiredStaff:[0,0,0],maxReducedSundays:0}}};
 const rows={s0:{'1':'overtime','2':'off'}};
-const reply=(ot,before,done)=>({status:'FEASIBLE',assignments:rows,seconds:60,allocation:{overtimeTotal:ot,nightSpread:0,before:{overtimeTotal:before},overtimeReducedBy:before-ot},search:{done,continueRecommended:!done,resume:done?null:{stage:'overtime',idle:1,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-18'});
+const reply=(ot,before,done)=>({status:'FEASIBLE',assignments:rows,seconds:60,allocation:{overtimeTotal:ot,nightSpread:0,before:{overtimeTotal:before},overtimeReducedBy:before-ot},search:{done,continueRecommended:!done,resume:done?null:{stage:'overtime',idle:1,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-19'});
 const said=h=>h.nodes.view.text.match(/作り直す前[^。]*。/)?.[0];
 (async()=>{
  // さらに改善する：押す前の表（A残3回）と比べる。途中の通信の表とは比べない。

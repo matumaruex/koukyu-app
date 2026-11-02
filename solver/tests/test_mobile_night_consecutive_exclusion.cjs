@@ -8,7 +8,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[
 (async()=>{
  const h=harness(null,{current:raw});
  assert.equal(h.get('inputData().p.excludeNightFromConsecutive'),true);
- assert(h.get('inputData().signature').startsWith('rules-3.72:'));
+ assert(h.get('inputData().signature').startsWith('rules-3.73:'));
  const before=h.get('inputData().signature');
  for(const index of [0,1,2]){
   h.eval(`editStaff(data.staff[${index}])`);
@@ -26,8 +26,8 @@ const raw={schemaVersion:4,savedTables:[],staff:[
  // 実際の旧署名には共通指定がない。スナップショットの有無にかかわらず、旧表を保持する。
  for(const prefix of ['rules-3.59:','rules-3.56:'])for(const keepSnapshot of [true,false]){
   const work=JSON.parse(values.koukyu_v4_work),w=work.schedules['2026-10'];
-  w.workSignature=w.workSignature.replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.72:',prefix);
-  if(prefix==='rules-3.56:')w.workSignature=w.workSignature.replace(',"nightDistribution":true','').replace(',"overtimeDistribution":true','');
+  w.workSignature=w.workSignature.replace(/,"maxConsecutiveOff":3}(?=\|staff:|$)/,'}').replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.73:',prefix);
+  if(prefix==='rules-3.56:')w.workSignature=w.workSignature.replace(/,"maxConsecutiveOff":3}(?=\|staff:|$)/,'}').replace(',"nightDistribution":true','').replace(',"overtimeDistribution":true','');
   w.meta={...w.meta,signature:w.workSignature,optimizationPolicy:'quality-first-15',allocation:{minimumOvertimeProven:true}};
   if(keepSnapshot)w.workSnapshot.schedule.meta=w.meta;else delete w.workSnapshot;
   const re=harness(null,{current:JSON.parse(values.koukyu_v4_data),stored:{koukyu_v4_work:JSON.stringify(work)}});

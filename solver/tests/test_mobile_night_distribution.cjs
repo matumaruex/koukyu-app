@@ -8,13 +8,13 @@ const raw={schemaVersion:4,savedTables:[],staff:[
 (async()=>{
  const h=harness(null,{current:raw});
  assert.equal(h.get('inputData().p.nightDistribution'),true,'通常作成に自動で適用する');
- assert(h.get('inputData().signature').startsWith('rules-3.72:'));
- assert.equal(h.get('OPTIMIZATION_POLICY'),'quality-first-18');
+ assert(h.get('inputData().signature').startsWith('rules-3.73:'));
+ assert.equal(h.get('OPTIMIZATION_POLICY'),'quality-first-19');
  assert.equal(h.get('OvertimePreference.POLICY'),h.get('OPTIMIZATION_POLICY'));
  h.eval("schedule().assignments={a:{'1':'night','2':'nightOff','7':'off'},b:{'1':'early'}};schedule().workSignature=inputData().signature;render()");
  const values=Object.fromEntries(h.values),work=JSON.parse(values.koukyu_v4_work),table=work.schedules['2026-10'];
  delete table.workSnapshot;
- table.workSignature=table.workSignature.replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.72:','rules-3.56:').replace(',"nightDistribution":true','').replace(',"overtimeDistribution":true','');
+ table.workSignature=table.workSignature.replace(/,"maxConsecutiveOff":3}(?=\|staff:|$)/,'}').replace(/,"partWeeklyLimit":false}(?=\|staff:|$)/,'}').replace(/,"excludeNightFromConsecutive":true}(?=\|staff:|$)/,'}').replace('rules-3.73:','rules-3.56:').replace(',"nightDistribution":true','').replace(',"overtimeDistribution":true','');
  table.meta={status:'OPTIMAL',optimizationPolicy:'quality-first-13',signature:table.workSignature,allocation:{minimumOvertimeProven:true}};
  const reopened=harness(null,{current:JSON.parse(values.koukyu_v4_data),stored:{...values,koukyu_v4_work:JSON.stringify(work)}});
  assert(reopened.get('hasTable()'));

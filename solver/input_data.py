@@ -68,6 +68,9 @@ def normalize(raw):
         raise ValueError('maxExtraOffSpread must be an integer from 0 to period length.')
     p['start'] = date(year, month, 16)
     # 通常画面では週上限を使わない。項目がない旧入力は当時の判定を維持する。
+    p.setdefault('maxConsecutiveOff', None)
+    if p['maxConsecutiveOff'] is not None and (type(p['maxConsecutiveOff']) is not int or p['maxConsecutiveOff'] != 3):
+        raise ValueError('maxConsecutiveOff must be 3 when enabled.')
     p.setdefault('partWeeklyLimit', True)
     if type(p['partWeeklyLimit']) is not bool:
         raise ValueError('partWeeklyLimit must be boolean.')
