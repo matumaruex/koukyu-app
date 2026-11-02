@@ -24,7 +24,7 @@ const label=(h,text)=>h.nodes['dialog-body'].all('label').find(l=>l.text.include
  await made.ctx.generate();
  assert(made.nodes.view.text.includes('連勤・連休・夜勤の端数・日勤の種類の例外：1件'));
  assert(made.nodes.view.text.includes('職員A 10月19日（月）：4連勤目（上限3日）'));
- assert(made.nodes.view.text.includes('最少を確認済み'));assert(made.nodes.view.text.includes('点線枠のマス'));
+ assert(made.nodes.view.text.includes('最少を確認済み'));assert(made.nodes.view.text.includes('太い点線枠と角の印'));
  const marked=made.nodes.view.all('td').filter(td=>(td.attributes['aria-label']||'').includes('（例外）'));
  assert.equal(marked.length,1);assert(marked[0].attributes['aria-label'].startsWith('職員A 10月19日'));
 

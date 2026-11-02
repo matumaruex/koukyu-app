@@ -18,7 +18,7 @@ const node=(root,cls)=>root.all('section').find(e=>e.className.split(' ').includ
 const visible=root=>root.className==='print-only'?'':root.textContent+root.children.map(c=>typeof c==='object'&&c.children?visible(c):String(c)).join('');
 const h=start(),roster=h.nodes.view.all('article').find(e=>e.id==='roster-result');
 const attention=node(roster,'result-attention'),summary=node(roster,'result-info');
-assert(attention);assert(summary);assert(roster.children.indexOf(attention)<roster.children.indexOf(summary));
+assert(attention);assert(summary);const fold=roster.children.find(e=>e.tagName==='DETAILS'&&e.className.includes('report-fold'));assert(fold&&!fold.open);assert(fold.all('section').includes(summary));assert.equal(fold.all('summary')[0].text,'回数と配分');assert(roster.children.indexOf(attention)<roster.children.indexOf(fold));
 assert.equal(attention.children[0].text,'確認すること');
 assert(attention.children[1].text.includes('不足あり'));
 assert(attention.children[2].text.includes('連勤・連休・夜勤の端数・日勤の種類の例外：1件'));

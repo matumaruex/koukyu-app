@@ -175,7 +175,6 @@ legend{color:#f2c55c}
 .month-table td.short{background:#f2f5f8;color:#111;font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
 .month-table td.relaxed{background:#f2f5f8;color:#111;text-decoration:underline dotted;text-underline-offset:3px}
 .month-table td.locked{box-shadow:inset 0 0 0 2.5px #283644}
-.month-table td.exception{outline:2px dashed #52606d;outline-offset:-4px}
 .month-table td.editable:hover{outline-color:#52606d}
 .month-table td.editable:focus-visible{outline-color:#1565c0}
 .month-table td.wished{color:#bf2028;font-weight:700}
@@ -222,8 +221,9 @@ footer{color:#8f9cc0;padding-bottom:160px}
 .staff-card .staff-setting-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px}
 .staff-identity{display:flex;align-items:center;gap:6px;min-width:0}
 .staff-days-off{padding:3px 7px;border:1px solid rgba(183,194,223,.22);border-radius:6px;background:#1c3263;color:#c4cee8;font-size:13px;line-height:1.5;white-space:nowrap}
-.staff-days-off-fixed{background:#3a2c10;color:#f2c55c;border-color:#b48a35}
-.staff-days-off-minimum{background:#12352f;color:#9eece2;border-color:#40b5a6}
+.staff-days-off-mode{font-weight:700}
+.staff-days-off-fixed{color:#f2c55c}
+.staff-days-off-minimum{color:#9eece2}
 }
 @media screen and (max-width:359px){.staff-card .staff-setting-row{gap:6px}.staff-days-off{font-size:12px;padding:3px 6px}}
 
@@ -310,7 +310,6 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .month-table td.short{font-weight:700;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
 .month-table td.relaxed{text-decoration:underline dotted;text-underline-offset:2px}
 .month-table td.locked{box-shadow:inset 0 0 0 2px #111}
-.month-table td.exception{outline:1px dashed #111;outline-offset:-2px}
 }
 
 /* 区切り行を使わず、名前欄だけで所属を見分ける。 */
@@ -339,4 +338,19 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 @media screen{
 .landscape-notice-panel .result-report{margin:0 0 12px;padding:10px 12px;border-left-width:2px}
 .landscape-notice-panel .result-report:last-child{margin-bottom:0}
+}
+
+/* 集計は必要なときに開き、確認事項と表の操作はすぐ見える位置に置く。 */
+@media screen{
+.report-fold{margin:12px 0;border:1px solid rgba(183,194,223,.28);border-left:3px solid #718ab7;border-radius:10px;background:#13254f}
+.report-fold>summary{margin:0;padding:10px 12px 10px 30px;color:#c4cee8;font-size:14px;font-weight:700;min-height:44px}
+.report-fold>summary>.explanation-icon{left:8px;top:13px}
+.report-fold>.result-report,.report-fold>.consecutive-rest-summary{margin:0;padding:4px 12px 12px;border:0;background:transparent}
+.month-table-actions{display:flex;gap:8px;margin:12px 0}
+.month-table-actions>button{flex:1;min-width:0;padding:10px 8px;font-size:14px}
+/* 背景の土日色と希望の文字色を保ち、枠と角だけで例外を強調する。 */
+.month-table td.exception{outline:3px dashed #8a3314;outline-offset:-2px;background-image:linear-gradient(135deg,#8a3314 0 5px,transparent 5px)}
+}
+@media print{
+.month-table td.exception{outline:1.5px dashed #111;outline-offset:-1.5px;background-image:linear-gradient(135deg,#111 0 4px,transparent 4px)!important}
 }
