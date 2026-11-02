@@ -14,8 +14,8 @@ assert.deepEqual(h.get("overtimeProfile(data.staff[2])"),{available:13,normal:22
 assert.deepEqual(h.get("overtimeProfile(data.staff[0])"),{available:22,normal:22,proportional:false,cap:6});
 h.eval('schedule().assignments='+JSON.stringify({a:row([1,3,5,7,9]),b:row([1,3,5,7]),c:row([20,22])})+';schedule().workSignature=inputData().signature;');
 let text=h.eval('allocationSummary()').text;
-assert(text.includes('残業（A残できる人）：4〜5回 ／ 差1回（出勤できる日数が少ない人を除く）'));
-assert(text.includes('職員C：A残2回（出勤できる日数13日・上限4回。比率で比べています）'));
+assert(text.includes('残業（通し勤務ができる人）：4〜5回 ／ 差1回（出勤できる日数が少ない人を除く）'));
+assert(text.includes('職員C：残2回（出勤できる日数13日・上限4回。比率で比べています）'));
 assert(text.includes('まだ確認できていません'));assert(!text.includes('これ以上均等にできない'));
 // 同じ表についての証明だけを使う（職員ごとの回数を照合）。
 h.eval("schedule().meta={status:'FEASIBLE',optimizationPolicy:OPTIMIZATION_POLICY,overtimeFairness:{total:11,spread:1,minimumSpreadProven:true,byStaff:{s0:5,s1:4,s2:2}}};");
@@ -24,10 +24,10 @@ h.eval("schedule().meta.overtimeFairness.byStaff={s0:4,s1:5,s2:2};");
 assert(h.eval('allocationSummary()').text.includes('まだ確認できていません'));
 // 希望入力で、出勤できる日数と上限を案内する。普通の人には出さない。
 h.eval("state.tab='requests';editRequests('c');");
-assert(h.nodes['dialog-body'].text.includes('今期の出勤できる日数は13日です。A残は月4回まで'));
+assert(h.nodes['dialog-body'].text.includes('今期の出勤できる日数は13日です。残は月4回まで'));
 h.eval("editRequests('a');");assert(!h.nodes['dialog-body'].text.includes('出勤できる日数は'));
 // 上限を超えた手直しは、上限の回数を示す。
-assert.equal(h.ctx.errorsText([{code:'overtime_limit',staff:'s2',actual:5,limit:4}],{s2:'c'}),'職員C：A残が5回（今期の上限4回）');
+assert.equal(h.ctx.errorsText([{code:'overtime_limit',staff:'s2',actual:5,limit:4}],{s2:'c'}),'職員C：残が5回（今期の上限4回）');
 // 希望休を減らすと普通の人に戻る。
 h.eval("schedule().requests.c=[1,2,3];");
 assert.equal(h.get("overtimeProfile(data.staff[2]).proportional"),false);

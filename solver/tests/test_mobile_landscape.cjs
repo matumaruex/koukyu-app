@@ -75,6 +75,18 @@ const body=h=>h.nodes['dialog-body'];
  await many.click('注意1件');const manyPanel=body(many).all('section')[0];assert(manyPanel.text.includes('10月16日'));assert(manyPanel.text.includes('11月15日'));assert(!body(many).children[0].text.includes('夜勤後にできなかった希望休'));await many.click('注意を閉じる');await many.click('閉じる');assert.deepEqual(many.get('data'),manyData);assert.equal(many.calls.length,0);
  // 条件未確認や必須違反も消さずに見出しから開ける。
  for(const [meta,text]of [[null,'この表の条件確認は未完了です'],[{status:'INVALID'},'条件に合わない勤務があります']]){const bad=start();bad.ctx.testMeta=meta;bad.eval('schedule().meta=testMeta;render()');open(bad);await bad.click('注意1件');assert(body(bad).all('section')[0].text.includes(text));await bad.click('閉じる');}
+ // 同じ勤務を通常・印刷・横表示・保存表で新しい記号にそろえ、値と入力署名を維持する。
+ const marks=start();marks.eval("data.staff[0].canOvertime=true;schedule().assignments.a={'1':'overtime','2':'night','3':'nightOff','4':'off'};schedule().shiftRequests={a:{'1':'overtime','2':'night'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
+ const expected=['残','S','ー','公','・'],symbols=table=>table.all('tr')[2].children.slice(6,11).map(e=>e.text),markData=marks.get('data'),markSignature=marks.get('inputData().signature'),markStorage=[...marks.values];
+ assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
+ const legend=marks.nodes.view.text;for(const phrase of ['残 通し7:00','S 夜勤','ー 明け','公 公休'])assert(legend.includes(phrase),phrase);
+ open(marks);assert.deepEqual(symbols(body(marks).all('table')[0]),expected);await marks.click('閉じる');
+ marks.eval('editHistory()');const historyOptions=body(marks).all('select')[1].all('option').map(e=>e.text);for(const label of ['残（通し）','S（夜勤）','ー（明け）','公（公休）'])assert(historyOptions.includes(label));await marks.click('閉じる');
+ marks.eval("editShift(data.staff[0],1)");assert(body(marks).all('option').some(e=>e.text==='残（通し）'));await marks.click('閉じる');
+ marks.eval("editRequests('a')");const requestMarks=body(marks).all('span').filter(e=>e.className==='request-mark').map(e=>e.text);assert(requestMarks.includes('残'));assert(requestMarks.includes('S'));assert(requestMarks.includes('公'));await marks.click('閉じる');
+ assert(marks.ctx.solverIssues(['職員1のA残の回数'],marks.get('inputData().map')).items[0].includes('作成時の職員Aの残の回数'));
+ assert.deepEqual(marks.get('data'),markData);assert.equal(marks.get('inputData().signature'),markSignature);assert.deepEqual([...marks.values],markStorage);assert.equal(marks.calls.length,0);
+ marks.eval("data.savedTables.push(RosterStorage.capture(data,key(),'記号確認','marks'));state.tab='saved';state.archiveId='marks';render()");assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
  // 28〜31日でも全日付・全職員・集計列を省かない。
  for(const [year,month,n]of [[2026,2,28],[2028,2,29],[2026,9,30],[2026,10,31]]){
   const days=start();days.ctx.testYear=year;days.ctx.testMonth=month;

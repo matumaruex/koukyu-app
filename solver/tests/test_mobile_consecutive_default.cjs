@@ -26,7 +26,7 @@ const current={schemaVersion:4,savedTables:[],staff,schedules:{'2026-10':{assign
   assert(reopened.get('hasTable()'));assert(reopened.get('workChanged()'));assert.deepEqual(reopened.get('schedule().workSnapshot.staff.map(s=>s.maxConsecutive)'),[2,5,5]);
   assert.deepEqual(reopened.get('schedule().assignments'),w.assignments);assert.equal(reopened.calls.length,0);
   reopened.eval('saveTableDialog()');await reopened.click('保存する');assert.deepEqual(reopened.get('data.savedTables.at(-1).staff.map(s=>s.maxConsecutive)'),[2,5,5]);
-  // version=1の同一入力も、当時の条件を記録して保持する（旧版の署名にはA残の1サイクル1回の項目がない）。
+  // version=1の同一入力も、当時の条件を記録して保持する（旧版の署名には残の1サイクル1回の項目がない）。
   oldWork.version=1;delete w.workSnapshot;
   const v1=harness(null,{current,stored:{[actualKey]:JSON.stringify(oldWork)}});v1.eval(mode==='auto'?"setTab('auto')":"setTab('schedule')");
   assert(v1.get('hasTable()'));assert.deepEqual(v1.get('schedule().workSnapshot.staff.map(s=>s.maxConsecutive)'),[2,5,5]);

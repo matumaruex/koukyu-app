@@ -5,7 +5,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[
  {id:'a',name:'職員A',type:'full',monthlyDaysOff:9,fixedDaysOff:true,nightShiftType:'all',maxConsecutive:3},
  {id:'b',name:'職員B',type:'part',monthlyDaysOff:11,nightShiftType:'none',startTime:'09:00',endTime:'17:00'}],
  schedules:{'2026-10':{requests:{a:[6,8]},assignments:{},history:{a:Array(5).fill('off')}}}};
-function checkbox(h){const label=h.nodes['dialog-body'].all('label').find(e=>e.text.includes('1日だけの出勤を避ける（休→出勤→休）'));assert(label);return label.all('input')[0];}
+function checkbox(h){const label=h.nodes['dialog-body'].all('label').find(e=>e.text.includes('1日だけの出勤を避ける（公→出勤→公）'));assert(label);return label.all('input')[0];}
 const submit=h=>h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault(){}});
 (async()=>{
  const h=harness(null,{current:raw});assert.equal(h.get('data.staff[0].avoidIsolatedWork'),false);assert(!Object.hasOwn(h.get('inputData().p.staff[0]'),'avoidIsolatedWork'));
@@ -26,7 +26,7 @@ const submit=h=>h.nodes['dialog-body'].all('form')[0].onsubmit({preventDefault()
  const saved=made.get('data');made.ctx.openLandscapeTable();assert(made.nodes['dialog-body'].text.includes('勤務条件の例外：1件'));await made.click('閉じる');assert.deepEqual(made.get('data'),saved);
  // 手直しの例外は「数学的に避けられない」と断定しない。
  const edit=harness(null,{current:enabled,response:async()=>({status:'INVALID',validationErrors:[error],isolatedWork:{count:1,proven:false,policy:'off-work-off-1'},boundaryComplete:true})});edit.eval("schedule().assignments={a:{'6':'off','7':'early','8':'off'},b:{'1':'part'}};schedule().workSignature=inputData().signature;");await edit.ctx.validateCurrent();assert.equal(edit.get('schedule().meta.status'),'VALID');assert(edit.nodes.view.text.includes('避けられないかは未確認です'));assert(!edit.nodes.view.text.includes('最少を確認済み'));assert.equal(edit.get('schedule().meta.isolatedWorkExceptions'),1);
- assert(made.ctx.exceptionText({...error,day:1,workDay:0},made.get('inputData().map')).includes('10月15日（木）：1日だけの出勤（休→出勤→休、翌日は今期の初日）'));
+ assert(made.ctx.exceptionText({...error,day:1,workDay:0},made.get('inputData().map')).includes('10月15日（木）：1日だけの出勤（公→出勤→公、翌日は今期の初日）'));
  assert(made.ctx.progressText({},{search:{reason:'isolated_work_unconfirmed'}}).includes('まだ不可能とは判定していません'));
  const base={status:'FEASIBLE',assignments:{},allocation:{overtimeTotal:0}};
  assert(flow.compare({...base,isolatedWorkExceptions:0,staffingShortfallTotal:9},{...base,isolatedWorkExceptions:1,staffingShortfallTotal:0})<0);

@@ -6,7 +6,7 @@ const rows={s0:{'1':'overtime','2':'off'}};
 const reply=(ot,before,done)=>({status:'FEASIBLE',assignments:rows,seconds:60,allocation:{overtimeTotal:ot,nightSpread:0,before:{overtimeTotal:before},overtimeReducedBy:before-ot},search:{done,continueRecommended:!done,resume:done?null:{stage:'overtime',idle:1,proven:{}}},boundaryComplete:true,optimizationPolicy:'quality-first-19'});
 const said=h=>h.nodes.view.text.match(/作り直す前[^。]*。/)?.[0];
 (async()=>{
- // さらに改善する：押す前の表（A残3回）と比べる。途中の通信の表とは比べない。
+ // さらに改善する：押す前の表（残3回）と比べる。途中の通信の表とは比べない。
  let n=0;const improve=harness(raw,{response:async()=>(++n===1?reply(1,3,false):reply(1,1,true))});
  improve.eval("schedule().assignments={a:{'1':'overtime','3':'overtime','5':'overtime','2':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',signature:inputData().signature,allocation:{overtimeTotal:3,nightSpread:0}};render()");
  await improve.ctx.generate('improve');

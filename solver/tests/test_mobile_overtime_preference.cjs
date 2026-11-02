@@ -51,7 +51,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert.equal(h.get('data.staff[0].overtimePreference'),2);
  assert.equal(h.calls.at(-1).input.staff[0].overtimePreference,2);
  assert.deepEqual(h.get('data.savedTables[0]'),saved);assert.deepEqual(h.get('history()'),history);
- // 不正値は保存表のスナップショットでも拒否。パートとA残不可には適用しない。
+ // 不正値は保存表のスナップショットでも拒否。パートと残不可には適用しない。
  const bad=JSON.parse(JSON.stringify(persisted));bad.savedTables[0].staff[0].overtimePreference='2';
  assert.throws(()=>h.ctx.checkBackup(bad));
  h.eval("data.staff[0].canOvertime=false;data.staff[3].overtimePreference=2;");

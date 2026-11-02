@@ -13,7 +13,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[
 const h=harness(null,{current:raw});
 h.eval('schedule().assignments='+JSON.stringify({a:row(6),b:row(4),c:row(3),d:row(0),p:row(0)})+';schedule().workSignature=inputData().signature;');
 let text=h.eval('allocationSummary()').text;
-assert(text.includes('残業（A残できる人）：3〜6回 ／ 差3回'));
+assert(text.includes('残業（通し勤務ができる人）：3〜6回 ／ 差3回'));
 assert(text.includes('避けられないかは、まだ確認できていません'));
 h.eval("schedule().meta={status:'FEASIBLE',optimizationPolicy:OPTIMIZATION_POLICY,overtimeFairness:{total:13,spread:3,minimumSpreadProven:true}};");
 assert(h.eval('allocationSummary()').text.includes('上位条件と残業合計を維持する範囲で、この回数差が最少'));
