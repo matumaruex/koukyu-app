@@ -20,8 +20,8 @@ const reopen=(from,extra={})=>harness(null,{current:{...JSON.parse(from.values.g
  const reopened=reopen(h);
  assert.equal(reopened.get('hasTable()'),true);
  assert.equal(reopened.get('metadata().status'),'FEASIBLE');
- assert(reopened.nodes.view.text.includes('作業中の公休表'));
- assert(reopened.nodes.view.text.includes('条件を編集しても残ります'));
+ assert(reopened.nodes.view.text.includes('現在の公休表（正本）'));
+ assert(reopened.nodes.view.text.includes('開き直しても残ります'));
  assert.equal(reopened.calls.length,0);
 
  // 希望休の達成基準が変わるため旧作業表を無効化。入力・固定・保存表は保持する。

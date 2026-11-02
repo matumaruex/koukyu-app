@@ -49,7 +49,7 @@ const body=h=>h.nodes['dialog-body'];
  assert.deepEqual(stale.get('data'),changed);assert.deepEqual(stale.get('schedule().workSnapshot'),old);assert.equal(stale.calls.length,0);
 
  // 保存した表は現在の期間・職員を使わず、保存時の内容で表示する。
- const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='現在の別名';state.month=11;state.tab='saved';state.archiveId='saved';render()");
+ const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='現在の別名';state.month=11;testSavedSnapshot(data.savedTables.find(r=>r.id==='saved'))");
  const current=saved.get('data'),period=saved.get('[state.year,state.month]');
  open(saved);assert(body(saved).text.includes('作成時の職員A'));assert(!body(saved).text.includes('現在の別名'));
  assert(body(saved).text.includes('10月16日'));assert(body(saved).all('td').every(td=>!td.onclick));
@@ -86,7 +86,7 @@ const body=h=>h.nodes['dialog-body'];
  marks.eval("editRequests('a')");const requestMarks=body(marks).all('span').filter(e=>e.className==='request-mark').map(e=>e.text);assert(requestMarks.includes('残'));assert(requestMarks.includes('S'));assert(requestMarks.includes('公'));await marks.click('閉じる');
  assert(marks.ctx.solverIssues(['職員1のA残の回数'],marks.get('inputData().map')).items[0].includes('作成時の職員Aの残の回数'));
  assert.deepEqual(marks.get('data'),markData);assert.equal(marks.get('inputData().signature'),markSignature);assert.deepEqual([...marks.values],markStorage);assert.equal(marks.calls.length,0);
- marks.eval("data.savedTables.push(RosterStorage.capture(data,key(),'記号確認','marks'));state.tab='saved';state.archiveId='marks';render()");assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
+ marks.eval("data.savedTables.push(RosterStorage.capture(data,key(),'記号確認','marks'));testSavedSnapshot(data.savedTables.find(r=>r.id==='marks'))");assert(marks.nodes.view.all('table').every(t=>JSON.stringify(symbols(t))===JSON.stringify(expected)));
  // 28〜31日でも全日付・全職員・集計列を省かない。
  for(const [year,month,n]of [[2026,2,28],[2028,2,29],[2026,9,30],[2026,10,31]]){
   const days=start();days.ctx.testYear=year;days.ctx.testMonth=month;

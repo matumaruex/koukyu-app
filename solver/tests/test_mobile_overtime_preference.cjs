@@ -45,9 +45,9 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  assert.equal(reload.get('data.savedTables[0].staff[0].overtimePreference'),2);
  h.eval("data.staff[0].overtimePreference=0;render()");assert(h.get('hasTable()'));assert(h.get('workChanged()'));
  assert.equal(h.get('inputData().signature'),originalSignature);assert.deepEqual(h.get('history()'),history);
- h.eval("setTab('saved');state.archiveId=data.savedTables[0].id;render()");
+ h.eval("testSavedSnapshot(data.savedTables[0])");
  assert(h.nodes.view.text.includes('職員A：5回 ／ 多め'));
- h.eval('copySavedTableDialog(data.savedTables[0])');await h.click('編集用のコピーを作る');
+ await h.eval('openSavedTable(data.savedTables[0].id)');
  assert.equal(h.get('data.staff[0].overtimePreference'),2);
  assert.equal(h.calls.at(-1).input.staff[0].overtimePreference,2);
  assert.deepEqual(h.get('data.savedTables[0]'),saved);assert.deepEqual(h.get('history()'),history);

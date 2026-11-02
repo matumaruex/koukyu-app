@@ -25,12 +25,12 @@ const mode=h=>h.nodes['dialog-body'].all('select')[0];
  made.eval("editShift(data.staff[0],7)");assert(made.nodes['dialog-body'].all('option').some(o=>o.value==='off'&&o.text==='有（有給）'));await made.click('閉じる');
  assert(made.ctx.diagnosisIssues({status:'EXPLAINED',proven:true,droppedWishes:[{kind:'request',staff:'s0',day:7}]},made.get('inputData().map')).items[0].includes('有給'));
  assert(made.ctx.errorsText([{code:'request',staff:'s0',day:7}],made.get('inputData().map')).includes('有給の希望日への出勤'));
- made.eval("data.savedTables.push(RosterStorage.capture(data,key(),'有給確認','saved'));state.tab='saved';state.archiveId='saved';render()");assert(made.nodes.view.all('table').every(t=>t.all('tr').find(r=>r.className==='roster-staff-row').children.slice(6).filter(c=>c.text==='有').length===2));
+ made.eval("data.savedTables.push(RosterStorage.capture(data,key(),'有給確認','saved'));testSavedSnapshot(data.savedTables.find(r=>r.id==='saved'))");assert(made.nodes.view.all('table').every(t=>t.all('tr').find(r=>r.className==='roster-staff-row').children.slice(6).filter(c=>c.text==='有').length===2));
  const checked=made.ctx.checkBackup(made.get('data'));assert.deepEqual(checked.savedTables[0].schedule.paidLeave.a,[7,8]);
  // 公休→有給の表記変更は、現在の表や計算の署名を保持してすぐ反映する。
  const same=harness(null,{current:raw});same.eval("schedule().assignments={a:{'7':'off'},b:{'1':'part'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");const signature=same.get('inputData().signature');same.eval("toggleRequest('a',7,'paidLeave')");assert.equal(same.get('inputData().signature'),signature);assert(!same.get('workChanged()'));assert.equal(same.nodes.view.all('table')[0].all('tr').find(r=>r.className==='roster-staff-row').children[12].text,'有');
  // 保存表は当時の有給、作業表は現在の有給を表示する。
- same.eval("data.savedTables.push(RosterStorage.capture(data,key(),'有給保存','paid'));toggleRequest('a',7,'off');state.tab='saved';state.archiveId='paid';render()");assert.equal(same.nodes.view.all('table')[0].all('tr').find(r=>r.className==='roster-staff-row').children[12].text,'有');assert.equal(same.get("data.schedules[key()].paidLeave??null"),null);
+ same.eval("data.savedTables.push(RosterStorage.capture(data,key(),'有給保存','paid'));toggleRequest('a',7,'off');testSavedSnapshot(data.savedTables.find(r=>r.id==='paid'))");assert.equal(same.nodes.view.all('table')[0].all('tr').find(r=>r.className==='roster-staff-row').children[12].text,'有');assert.equal(same.get("data.schedules[key()].paidLeave??null"),null);
  // バックアップでは、同じ日の希望休に属さない指定や日付の壊れを拒否する。
  for(const paid of [null,[],{a:[0]},{a:[32]},{a:[7,7]},{a:['7']},{a:[8]}])assert.throws(()=>h.ctx.checkBackup({...raw,schedules:{'2026-10':{...raw.schedules['2026-10'],paidLeave:paid}}}));
  const q=harness(null,{current:raw,quota:true}),before=q.get('data');assert.equal(q.ctx.toggleRequest('a',7,'paidLeave'),false);assert.deepEqual(q.get('data'),before);

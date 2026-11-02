@@ -30,10 +30,10 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  const legacyWithoutSnapshot=JSON.parse(JSON.stringify(legacyWork));delete legacyWithoutSnapshot.schedules['2026-10'].workSnapshot;
  const oldWithoutSnapshot=harness(null,{current:raw,stored:{koukyu_v4_work:JSON.stringify(legacyWithoutSnapshot)}});
  assert(oldWithoutSnapshot.get('hasTable()'));assert(oldWithoutSnapshot.get('workChanged()'));assert(oldWithoutSnapshot.get('Boolean(schedule().workSnapshot)'));
- legacyReload.eval("const record=RosterStorage.capture(data,key(),'旧表','saved-rest-test');record.schedule.meta={status:'FEASIBLE',optimizationPolicy:'quality-first-11',ruleExceptions:[{code:'rest_balance',high:2,low:0,count:1}]};data.savedTables.push(record);state.archiveId=record.id;state.tab='saved';render()");
+ legacyReload.eval("const record=RosterStorage.capture(data,key(),'旧表','saved-rest-test');record.schedule.meta={status:'FEASIBLE',optimizationPolicy:'quality-first-11',ruleExceptions:[{code:'rest_balance',high:2,low:0,count:1}]};data.savedTables.push(record);testSavedSnapshot(record)");
  assert(legacyReload.nodes.view.text.includes('差1回'));assert(!legacyReload.nodes.view.text.includes('連休の回数の差が2回'));
  assert.equal(legacyReload.get('data.savedTables[0].schedule.meta.ruleExceptions.length'),1);
- legacyReload.eval("data.savedTables[0].schedule.meta={status:'VALID',signature:'rules-3.73:edited',ruleExceptions:[{code:'rest_balance',counts:{s0:3,s1:1},high:3,low:1,count:1}]};render()");
+ legacyReload.eval("data.savedTables[0].schedule.meta={status:'VALID',signature:'rules-3.73:edited',ruleExceptions:[{code:'rest_balance',counts:{s0:3,s1:1},high:3,low:1,count:1}]};testSavedSnapshot(data.savedTables[0])");
  assert(legacyReload.nodes.view.text.includes('連休の回数の差が2回'));
 
  // 作成結果の例外：名前と回数、最少を確認済み。

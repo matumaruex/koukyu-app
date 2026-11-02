@@ -36,7 +36,7 @@ const visible=e=>e.className==='print-only'?'':e.textContent+e.children.map(c=>t
  await h.click('閉じる');assert.deepEqual(h.get('data'),before);assert.equal(h.get('inputData().signature'),signature);assert.equal(h.calls.length,0);
 
  // 保存した表は、表のそばのボタンから保存時の職員・期間で開く。
- const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='現在の別名';state.month=11;state.tab='saved';state.archiveId='saved';render()");
+ const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='現在の別名';state.month=11;testSavedSnapshot(data.savedTables.find(r=>r.id==='saved'))");
  const sw=wrap(saved);assert(!part(sw,'month-operations'));assert(part(sw,'month-heading').all('button').some(b=>b.text==='横画面で見る'));
  assert.equal(visible(saved.nodes.view).split('夜勤後にできなかった希望休').length-1,1);
  const snapshot=saved.get('data');part(sw,'month-heading').all('button')[0].click();assert(saved.nodes['dialog-body'].text.includes('作成時の職員A'));assert(!saved.nodes['dialog-body'].text.includes('現在の別名'));await saved.click('閉じる');assert.deepEqual(saved.get('data'),snapshot);

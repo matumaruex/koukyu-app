@@ -34,8 +34,8 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  // 共有設定を変えると両方式が古い条件になる。保存表と手入力の前期は残る。
  const history=v.get('history()');v.eval("data.staff[0].minConsecutiveRest=1;setTab('schedule')");assert.equal(v.get('hasTable()'),true);assert(v.get('workChanged()'));
  assert.deepEqual(v.get('data.savedTables[0]'),saved);assert.deepEqual(v.get('history()'),history);
- v.eval("setTab('saved');state.archiveId=data.savedTables[0].id;render()");assert(v.nodes.view.text.includes('連休2回／必要2回'));
- v.eval('copySavedTableDialog(data.savedTables[0])');await v.click('編集用のコピーを作る');
+ v.eval("testSavedSnapshot(data.savedTables[0])");assert(v.nodes.view.text.includes('連休2回／必要2回'));
+ await v.eval('openSavedTable(data.savedTables[0].id)');
  assert.equal(v.get('data.staff[0].minConsecutiveRest'),2);assert.equal(v.calls.at(-1).input.staff[0].minConsecutiveRest,2);
  assert.deepEqual(v.get('data.savedTables[0]'),saved);assert.deepEqual(v.get('history()'),history);
  // 手直し後は古い集計を使わず、最新の勤務から不足を表示。必須違反をDRAFTにしない。

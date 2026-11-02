@@ -38,6 +38,8 @@ function harness(raw,options={}){
  if(options.backgroundActual)vm.runInContext(fs.readFileSync(path.join(root,'background-job.js'),'utf8'),ctx);else ctx.BackgroundJob={load:()=>null,clear:()=>{},cancel:()=>{},start:async(details,identity)=>({...details,...identity}),wait:async(job,opts)=>{let seed=0;return ctx.CreationWorkflow.run({input:job.input,initialAssignments:job.initialAssignments,request:p=>ctx.api({...p,allowStaffingShortfall:true,allowNightShortfall:false,allowRuleExceptions:true}),nextSeed:()=>++seed,isCurrent:opts.isCurrent,onExtend:opts.onExtend});}};
  vm.runInContext(fs.readFileSync(path.join(root,'auto-roster-ui.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'mobile.js'),'utf8'),ctx);
+ // 保存時の条件の描画は、正本への読込とは独立に検証する（古い作業表にも共通）。
+ vm.runInContext(`function testSavedSnapshot(record){const view=$('view');view.replaceChildren();withSavedTable(record,()=>{const panel=card();appendResultReports(panel);panel.append(monthTable(false,{onLandscape:()=>openLandscapeTable(record),reportsShown:true}));decorateRosterExplanations(panel);view.append(panel);const print=el('div',undefined,'print-only');print.append(monthTable());view.append(print);});}`,ctx);
  return {ctx,values,nodes,calls,confirmations,timers,eval:s=>vm.runInContext(s,ctx),get:s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',ctx)),click:async(name,where='dialog-body')=>{const button=nodes[where].all('button').find(e=>e.text===name);if(!button)throw Error('Missing button '+name+' in '+nodes[where].text);await button.click();}};
 }
 module.exports={harness,Element};

@@ -45,7 +45,7 @@ const provenSummary=h.eval('allocationSummary()');assert(provenSummary.text.incl
 assert(!provenSummary.all('details')[0].text.includes('残業合計が最少'));
 
 // 作業中と保存した表で報告をそろえ、保存時の職員名を使う。
-const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='変更後の別名';state.tab='saved';state.archiveId='saved';render()");
+const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='変更後の別名';testSavedSnapshot(data.savedTables.find(r=>r.id==='saved'))");
 const archived=node(saved.nodes.view,'result-attention');assert(archived.text.includes('職員A'));assert(!archived.text.includes('変更後の別名'));
 assert(archived.text.includes('夜勤後にできなかった希望休'));assert.equal(archived.text.split('4連勤目').length-1,1);
 assert.equal(saved.calls.length,0);
