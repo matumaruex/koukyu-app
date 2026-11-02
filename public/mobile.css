@@ -229,6 +229,8 @@ footer{color:#8f9cc0;padding-bottom:160px}
 .staff-card .staff-setting-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px}
 .staff-identity{display:flex;align-items:center;gap:6px;min-width:0}
 .staff-days-off{padding:3px 7px;border:1px solid rgba(183,194,223,.22);border-radius:6px;background:#1c3263;color:#c4cee8;font-size:13px;line-height:1.5;white-space:nowrap}
+.staff-days-off-fixed{background:#3a2c10;color:#f2c55c;border-color:#b48a35}
+.staff-days-off-minimum{background:#12352f;color:#9eece2;border-color:#40b5a6}
 }
 @media screen and (max-width:359px){.staff-card .staff-setting-row{gap:6px}.staff-days-off{font-size:12px;padding:3px 6px}}
 
