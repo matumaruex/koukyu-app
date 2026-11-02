@@ -93,8 +93,15 @@ const body=h=>h.nodes['dialog-body'];
   days.eval("state.year=testYear;state.month=testMonth;schedule().assignments=Object.fromEntries(data.staff.map(st=>[st.id,Object.fromEntries(Array.from({length:days()},(_,i)=>[String(i+1),i%2?'early':'off']))]));schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
   const all=days.nodes.view.all('table')[0].all('tr').map(r=>r.children.map(c=>c.text));open(days);
   const viewed=body(days).all('table')[0].all('tr');assert.equal(viewed[0].children.length,n+6);assert.deepEqual(viewed.slice(2).map(r=>r.children.map(c=>c.text)),all.slice(2));
-  // 16日始まり・月またぎ・うるう年でも、色を付ける日付/曜日の見出しが実際の土日と合う。
-  for(let d=1;d<=n;d++){const weekday=new Date(Date.UTC(year,month-1,15+d)).getUTCDay(),cls=weekday===6?'sat':weekday===0?'sun':'';assert.equal(viewed[0].children[d+5].className||'',cls);assert.equal(viewed[1].children[d-1].className||'',cls);}
+  // 16日始まり・月またぎ・うるう年でも、土日の列が勤務・人数欄の最下段まで合う。
+  // 保存表・印刷用にも同じ日付を使い、名前と個人集計には曜日色を付けない。
+  const archived=days.eval("withSavedTable(RosterStorage.capture(data,key(),'曜日確認','weekends'),()=>monthTable(false))").all('table')[0];
+  for(const table of [...days.nodes.view.all('table'),body(days).all('table')[0],archived]){
+   const rs=table.all('tr');
+   for(let d=1;d<=n;d++){const weekday=new Date(Date.UTC(year,month-1,15+d)).getUTCDay(),cls=weekday===6?'sat':weekday===0?'sun':'';assert.equal(rs[0].children[d+5].className||'',cls);assert.equal(rs[1].children[d-1].className||'',cls);
+    for(const r of rs.slice(2)){const offset=r.className==='roster-staff-row'?6:1;assert.equal(r.children[d+offset-1].attributes['data-weekday']||'',cls);assert(r.children.slice(0,offset).every(c=>!c.attributes['data-weekday']));}
+   }
+  }
   await days.click('閉じる');assert(days.nodes.view.text.includes('記号・ルールの説明'));
  }
  console.log('PASS: 公休表の横表示・拡大・閉じる・別画面への復帰、旧作業表と保存表の参照、入力と表の保持');

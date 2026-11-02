@@ -159,7 +159,7 @@ legend{color:#f2c55c}
 .request-calendar .wish-part{background:#24396b;color:#dfe6f7}
 .request-calendar button.wish-paidLeave{background:#283240;color:#ff8585;font-weight:700}
 
-/* 表は白地・黒文字。土日は見出しの淡い背景、希望は赤文字で区別する。 */
+/* 表は白地・黒文字。土日は列全体の淡い背景、希望は赤文字で区別する。 */
 .scroll{border-color:#b8c3cf}
 .month-table{background:#fff;color:#111}
 .month-table td,.month-table th{border-color:#bfc8d2;color:#111}
@@ -317,4 +317,12 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 .month-table .name.team-B{background:#fff0bf!important}
 .month-table .name.team-C{background:#e9dff5!important}
 .month-table .name.team-part{background:#dcebf7!important}
+}
+
+/* 土日の列は勤務マスから人数欄の最下段まで同じ淡色をつなげる。 */
+.month-table td[data-weekday=sat]{background:#dff1fc}
+.month-table td[data-weekday=sun]{background:#fbe2eb}
+@media print{
+.month-table td[data-weekday=sat]{background:#dff1fc!important}
+.month-table td[data-weekday=sun]{background:#fbe2eb!important}
 }
