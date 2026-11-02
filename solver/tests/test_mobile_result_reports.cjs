@@ -46,7 +46,7 @@ assert(!provenSummary.all('details')[0].text.includes('残業合計が最少'));
 
 // 作業中と保存した表で報告をそろえ、保存時の職員名を使う。
 const saved=start();saved.eval("data.savedTables.push(RosterStorage.capture(data,key(),'保存した表','saved'));data.staff[0].name='変更後の別名';state.tab='saved';state.archiveId='saved';render()");
-const archived=node(saved.nodes.view,'result-attention');assert(archived.text.includes('職員Aさん'));assert(!archived.text.includes('変更後の別名'));
+const archived=node(saved.nodes.view,'result-attention');assert(archived.text.includes('職員A'));assert(!archived.text.includes('変更後の別名'));
 assert(archived.text.includes('夜勤後にできなかった希望休'));assert.equal(archived.text.split('4連勤目').length-1,1);
 assert.equal(saved.calls.length,0);
 
@@ -61,4 +61,24 @@ assert(visible(clean.nodes.view).includes('この表はそのまま使用でき�
 const stable=start(),before=stable.get('data'),stored=[...stable.values],signature=stable.get('inputData().signature');
 stable.eval("appendResultReports(el('div'),{check:true})");
 assert.deepEqual(stable.get('data'),before);assert.deepEqual([...stable.values],stored);assert.equal(stable.get('inputData().signature'),signature);assert.equal(stable.calls.length,0);
+// すべての解説行を同じアイコン部品で示す。表と操作ボタンは飾らない。
+const styled=start(),styledData=styled.get('data'),styledStorage=[...styled.values];
+const styledRoster=styled.nodes.view.all('article').find(e=>e.id==='roster-result');
+const has=(e,c)=>(e.className||'').split(' ').includes(c);
+const icons=e=>e.children.filter(c=>has(c,'explanation-icon'));
+for(const tag of ['p','li','summary'])for(const line of styledRoster.all(tag)){
+ assert(has(line,'explanation-line'),line.text);assert.equal(icons(line).length,1,line.text);assert.equal(icons(line)[0].attributes['aria-hidden'],'true');
+}
+for(const title of [...styledRoster.all('strong'),...styledRoster.all('h3')].filter(e=>['result-report-title','result-section-title','month-guide-title'].some(c=>has(e,c))))assert.equal(icons(title).length,1,title.text);
+const info=node(styledRoster,'result-info'),warn=node(styledRoster,'result-warning'),error=node(styledRoster,'result-error');
+assert(icons(info.all('strong')[0]).some(e=>has(e,'explanation-info')));assert(icons(warn.all('strong')[0]).some(e=>has(e,'explanation-warning')));assert(icons(error.all('strong')[0]).some(e=>has(e,'explanation-error')));
+const ok=styledRoster.all('p').find(e=>has(e,'ok-line'));assert(ok);assert(icons(ok).some(e=>has(e,'explanation-success')));
+assert(styledRoster.all('table').every(t=>!t.all('span').some(e=>has(e,'explanation-icon'))));assert(styledRoster.all('button').every(b=>!icons(b).length));
+assert(!styledRoster.text.includes('職員Aさん'));assert(styledRoster.text.includes('職員A 10月19日'));
+const textBefore=styledRoster.text;styled.ctx.explanationRoot=styledRoster;styled.eval('decorateRosterExplanations(explanationRoot)');assert.equal(styledRoster.text,textBefore);for(const p of styledRoster.all('p'))assert.equal(icons(p).length,1);
+assert.deepEqual(styled.get('data'),styledData);assert.deepEqual([...styled.values],styledStorage);assert.equal(styled.calls.length,0);
+// 「さん」を含む登録名そのものは保ち、末尾に敬称を追加しない。
+styled.eval("data.staff[0].name='さんぽ';render()");const nameRoster=styled.nodes.view.all('article').find(e=>e.id==='roster-result');assert(nameRoster.text.includes('さんぽ 10月19日'));assert(!nameRoster.text.includes('さんぽさん'));
+// 解説の敬称を外しても、希望入力などの呼びかけはそのまま。
+styled.eval("editRequests('a')");assert(styled.nodes['dialog-body'].text.includes('さんぽさんの希望入力'));
 console.log('PASS: 注意を先に統一表示・不足と例外の重複除去・重要な報告と証明を維持・保存表との統一・入力と表の保持');

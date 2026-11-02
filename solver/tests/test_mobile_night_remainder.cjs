@@ -30,9 +30,9 @@ const box=(h,text)=>h.nodes['dialog-body'].all('label').find(l=>l.text.includes(
  await made.ctx.generate();
  assert.equal(made.calls[0].input.staff[0].nightRemainderPriority,true);
  const text=made.nodes.view.text;
- assert(text.includes('夜勤の端数を優先：職員Aさん15回'));
+ assert(text.includes('夜勤の端数を優先：職員A 15回'));
  assert(text.includes('連勤・連休・夜勤の端数・日勤の種類の例外：1件'));assert(text.includes('最少を確認済み'));
- assert(text.includes('職員Bさん：夜勤16回（端数を優先する人ではないため目安は15回）'));
+ assert(text.includes('職員B：夜勤16回（端数を優先する人ではないため目安は15回）'));
 
  // 手直しで端数がほかの人へ行った場合は、条件違反ではなく例外として表を保つ。
  const edit=harness(prio,{response:async()=>({status:'INVALID',validationErrors:[err],boundaryComplete:true})});

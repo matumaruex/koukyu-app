@@ -43,7 +43,7 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  assert.equal(made.calls[0].input.restCountBalance,true);
  const text=made.nodes.view.text;
  assert(text.includes('連勤・連休・夜勤の端数・日勤の種類の例外：1件'));assert(text.includes('最少を確認済み'));
- assert(text.includes('連休の回数の差が2回（職員Aさん3回・職員Bさん1回）'));
+ assert(text.includes('連休の回数の差が2回（職員A 3回・職員B 1回）'));
 
  // 手直しで差が開いた場合は、条件違反ではなく例外として表を保つ。
  const edit=harness(raw,{response:async()=>({status:'INVALID',validationErrors:[err],boundaryComplete:true})});

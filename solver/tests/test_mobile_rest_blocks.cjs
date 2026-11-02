@@ -44,12 +44,12 @@ const diagnostic={status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:
  await edit.ctx.validateCurrent();assert.equal(edit.get('schedule().meta.status'),'INVALID');assert.equal(edit.get('ready()'),false);
  assert.equal(edit.get('schedule().meta.consecutiveRest.s0.actual'),1);
  assert(edit.nodes.view.text.includes('職員A：連休1回／必要2回'));assert(edit.nodes.view.text.includes('1回不足'));
- assert(edit.eval("errorsText([{code:'rest_blocks',staff:'s0',actual:1,required:2}],inputData().map)").includes('職員Aさん：連休1回／必要2回'));
+ assert(edit.eval("errorsText([{code:'rest_blocks',staff:'s0',actual:1,required:2}],inputData().map)").includes('職員A：連休1回／必要2回'));
  for(const mode of ['normal']){
   const fail=harness(null,{current:required,response:async p=>({status:'INFEASIBLE',seconds:.1,autoDone:true,...(p.autoPhase==='adjust'?{}:{diagnosis:diagnostic})})});
   if(mode==='auto')fail.eval("setTab('auto')");await fail.ctx.generate();
   assert.equal(fail.get('hasTable()'),false);assert(fail.nodes.view.text.includes('この条件では表を作れません'));
-  assert(fail.nodes.view.text.includes('職員Aさん：連休2回必要'));assert(!fail.nodes.view.text.includes('次の0件を外すと作れます'));
+  assert(fail.nodes.view.text.includes('職員A：連休2回必要'));assert(!fail.nodes.view.text.includes('次の0件を外すと作れます'));
  }
  // 保存時の職員の不正な設定も、入力と同様に読み込みを止める。
  const bad=JSON.parse(JSON.stringify(backup));bad.savedTables[0].staff[0].minConsecutiveRest='2';

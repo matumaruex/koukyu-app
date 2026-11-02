@@ -27,8 +27,8 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  h.ctx.testRows={a:row(5),b:row(3),c:row(3),p:row(0)};
  h.eval("data.staff[0].overtimePreference=2;setTab('schedule');schedule().assignments=clone(testRows);schedule().workSignature=inputData().signature;render()");
  let text=h.eval('allocationSummary()').text;
- assert(text.includes('職員Aさん：5回 ／ 多め（＋2回目安）'));
- assert(text.includes('職員Bさん：3回 ／ 通常'));assert(text.includes('まだ確認できていません'));
+ assert(text.includes('職員A：5回 ／ 多め（＋2回目安）'));
+ assert(text.includes('職員B：3回 ／ 通常'));assert(text.includes('まだ確認できていません'));
  assert(!text.includes('これ以上均等にできない'));
  h.eval("schedule().meta={status:'FEASIBLE',optimizationPolicy:OvertimePreference.POLICY,overtimeFairness:{total:11,byStaff:{s0:5,s1:3,s2:3},preferenceByStaff:{s0:2,s1:0,s2:0},preferenceApplied:true,minimumSpreadProven:true}};");
  assert(h.eval('allocationSummary()').text.includes('歓迎の目安からの配分差が最少'));
@@ -46,7 +46,7 @@ const row=n=>Object.fromEntries(Array.from({length:31},(_,i)=>[String(i+1),i<n*2
  h.eval("data.staff[0].overtimePreference=0;render()");assert(h.get('hasTable()'));assert(h.get('workChanged()'));
  assert.equal(h.get('inputData().signature'),originalSignature);assert.deepEqual(h.get('history()'),history);
  h.eval("setTab('saved');state.archiveId=data.savedTables[0].id;render()");
- assert(h.nodes.view.text.includes('職員Aさん：5回 ／ 多め'));
+ assert(h.nodes.view.text.includes('職員A：5回 ／ 多め'));
  h.eval('copySavedTableDialog(data.savedTables[0])');await h.click('編集用のコピーを作る');
  assert.equal(h.get('data.staff[0].overtimePreference'),2);
  assert.equal(h.calls.at(-1).input.staff[0].overtimePreference,2);

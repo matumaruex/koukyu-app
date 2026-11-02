@@ -60,7 +60,7 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  // 作れないときは、理由調べの結果（外す希望）を名前と日付で出す。
  const impossible=harness(raw,{response:async()=>({status:'INFEASIBLE',seconds:.1,diagnosis:{status:'EXPLAINED',proven:true,missingNights:[],droppedWishes:[{kind:'request',staff:'s0',day:3,shift:'off'}]}})});
  await impossible.ctx.generate();assert.equal(impossible.calls.length,1);assert.equal(impossible.get('hasTable()'),false);
- assert(impossible.nodes.view.text.includes('次の1件を外すと作れます'));assert(impossible.nodes.view.text.includes('職員さん 10月18日（日）の希望休'));
+ assert(impossible.nodes.view.text.includes('次の1件を外すと作れます'));assert(impossible.nodes.view.text.includes('職員 10月18日（日）の希望休'));
  const nights=harness(raw,{response:async()=>({status:'INFEASIBLE',seconds:.1,diagnosis:{status:'EXPLAINED',proven:true,missingNights:[3,4,5,10],droppedWishes:[]}})});
  await nights.ctx.generate();assert(nights.nodes.view.text.includes('夜勤に入れる人がいない日：10月18日（日）〜10月20日（火）、10月25日（日）'));
  const unknown=harness(raw);await unknown.ctx.generate();assert.equal(unknown.calls.length,8);assert(unknown.nodes.notice.textContent.includes('不可能と判定したわけではありません'));

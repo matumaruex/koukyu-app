@@ -25,13 +25,13 @@ const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'fu
  const made=harness(raw,{response:async()=>({status:'FEASIBLE',assignments:rows,seconds:3,overtimeCycleExcess:1,overtimeCycles:{excess:1,items:[{staff:'s0',start:1,end:3,overtime:2,count:1}],minimumProven:true},allocation:{overtimeTotal:2,nightSpread:0},search:{done:true},boundaryComplete:true,optimizationPolicy:'quality-first-17'})});
  await made.ctx.generate();
  assert.equal(made.calls[0].input.overtimeCycleLimit,true);
- assert(made.nodes.view.text.includes('A残の1サイクル1回：2回目が1件（職員Aさん 10/16〜10/18） ・ 人数不足を減らすため'));
+ assert(made.nodes.view.text.includes('A残の1サイクル1回：2回目が1件（職員A 10/16〜10/18） ・ 人数不足を減らすため'));
  // 手直しで作った2回目は理由を付けない。守れている表はそのまま表示。
  made.eval("schedule().assignments.a['6']='overtime';schedule().assignments.a['7']='early';schedule().assignments.a['8']='overtime';render()");
- assert(made.nodes.view.text.includes('A残の1サイクル1回：2回目が2件'));assert(!made.nodes.view.text.includes('2回目が2件（職員Aさん 10/16〜10/18、職員Aさん 10/20〜10/23） ・ 人数不足'));
+ assert(made.nodes.view.text.includes('A残の1サイクル1回：2回目が2件'));assert(!made.nodes.view.text.includes('2回目が2件（職員A 10/16〜10/18、職員A 10/20〜10/23） ・ 人数不足'));
  // 希望で入れたA残だけのサイクルは「希望・固定どおり」。人数不足の理由は付けない。
  const wish=harness(raw);wish.eval("schedule().shiftRequests={a:{'1':'overtime','3':'overtime'}};schedule().assignments={a:{'1':'overtime','2':'early','3':'overtime','4':'off'},b:{'1':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature,overtimeCycleExcess:1};render()");
- assert(wish.nodes.view.text.includes('A残の1サイクル1回：2回目が1件（職員Aさん 10/16〜10/18（希望・固定どおり））'));assert(!wish.nodes.view.text.includes('人数不足を減らすため'));
+ assert(wish.nodes.view.text.includes('A残の1サイクル1回：2回目が1件（職員A 10/16〜10/18（希望・固定どおり））'));assert(!wish.nodes.view.text.includes('人数不足を減らすため'));
  const ok=harness(raw);ok.eval("schedule().assignments={a:{'1':'overtime','2':'off','3':'overtime'},b:{'1':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
  assert(ok.nodes.view.text.includes('A残の1サイクル1回：守れています'));
 

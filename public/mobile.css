@@ -289,3 +289,15 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 }
 
 @media print{.month-guide .legend{margin:2px 0}}
+
+/* 解説の印は丸形に統一。補助的な印なので読み上げと印刷には含めない。 */
+.explanation-icon{display:none}
+@media screen{
+.explanation-line{position:relative;padding-left:25px}
+.explanation-icon{position:absolute;left:0;top:.18em;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:1.5px solid currentColor;border-radius:50%;color:#aebfdf;font-family:Arial,sans-serif;font-size:12px;font-weight:700;line-height:1;letter-spacing:0}
+.explanation-icon::before{content:'i'}.explanation-warning,.explanation-error{color:#f2c55c}.explanation-warning::before,.explanation-error::before{content:'!'}.explanation-error{color:#ffb39e}.explanation-success{color:#63cbb8}.explanation-success::before{content:'✓'}
+.result-report .stat-line.explanation-line{padding-left:35px}.stat-line>.explanation-icon{left:10px;top:12px}
+.explanation-line.ok-line{display:block}.explanation-line.ok-line::before{display:none}
+.result-report ul.explanation-list{padding-left:0;list-style:none}
+.consecutive-rest-summary>strong.explanation-line{display:block;padding-right:54px}.consecutive-rest-summary>strong.explanation-line>.result-report-status{position:absolute;top:0;right:0}
+}
