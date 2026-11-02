@@ -93,6 +93,8 @@ const body=h=>h.nodes['dialog-body'];
   days.eval("state.year=testYear;state.month=testMonth;schedule().assignments=Object.fromEntries(data.staff.map(st=>[st.id,Object.fromEntries(Array.from({length:days()},(_,i)=>[String(i+1),i%2?'early':'off']))]));schedule().workSignature=inputData().signature;schedule().meta={status:'VALID',signature:inputData().signature};render()");
   const all=days.nodes.view.all('table')[0].all('tr').map(r=>r.children.map(c=>c.text));open(days);
   const viewed=body(days).all('table')[0].all('tr');assert.equal(viewed[0].children.length,n+6);assert.deepEqual(viewed.slice(2).map(r=>r.children.map(c=>c.text)),all.slice(2));
+  // 16日始まり・月またぎ・うるう年でも、色を付ける日付/曜日の見出しが実際の土日と合う。
+  for(let d=1;d<=n;d++){const weekday=new Date(Date.UTC(year,month-1,15+d)).getUTCDay(),cls=weekday===6?'sat':weekday===0?'sun':'';assert.equal(viewed[0].children[d+5].className||'',cls);assert.equal(viewed[1].children[d-1].className||'',cls);}
   await days.click('閉じる');assert(days.nodes.view.text.includes('記号・ルールの説明'));
  }
  console.log('PASS: 公休表の横表示・拡大・閉じる・別画面への復帰、旧作業表と保存表の参照、入力と表の保持');

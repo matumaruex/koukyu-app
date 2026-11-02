@@ -159,25 +159,26 @@ legend{color:#f2c55c}
 .request-calendar .wish-part{background:#24396b;color:#dfe6f7}
 .request-calendar button.wish-paidLeave{background:#283240;color:#ff8585;font-weight:700}
 
-/* 表は単色の背景と白文字にし、希望だけ赤文字で示す。 */
-.scroll{border-color:#46515f}
-.month-table{background:#1c2430;color:#fff}
-.month-table td,.month-table th{border-color:#414c5b;color:#fff}
-.month-table th,.month-table .name{background:#283240;color:#fff}
+/* 表は白地・黒文字。土日は見出しの淡い背景、希望は赤文字で区別する。 */
+.scroll{border-color:#b8c3cf}
+.month-table{background:#fff;color:#111}
+.month-table td,.month-table th{border-color:#bfc8d2;color:#111}
+.month-table th,.month-table .name{background:#f2f5f8;color:#111}
 .month-table .name{font-family:inherit;font-weight:600}
-.month-table th.sun,.month-table th.sat{color:#fff}
-.month-table td{background:#1c2430;font-weight:500}
-.month-table td:is(.early,.late,.overtime,.night,.nightOff,.off,.part){background:#1c2430;color:#fff;box-shadow:none;font-weight:500}
-.month-table td.total,.month-table .count-night,.month-table .count-early,.month-table .count-late{background:#283240;color:#fff;font-weight:700}
-.month-table .count-row td{background:#283240;color:#fff}
-.month-table .count-row.first>*{border-top:2px solid #7c899a}
-.month-table td.short{background:#283240;color:#fff;font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
-.month-table td.relaxed{background:#283240;color:#fff;text-decoration:underline dotted;text-underline-offset:3px}
-.month-table td.locked{box-shadow:inset 0 0 0 2.5px #fff}
-.month-table td.exception{outline:2px dashed #fff;outline-offset:-4px}
-.month-table td.editable:hover{outline-color:#fff}
-.month-table td.editable:focus-visible{outline-color:#fff}
-.month-table td.wished{color:#ff8585;font-weight:700}
+.month-table th.sat{background:#dff1fc;color:#111}
+.month-table th.sun{background:#fbe2eb;color:#111}
+.month-table td{background:#fff;font-weight:500}
+.month-table td:is(.early,.late,.overtime,.night,.nightOff,.off,.part){background:#fff;color:#111;box-shadow:none;font-weight:500}
+.month-table td.total,.month-table .count-night,.month-table .count-early,.month-table .count-late{background:#f2f5f8;color:#111;font-weight:700}
+.month-table .count-row td{background:#f2f5f8;color:#111}
+.month-table .count-row.first>*{border-top:2px solid #8291a3}
+.month-table td.short{background:#f2f5f8;color:#111;font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.month-table td.relaxed{background:#f2f5f8;color:#111;text-decoration:underline dotted;text-underline-offset:3px}
+.month-table td.locked{box-shadow:inset 0 0 0 2.5px #283644}
+.month-table td.exception{outline:2px dashed #52606d;outline-offset:-4px}
+.month-table td.editable:hover{outline-color:#52606d}
+.month-table td.editable:focus-visible{outline-color:#1565c0}
+.month-table td.wished{color:#bf2028;font-weight:700}
 .month-title{color:#f2c55c}
 
 /* まとめの数字は金で大きく、守れている項目にはアンクの印 */
@@ -297,6 +298,8 @@ dialog.landscape-dialog{position:fixed;inset:0;margin:0;width:100vw;width:100dvw
 /* 紙では白地に黒文字を使い、希望は画面と同じく赤で区別する。 */
 @media print{
 .month-table th,.month-table td{background:#fff!important;color:#111!important;border-color:#aaa}
+.month-table th.sat{background:#dff1fc!important}
+.month-table th.sun{background:#fbe2eb!important}
 .month-table td.wished{color:#bf2028!important;font-weight:700}
 .month-table td.short{font-weight:700;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
 .month-table td.relaxed{text-decoration:underline dotted;text-underline-offset:2px}

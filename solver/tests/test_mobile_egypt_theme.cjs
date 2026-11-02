@@ -1,5 +1,5 @@
 'use strict';
-// 3.48 エジプト（王墓）の見た目：周囲の装飾を維持し、表は単色・希望を赤に統一する。
+// 3.48 エジプト（王墓）の見た目：周囲の装飾を維持し、表は白地・黒文字、土日だけ淡い色で見分ける。
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{harness}=require('./mobile_harness.cjs');
 const root=path.join(__dirname,'../../public');
 const raw={schemaVersion:4,savedTables:[],staff:[{id:'a',name:'職員A',type:'full',monthlyDaysOff:9,nightShiftType:'all',canOvertime:true},{id:'b',name:'職員B',type:'full',monthlyDaysOff:9,nightShiftType:'all',canOvertime:true}],
@@ -23,13 +23,13 @@ const every=node=>[node,...node.children.filter(v=>v&&typeof v==='object').flatM
 
  // 画面と版：読み込みの番号をそろえ、下の4つの画面と設定・期間の部品を残す。
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),versions=[...html.matchAll(/\?v=(\d+)/g)].map(m=>m[1]);
- assert(versions.length>=10);assert.equal(new Set(versions).size,1);assert.equal(versions[0],'89');
+ assert(versions.length>=10);assert.equal(new Set(versions).size,1);assert.equal(versions[0],'90');
  assert.deepEqual([...html.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]),['schedule','requests','staff','saved']);
  for(const id of ['settings','previous','next','month','period-label','notice','view','toast','dialog','dialog-body','import'])assert(html.includes(`id="${id}"`),id);
- assert(html.includes('<footer>公休表 3.76</footer>'));
+ assert(html.includes('<footer>公休表 3.77</footer>'));
  // 暗い配色は画面だけ（@media screen の中）。印刷の規則には入れない。
  const css=fs.readFileSync(path.join(root,'mobile.css'),'utf8'),start=css.indexOf('@media screen{'),theme=css.slice(start);
- assert(start>0);assert(theme.includes('.month-table td.wished{color:#ff8585;'));
+ assert(start>0);assert(theme.includes('.month-table td.wished{color:#bf2028;'));
  assert(!css.slice(0,start).includes('#0a1430'));
  for(const block of css.matchAll(/@media print\{([^@]*)\}/g))assert(!block[1].includes('#0f1d3d')&&!block[1].includes('#0a1430'));
  // 象形文字は切り出した書体を自前で配る（外部の読み込みに失敗しても印が四角にならない）。ライセンスを同梱。
