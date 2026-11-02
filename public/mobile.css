@@ -157,6 +157,7 @@ legend{color:#f2c55c}
 .request-calendar .wish-overtime{background:linear-gradient(160deg,#d0623f,#b24a30);color:#fff}
 .request-calendar .wish-night{background:#0a1430;color:#f2c55c;box-shadow:inset 0 0 0 1.5px #e2b23c}
 .request-calendar .wish-part{background:#24396b;color:#dfe6f7}
+.request-calendar button.wish-paidLeave{background:#283240;color:#ff8585;font-weight:700}
 
 /* 表は単色の背景と白文字にし、希望だけ赤文字で示す。 */
 .scroll{border-color:#46515f}

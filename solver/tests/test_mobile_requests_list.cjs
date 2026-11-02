@@ -19,7 +19,7 @@ const row=(h,id)=>h.nodes.view.all('div').find(e=>e.className?.startsWith('staff
  h.ctx.editRequests('c');assert.equal(leave(h).checked,true);await h.click('閉じる');assert.deepEqual(h.get('inputData()'),before);
  assert.equal(h.nodes.view.all('select').length,0);assert(!h.nodes.view.text.includes('公休表を作る'));assert(!h.nodes.view.text.includes('希望休：'));
  // 3.41の追加ルール・時間を変えず、開く/閉じるだけでは条件も確認状態も変わらない。
- h.ctx.editRequests('b');assert.equal(h.nodes.dialog.open,true);assert(h.nodes['dialog-body'].text.includes('希望休：1日 ／ 希望出勤：1日 ／ 希望夜勤：1日'));
+ h.ctx.editRequests('b');assert.equal(h.nodes.dialog.open,true);assert(h.nodes['dialog-body'].text.includes('希望休：1日 ／ 有給：0日 ／ 希望出勤：1日 ／ 希望夜勤：1日'));
  assert(!h.nodes['dialog-body'].text.includes('希望の種類を選んで'));assert(!h.nodes['dialog-body'].text.includes('すべて必ず守る指定'));
  await h.click('閉じる');assert.equal(h.nodes.dialog.open,false);assert.deepEqual(h.get('inputData()'),before);
  assert.equal(before.p.overtimeCycleLimit,true);assert.equal(before.p.staff[1].nightRemainderPriority,true);assert.equal(before.p.staff[1].noConsecutiveRest,true);
@@ -32,7 +32,7 @@ const row=(h,id)=>h.nodes.view.all('div').find(e=>e.className?.startsWith('staff
  day(h,10).click();assert.equal(h.get('schedule().shiftRequests.b[10]??null'),null);
  await h.click('入力完了');assert.equal(h.nodes.dialog.open,false);assert(row(h,'B').text.includes('入力済み'));assert.equal(h.get('state.reqStaff'),'b');assert.deepEqual(h.get('schedule().assignments'),assignments);assert.deepEqual(h.get('schedule().workSnapshot'),snapshot);assert.deepEqual(h.get('schedule().history'),history);
  // パートにA/夜勤を提示しない。未入力の完了は希望なし。
- h.ctx.editRequests('a');assert.deepEqual(mode(h).children.map(e=>e.value),['off','part']);await h.click('入力完了');assert(row(h,'A').text.includes('希望なし'));assert(h.nodes.view.text.includes('2 / 2人 確認済み'));
+ h.ctx.editRequests('a');assert.deepEqual(mode(h).children.map(e=>e.value),['off','paidLeave','part']);await h.click('入力完了');assert(row(h,'A').text.includes('希望なし'));assert(h.nodes.view.text.includes('2 / 2人 確認済み'));
  assert(!h.nodes.view.text.includes('公休表を作る'));
  // 長期休暇は従来の公休比較設定だけを今期に保存する。
  h.ctx.editRequests('b');const beforeLeaveSnapshot=h.get('schedule().workSnapshot'),checkbox=leave(h);assert.equal(checkbox.checked,false);checkbox.checked=true;checkbox.onchange();assert.equal(checkbox.checked,true);assert.equal(h.get('schedule().requestReviewed.b'),true);assert.deepEqual(h.get('schedule().workSnapshot'),beforeLeaveSnapshot);assert.deepEqual(h.get('schedule().history'),history);assert.deepEqual(h.get('schedule().fairnessExcludedStaff'),['c','b']);assert.deepEqual(h.get('schedule().requests.b'),[7]);assert.deepEqual(h.get('schedule().excludedStaff'),['c']);
