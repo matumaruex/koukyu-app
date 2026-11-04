@@ -592,6 +592,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         model.add_min_equality(low_ot, overtime_scaled)
         overtime_range = high_ot - low_ot
     initial_metric = metrics(p, initial_assignments) if initial_assignments is not None else None
+    before_metric = initial_metric
+    repaired_initial = False
     initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
                            if e['code'] in ('coverage', 'night_coverage')) if initial_metric is not None else 0
     preserved_night_spread = None
@@ -609,7 +611,6 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         # 新規作成の途中の表ではnullを引き継ぎ、たまたま増えた公休を固定しない。
         model.add(min_extra >= preserved_extra)
     shortage_weight = weights(p)[1]
-    initial_preferences = preference_report(p, initial_assignments) if initial_assignments is not None else None
     objective = None
     if optimize or allow_staffing_shortfall:
         minor = ((max_extra - min_extra) * minor_unit(p)
@@ -656,15 +657,22 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     def cycle_excess_of(a):
         found = overtime_cycle_report(p, a)
         return found['excess'] if found else 0
-    initial_errors = validate(raw, initial_assignments) if initial_metric is not None else []
-    initial_night_shortage = sum(e['required'] - e['actual'] for e in initial_errors
-                                 if e['code'] == 'night_coverage') if initial_metric is not None else 0
-    initial_priority = (exceptions_of(initial_errors) * violation_weight
-                        + balance_of(initial_assignments) * balance_weight
-                        + initial_shortage * shortage_priority_weight + initial_night_shortage * gap_weight
-                        + cycle_excess_of(initial_assignments) * cycle_weight
-                        + len(initial_preferences['unmet']) * preference_weight
-                        + (initial_metric['nightSpread'] if balance_nights else 0)) if initial_metric is not None else None
+    def extract(solver):
+        return {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k]))
+                           for d in range(n)} for st in p['staff']}
+
+    def priority_of(a):
+        errors = validate(raw, a)
+        shortage = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
+        gaps = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
+        return (exceptions_of(errors) * violation_weight
+                + balance_of(a) * balance_weight
+                + shortage * shortage_priority_weight + gaps * gap_weight
+                + cycle_excess_of(a) * cycle_weight
+                + len(preference_report(p, a)['unmet']) * preference_weight
+                + (metrics(p, a)['nightSpread'] if balance_nights else 0))
+
+    initial_priority = priority_of(initial_assignments) if initial_metric is not None else None
 
     def decode_bound(bound, assignments):
         """条件段階の下限から、例外と人数不足の理論上の最少を取り出す（例外が下限に達している場合のみ）。"""
@@ -803,6 +811,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         balance_term = rest_spread_excess if balance_weight else 0
         streak_unit = len(rest_streaks) + 1
         isolated_scope = (sum(rule_violations) * (n + 1) * isolated_unit + balance_term * isolated_unit + sum(isolated)) * streak_unit + sum(rest_streaks)
+        def arrangement_of(a):
+            errors = validate(raw, a)
+            return ((exceptions_of(errors) * (n + 1) * isolated_unit
+                     + balance_of(a) * isolated_unit + isolated_count(p, a)) * streak_unit
+                    + streak_count(p, a))
         model.minimize(isolated_scope)
         if initial_assignments is not None:
             for (sid, d, shift), variable in x.items():
@@ -819,6 +832,16 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             isolated_minimum = int(proof.value(sum(isolated))) if isolated else None
             streak_minimum = int(proof.value(sum(rest_streaks))) if rest_streaks else None
             model.add(isolated_scope <= isolated_scope_value)
+            if initial_assignments is not None and arrangement_of(initial_assignments) != isolated_scope_value:
+                # 旧表が新しい最少の範囲に入らない場合は、証明に使った実在の候補から再開する。
+                # 旧表の人数不足・残業・段階の証明で、この上位の改善を塞がない。
+                initial_assignments = extract(proof)
+                initial_metric = metrics(p, initial_assignments)
+                initial_shortage = sum(e['required'] - e['actual'] for e in validate(raw, initial_assignments)
+                                       if e['code'] in ('coverage', 'night_coverage'))
+                initial_priority = priority_of(initial_assignments)
+                repaired_initial = True
+                resume = None
         elif proof_status != cp_model.INFEASIBLE:
             return {'status': 'UNKNOWN', 'seconds': round(isolated_proof_seconds + (rest_proof_seconds or 0) + (night_proof_seconds or 0) + (balance_proof_seconds or 0), 3),
                     'boundaryComplete': p['boundaryComplete'],
@@ -843,9 +866,6 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         solver.parameters.num_search_workers = ((SEARCH_WORKERS if holiday_plan is None and _deadline is None else 4)
                                                 if allow_staffing_shortfall else 1)
         return solver
-    def extract(solver):
-        return {st['id']: {str(d + 1): next(k for k in SHIFTS if solver.value(x[st['id'], d, k]))
-                           for d in range(n)} for st in p['staff']}
     if holiday_plan is not None:
         return holiday_plan.run(model, p, new_solver, extract, priority=priority,
                                 exceptions=sum(rule_violations), shortage=sum(shortfalls),
@@ -869,16 +889,6 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
     solver = new_solver(seconds)
     quality_result = None
     if quality_first:
-        def priority_of(a):
-            errors = validate(raw, a)
-            shortage = sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage'))
-            gaps = sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage')
-            return (exceptions_of(errors) * violation_weight
-                    + balance_of(a) * balance_weight
-                    + shortage * shortage_priority_weight + gaps * gap_weight
-                    + cycle_excess_of(a) * cycle_weight
-                    + len(preference_report(p, a)['unmet']) * preference_weight
-                    + (metrics(p, a)['nightSpread'] if balance_nights else 0))
         quality_result = quality_search(model, p, seconds=seconds, priority=priority if has_priority else None,
                                         objective=objective, overtime=sum(overtime_totals),
                                         overtime_spread=overtime_range if overtime_scaled else None,
@@ -996,7 +1006,11 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
         result['stopRule'] = {'minSeconds': min_seconds, 'afterFirst': after_first, 'stoppedEarly': stopped_early, 'firstSolutionSeconds': first_seconds}
     keep_previous = status == cp_model.UNKNOWN and initial_assignments is not None
     if keep_previous:
-        result.update(status='FEASIBLE', previousKept=True, explanation='改善を時間内に確認できなかったため、検査済みの元の表を保持しました。')
+        result['status'] = 'FEASIBLE'
+        if repaired_initial:
+            result['explanation'] = '勤務の並びの例外を減らした検査済みの表を保持しました。'
+        else:
+            result.update(previousKept=True, explanation='改善を時間内に確認できなかったため、検査済みの元の表を保持しました。')
     if status == cp_model.INFEASIBLE:
         result['conflictGroups'] = [assumptions[i] for i in solver.sufficient_assumptions_for_infeasibility() if i in assumptions]
         result['explanation'] = '列挙した条件群は同時に成立しません。最小の原因集合とは限りません。'
@@ -1051,8 +1065,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
             result['restBalanceExceptions'] = balance['excess']
     singles, streaks = isolated_count(p, assignments), streak_count(p, assignments)
     if isolated_scope_value is not None:
-        scope = ((exceptions_of(errors) * (n + 1) * (len(isolated) + 1)
-                  + balance_of(assignments) * (len(isolated) + 1) + singles) * (len(rest_streaks) + 1) + streaks)
+        scope = arrangement_of(assignments)
         if scope != isolated_scope_value:
             return {'status': 'UNKNOWN', 'seconds': result['seconds'], 'boundaryComplete': p['boundaryComplete'],
                     'search': {'stages': [], 'done': False, 'continueRecommended': True, 'resume': None,
@@ -1167,9 +1180,9 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                   'scope': 'FIXED_STAFFING_AND_NIGHT_REST_PRIORITY',
                                   'reason': 'balanced' if spread == ideal_spread else
                                             'constraints' if proven else 'not_proven'}
-    if initial_metric is not None:
-        result['allocation']['before'] = initial_metric
-        result['allocation']['overtimeReducedBy'] = initial_metric['overtimeTotal'] - result['allocation']['overtimeTotal']
+    if before_metric is not None:
+        result['allocation']['before'] = before_metric
+        result['allocation']['overtimeReducedBy'] = before_metric['overtimeTotal'] - result['allocation']['overtimeTotal']
     result['carryForward'] = {}
     for sid, row in assignments.items():
         next_days = ['nightOff', 'off'] if row[str(n)] == 'night' else ['off'] if row[str(n)] == 'nightOff' else []
@@ -1193,7 +1206,7 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                             + result.get('overtimeCycleExcess', 0) * cycle_weight
                             + len(preferences['unmet']) * preference_weight
                             + (result['allocation']['nightSpread'] if balance_nights else 0))
-            result['improved'] = (initial_priority, old_quality) > (new_priority, result['objective'])
+            result['improved'] = repaired_initial or (initial_priority, old_quality) > (new_priority, result['objective'])
     return result
 
 

@@ -4,6 +4,7 @@ def rank(r):
     m = r.get('allocation') or {}
     return [r.get('restExceptionCount') or 0, r.get('exceptionCount') or 0,
             r.get('nightRemainderExceptions') or 0, r.get('restBalanceExceptions') or 0,
+            r.get('isolatedWorkExceptions') or 0, r.get('restStreakExceptions') or 0,
             r.get('staffingShortfallTotal') or 0, r.get('nightShortfallTotal') or 0,
             r.get('overtimeCycleExcess') or 0,
             len((r.get('nightRestPreferences') or {}).get('unmet') or []),
