@@ -32,6 +32,10 @@ const label=(h,text)=>h.nodes['dialog-body'].all('label').find(l=>l.text.include
  const check=async errors=>{const v=harness(raw,{response:async()=>({status:'INVALID',validationErrors:errors,boundaryComplete:true})});
   v.eval("schedule().assignments={a:{'1':'early'},b:{'1':'off'}};schedule().workSignature=inputData().signature;");await v.ctx.validateCurrent();return v;};
  let v=await check([consecutive]);assert.equal(v.get('schedule().meta.status'),'VALID');assert.equal(v.get('schedule().meta.ruleExceptions.length'),1);assert.equal(v.get('ready()'),true);
+ const unconfirmed='この表には勤務条件の例外があります。避けられるかは未確認です。';
+ assert(v.nodes.view.text.includes(unconfirmed));v.ctx.openLandscapeTable();assert(v.nodes['dialog-body'].text.includes(unconfirmed));
+ await v.click('閉じる');v.eval('saveTableDialog()');await v.click('保存する');await v.eval('openSavedTable(data.savedTables[0].id)');
+ assert(v.nodes.view.text.includes(unconfirmed));assert(!v.nodes.view.text.includes('守ると表が作れないため'));
  v=await check([consecutive,{code:'coverage',day:1,time:420,actual:1,required:2}]);assert.equal(v.get('schedule().meta.status'),'DRAFT');assert.equal(v.get('schedule().meta.ruleExceptions.length'),1);
  v=await check([{code:'request',staff:'s0',day:1}]);assert.equal(v.get('schedule().meta.status'),'INVALID');
  v=await check([{code:'day_shift_eligibility',staff:'s0',day:1,allowed:'early',actual:'late'}]);assert.equal(v.get('schedule().meta.status'),'INVALID');
