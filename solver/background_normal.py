@@ -29,8 +29,9 @@ def compare(a, b):
 def candidate(r):
     return bool(r and r.get('assignments') and r.get('status') in ('OPTIMAL', 'FEASIBLE', 'DRAFT'))
 
-async def normal(input_data, initial, solve, max_seconds=480, base_seconds=60, progress=None):
+async def normal(input_data, initial, solve, max_seconds=480, base_seconds=60, progress=None, improvement=False, compare_initial=False):
     best = last = resume = None
+    initial_rank = None
     seconds = 0
     done = False
     bound = None
@@ -45,7 +46,13 @@ async def normal(input_data, initial, solve, max_seconds=480, base_seconds=60, p
                'allowNightShortfall': False, 'allowRuleExceptions': True}
         if baseline: req['initialAssignments'] = baseline
         if resume: req['resume'] = resume
+        if improvement:
+            req['improvementPass'] = True
+        if compare_initial and not rounds:
+            req['compareInitial'] = True
         r = await solve(req)
+        if not rounds:
+            initial_rank = r.get('initialRank')
         last = r
         elapsed = r.get('seconds')
         if not isinstance(elapsed, (float, int)) or isinstance(elapsed, bool) or elapsed < 0:
@@ -70,4 +77,27 @@ async def normal(input_data, initial, solve, max_seconds=480, base_seconds=60, p
         resume = search.get('resume') if improved or not best else None
     if best and bound is not None and isinstance(best.get('staffingShortfallTotal'), int):
         best = {**best, 'shortfallLowerBound': min(bound, best['staffingShortfallTotal'])}
-    return {'best': best, 'last': last, 'seconds': seconds, 'rounds': rounds, 'error': '計算を完了できませんでした。' if last and last.get('status') == 'WORKER_ERROR' else None, 'done': done, 'stale': False}
+    return {**({'initialRank': initial_rank} if initial_rank is not None else {}), 'best': best, 'last': last, 'seconds': seconds, 'rounds': rounds, 'error': '計算を完了できませんでした。' if last and last.get('status') == 'WORKER_ERROR' else None, 'done': done, 'stale': False}
+
+
+async def create_normal(input_data, initial, solve, progress=None):
+    if initial:
+        return await normal(input_data, initial, solve, progress=progress, improvement=True, compare_initial=True)
+    first = await normal(input_data, None, solve, progress=progress)
+    best = first['best']
+    if not best or first['error'] or best['status'] == 'OPTIMAL' or best.get('solverStatus') == 'OPTIMAL':
+        return first
+
+    async def improving(_stage):
+        if progress:
+            await progress('improvement')
+
+    extra = await normal(input_data, best['assignments'], solve, progress=improving, improvement=True)
+    other = extra['best']
+    # 同点で勤務を動かさない。同じ勤務について新たに得た証明だけは採用できる。
+    if other and (rank(other) < rank(best) or
+                  (other['assignments'] == best['assignments'] and compare(other, best) < 0)):
+        best = other
+    return {**extra, 'best': best, 'seconds': first['seconds'] + extra['seconds'],
+            'rounds': first['rounds'] + extra['rounds'], 'automaticImprovement': True,
+            'error': extra['error'] or (None if other else '追加計算を完了できませんでした。')}

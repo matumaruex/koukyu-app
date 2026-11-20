@@ -101,7 +101,7 @@ def _explain(model, dropped, night_missing, violations, violation_cap, seconds, 
     return result
 
 
-def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False, allow_rule_exceptions=False, resume=None, relax_wishes=False, _holiday_plan=None, _holiday_actual_off=None, _deadline=None):
+def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_seconds=None, after_first=None, allow_staffing_shortfall=False, allow_night_shortfall=False, quality_first=False, allow_rule_exceptions=False, resume=None, relax_wishes=False, _holiday_plan=None, _holiday_actual_off=None, _deadline=None, improvement_pass=False):
     """seconds は上限。min_seconds と after_first を両方指定すると、表が早く見つかった場合に上限より前に止める。
     allow_rule_exceptions：連勤上限・連勤＋1・日勤の種類（許可した人のみ）を、守ると表が作れないときだけ最小限破る中間ルールにする。
     resume：quality_first の続きの計算（段階と、最後に良くなってからの経過秒）。
@@ -893,7 +893,8 @@ def solve(raw, seconds=15, seed=1, optimize=True, initial_assignments=None, min_
                                         objective=objective, overtime=sum(overtime_totals),
                                         overtime_spread=overtime_range if overtime_scaled else None,
                                         new_solver=new_solver, extract=extract, priority_of=priority_of,
-                                        initial_assignments=initial_assignments, resume=resume)
+                                        initial_assignments=initial_assignments, resume=resume,
+                                        idle_seconds={'placement': 120} if improvement_pass else None)
         if quality_result['info'].get('resume') is not None:
             quality_result['info']['resume']['preservedCommonExtraDaysOff'] = preserved_extra
             if p['restCountBalance']:

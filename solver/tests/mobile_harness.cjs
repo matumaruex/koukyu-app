@@ -35,7 +35,7 @@ function harness(raw,options={}){
  vm.runInContext(fs.readFileSync(path.join(root,'roster-storage.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'creation-workflow.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'auto-creation-workflow.js'),'utf8'),ctx);
- if(options.backgroundActual)vm.runInContext(fs.readFileSync(path.join(root,'background-job.js'),'utf8'),ctx);else ctx.BackgroundJob={load:()=>null,clear:()=>{},cancel:()=>{},start:async(details,identity)=>({...details,...identity}),wait:async(job,opts)=>{let seed=0;return ctx.CreationWorkflow.run({input:job.input,initialAssignments:job.initialAssignments,request:p=>ctx.api({...p,allowStaffingShortfall:true,allowNightShortfall:false,allowRuleExceptions:true}),nextSeed:()=>++seed,isCurrent:opts.isCurrent,onExtend:opts.onExtend});}};
+ if(options.backgroundActual)vm.runInContext(fs.readFileSync(path.join(root,'background-job.js'),'utf8'),ctx);else ctx.BackgroundJob={load:()=>null,clear:()=>{},cancel:()=>{},start:async(details,identity)=>({...details,...identity}),wait:async(job,opts)=>{let seed=0;return ctx.CreationWorkflow.create({input:job.input,initialAssignments:job.initialAssignments,request:p=>ctx.api({...p,allowStaffingShortfall:true,allowNightShortfall:false,allowRuleExceptions:true}),nextSeed:()=>++seed,isCurrent:opts.isCurrent,onExtend:opts.onExtend});}};
  vm.runInContext(fs.readFileSync(path.join(root,'auto-roster-ui.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'mobile.js'),'utf8'),ctx);
  // 保存時の条件の描画は、正本への読込とは独立に検証する（古い作業表にも共通）。

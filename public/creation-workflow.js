@@ -1,22 +1,24 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.CreationWorkflow=api;})(globalThis,function(){
 'use strict';
 // 1回の通信は60秒以内。サーバーが「まだ良くなっている段階がある」と返す間は、続きから自動で呼び直す。
-// 各段階は、最少と証明できたか一定時間良くならなかったときに次へ進み、すべて終われば完了。全体の上限は8分（3.41で5分から延長）。
+// 各段階は、最少と証明できたか一定時間良くならなかったときに次へ進み、すべて終われば完了。1回の探索は最大8分。新規作成では、その表から追加改善を1回行う。
 const BASE_SECONDS=60,MAX_SECONDS=480;
 function rank(r){const m=r.allocation||{};return [r.restExceptionCount||0,r.exceptionCount||0,r.nightRemainderExceptions||0,r.restBalanceExceptions||0,r.isolatedWorkExceptions||0,r.restStreakExceptions||0,r.staffingShortfallTotal||0,r.nightShortfallTotal||0,r.overtimeCycleExcess||0,r.nightRestPreferences?.unmet?.length||0,m.nightSpread||0,m.overtimeTotal||0,m.overtimeBalance??m.overtimeSpread??0,m.surplusTotal||0,-(m.commonExtraDaysOff||0),m.minor||0];}
-function compare(a,b){const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return x[i]-y[i];
+function compareRanks(x,y){for(let i=0;i<x.length;i++)if(x[i]!==y[i])return x[i]-y[i];return 0;}
+function compare(a,b){const quality=compareRanks(rank(a),rank(b));if(quality)return quality;
  // 同じ品質なら、既に確認できた最少証明を時間切れの応答で失わない。
  const proof=r=>[r.status==='OPTIMAL',!!r.preferencePriorityProven,!!r.allocation?.minimumOvertimeProven,!!r.overtimeFairness?.minimumSpreadProven,!!r.shortfallProvenMinimum,!!r.nightFairness?.minimumSpreadProven];
  const u=proof(a),v=proof(b);for(let i=0;i<u.length;i++)if(u[i]!==v[i])return Number(v[i])-Number(u[i]);return 0;}
 function candidate(r){return r&&r.assignments&&['OPTIMAL','FEASIBLE','DRAFT'].includes(r.status);}
-async function run({input,initialAssignments,request,nextSeed,isCurrent=()=>true,onExtend=()=>{}}){
- let best=null,last=null,seconds=0,error=null,resume=null,done=false,shortfallBound=null;const rounds=[];
+async function run({input,initialAssignments,request,nextSeed,isCurrent=()=>true,onExtend=()=>{},improvement=false,compareInitial=false}){
+ let initialRank=null,best=null,last=null,seconds=0,error=null,resume=null,done=false,shortfallBound=null;const rounds=[];
  while(MAX_SECONDS-seconds>0.1){
   if(!isCurrent())return {stale:true};
   const budget=Math.min(BASE_SECONDS,MAX_SECONDS-seconds),baseline=best?.assignments||initialAssignments;
   try{
-   const r=await request({input,seconds:budget,adaptive:false,qualityFirst:true,seed:nextSeed(),...(baseline?{initialAssignments:baseline}:{}),...(resume?{resume}:{})});
+   const r=await request({input,seconds:budget,adaptive:false,qualityFirst:true,...(improvement?{improvementPass:true}:{}),...(compareInitial&&!rounds.length?{compareInitial:true}:{}),seed:nextSeed(),...(baseline?{initialAssignments:baseline}:{}),...(resume?{resume}:{})});
    if(!isCurrent())return {stale:true};
+   if(!rounds.length)initialRank=r.initialRank;
    last=r;
    const elapsed=Number.isFinite(r.seconds)&&r.seconds>=0?r.seconds:budget;
    seconds+=elapsed;rounds.push({seconds:elapsed,status:r.status,reason:r.search?.reason||null,stage:r.search?.resume?.stage||null});
@@ -34,7 +36,26 @@ async function run({input,initialAssignments,request,nextSeed,isCurrent=()=>true
   }catch(e){if(!isCurrent())return {stale:true};error=e;break;}
  }
  if(best&&shortfallBound!==null&&Number.isInteger(best.staffingShortfallTotal))best={...best,shortfallLowerBound:Math.min(shortfallBound,best.staffingShortfallTotal)};
- return {best,last,seconds,rounds,error,done,stale:false};
+ return {best,last,seconds,rounds,error,done,stale:false,...(initialRank?{initialRank}:{})};
 }
-return {BASE_SECONDS,MAX_SECONDS,rank,compare,run};
+function sameAssignments(a,b){
+ const staff=Object.keys(a);
+ if(staff.length!==Object.keys(b).length)return false;
+ return staff.every(id=>{
+  const days=Object.keys(a[id]);
+  return b[id]&&days.length===Object.keys(b[id]).length&&days.every(day=>a[id][day]===b[id][day]);
+ });
+}
+async function create(options){
+ if(options.initialAssignments)return run({...options,improvement:true,compareInitial:true});
+ const first=await run(options),best=first.best;
+ if(first.stale||first.error||!best||best.status==='OPTIMAL'||best.solverStatus==='OPTIMAL')return first;
+ options.onImprove?.();
+ const extra=await run({...options,initialAssignments:best.assignments,improvement:true,onExtend:options.onImprove});
+ if(extra.stale)return extra;
+ const other=extra.best;
+ const useOther=other&&(compareRanks(rank(other),rank(best))<0||(sameAssignments(other.assignments,best.assignments)&&compare(other,best)<0));
+ return {...extra,best:useOther?other:best,seconds:first.seconds+extra.seconds,rounds:first.rounds.concat(extra.rounds),automaticImprovement:true,error:extra.error||(!other?'追加計算を完了できませんでした。':null)};
+}
+return {BASE_SECONDS,MAX_SECONDS,rank,compare,compareRanks,sameAssignments,run,create};
 });

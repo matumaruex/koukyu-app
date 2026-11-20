@@ -240,7 +240,7 @@ const exceptionFields=['exceptionCount','restExceptionCount','nightRemainderExce
 if(short(r)!==null)parts.push('人数不足 '+change(short(first)??short(r),short(r),'か所'));
 if(Number.isInteger(r.allocation?.overtimeTotal))parts.push('残 '+change(first.allocation?.overtimeTotal??r.allocation.overtimeTotal,r.allocation.overtimeTotal,'回'));
 if(!r.allocation?.overtimePreferred&&Number.isInteger(r.allocation?.overtimeSpread))parts.push('残業の差 '+change(first.allocation?.overtimeSpread??r.allocation.overtimeSpread,r.allocation.overtimeSpread,'回'));
-return `続きを計算しています。いまは${stage}を調整中${parts.length?`（${parts.join('・')}）`:''}。良くなり続けている間は続け、最大8分ほどで終わります。`;}
+return `続きを計算しています。いまは${stage}を調整中${parts.length?`（${parts.join('・')}）`:''}。`;}
 // 計算で不成立になったときの説明。条件が少なければ名前と日付で示し、多ければ見直す候補を出す。
 function solverIssues(groups,map){const names=Object.keys(map).map(r=>(activeStaff().find(st=>st.id===map[r])?.name||''));
 const tidy=g=>String(g).replaceAll('A残','残').replace(/職員(\d+)/g,(m,i)=>names[i-1]||m).replace(/(\d{4})-(\d{2})-(\d{2})/g,(m,y,mo,d)=>{const t=new Date(Date.UTC(+y,+mo-1,+d));return `${+mo}月${+d}日（${'日月火水木金土'[t.getUTCDay()]}）`;});
@@ -268,7 +268,7 @@ const c=card();c.id='creation-panel';c.tabIndex=-1;
 if(!data.staff.length&&!exists){c.append(el('h2','公休表をつくりましょう'),button('職員を登録する',()=>setTab('staff'),'primary wide'),button('以前のデータを読み込む',()=>$('import').click(),'wide'));view.append(c);return;}
 const staff=activeStaff();if(!staff.length){c.append(el('h2','今期に入れる職員がいません'),button('職員を選ぶ',()=>setTab('staff'),'primary wide'));view.append(c);renderWorkingRoster(view);return;}
 const meta=metadata(),complete=Object.keys(history()).length===staff.length;
-if(state.busy){c.append(el('h2','公休表を作っています'),el('div',undefined,'progress'),el('p',state.progressStage||'人数と夜勤→残業合計→残業回数の公平さ→配置の順に改善します。良くなり続けている間は続け、最大8分ほどで終わります。','muted'),el('p','','muted'));c.lastChild.id='elapsed';const cancel=el('button','作成を中止する','secondary wide');cancel.type='button';cancel.id='cancel-generation';cancel.onclick=cancelGeneration;c.append(cancel);view.append(c);return;}
+if(state.busy){c.append(el('h2','公休表を作っています'),el('div',undefined,'progress'),el('p',state.progressStage||'人数と夜勤→残業合計→残業回数の公平さ→配置の順に改善します。','muted'),el('p',state.calculationLimit,'small'),el('p','','muted'));c.lastChild.id='elapsed';const cancel=el('button','作成を中止する','secondary wide');cancel.type='button';cancel.id='cancel-generation';cancel.onclick=cancelGeneration;c.append(cancel);view.append(c);return;}
 const pending=BackgroundJob.load();
 if(pending){
  if(pending.runId===state.receivedJob?.runId){
@@ -457,21 +457,32 @@ const previous=hasTable();
 // 「作り直す前より」の比較は、さらに改善するを押す前の表を基準にする（自動の続き計算の途中の表とは比べない）。
 const startOvertime=resumed?.startOvertime??(initial?Object.values(initial).reduce((t,row)=>t+Object.values(row||{}).filter(k=>k==='overtime').length,0):null);
 const current=()=>state.generation===generation&&schedule()===s&&inputData().signature===payload.signature;
-clearTimeout(tableCheckTimer);tableCheck=null;state.error=null;state.failure=null;state.creationFailure=null;state.progressStage='サーバーに作成を依頼しています。開始の確認まで、この画面でお待ちください。';notify('');busy(true);showCreationSection('creation-panel');
+clearTimeout(tableCheckTimer);tableCheck=null;state.error=null;state.failure=null;state.creationFailure=null;state.calculationLimit=initial?'追加改善の計算は最大約8分です。':'作成と自動の追加改善を合わせて最大約16分です。';state.progressStage='サーバーに作成を依頼しています。開始の確認まで、この画面でお待ちください。';notify('');busy(true);showCreationSection('creation-panel');
 try{
 let run;
 if(['localhost','127.0.0.1','::1'].includes(window.location?.hostname)){
- state.progressStage='このPCで作成中です。完了まで画面を開いたままにしてください。';render();
- run=await CreationWorkflow.run({input:payload.p,initialAssignments:initial,request:opts=>api({...opts,allowStaffingShortfall:allowShortfall,allowNightShortfall:false,allowRuleExceptions:allowShortfall}),nextSeed:()=>state.draftSeed=(state.draftSeed||0)%1000+1,isCurrent:current,onExtend:r=>{state.progressStage=progressText(r,r);render();}});
+ state.progressStage='このPCで計算中です。完了まで画面を開いたままにしてください。';render();
+ run=await CreationWorkflow.create({input:payload.p,initialAssignments:initial,request:opts=>api({...opts,allowStaffingShortfall:allowShortfall,allowNightShortfall:false,allowRuleExceptions:allowShortfall}),nextSeed:()=>state.draftSeed=(state.draftSeed||0)%1000+1,isCurrent:current,onImprove:()=>{state.progressStage='作成した表をもとに追加改善しています。';render();},onExtend:r=>{state.progressStage=progressText(r,r);render();}});
 }else{
  const job=resumed||await BackgroundJob.start({mode:'normal',input:payload.p,initialAssignments:initial},{mode:'normal',period:key(),signature:payload.signature,tableSignature:JSON.stringify(s.assignments),startOvertime},current);
  if(!current()){BackgroundJob.cancel(job);return;}state.backgroundJob=job;
  state.progressStage='画面を離れても作成を続けます。戻ると結果を確認できます。';render();
- run=await BackgroundJob.wait(job,{isCurrent:current,onWait:(offline,stage)=>{const label={conditions:'人数と夜勤',overtime:'残業の合計',overtime_fairness:'残業回数の公平さ',placement:'配置のバランス'}[stage];state.progressStage=offline?'通信が戻り次第、作成状況を確認します。':(label?'いまは'+label+'を調整中です。':'作成中です。')+'画面を離れても作成を続けます。';render();}});
+ run=await BackgroundJob.wait(job,{isCurrent:current,onWait:(offline,stage)=>{const label={conditions:'人数と夜勤',overtime:'残業の合計',overtime_fairness:'残業回数の公平さ',placement:'配置のバランス'}[stage];state.progressStage=offline?'通信が戻り次第、作成状況を確認します。':(stage==='improvement'?'作成した表をもとに追加改善しています。':label?'いまは'+label+'を調整中です。':'作成中です。')+'画面を離れても作成を続けます。';render();}});
 }
 if(run.stale||!current())return;
 const r=run.best||run.last;
-if(run.best){RosterStorage.clearResult(s);s.assignments=fromRemote(r.assignments,payload.map);const {assignments,carryForward,...meta}=r;s.workSignature=payload.signature;s.meta={...meta,seconds:run.seconds,timing:{...r.timing,mode:'complete',maxSeconds:CreationWorkflow.MAX_SECONDS},workflow:{rounds:run.rounds,automaticExtended:run.rounds.length>1,done:run.done},signature:payload.signature,tableSignature:JSON.stringify(s.assignments)};{const allocation={...(s.meta.allocation||{})};delete allocation.before;delete allocation.overtimeReducedBy;if(startOvertime!==null&&Number.isInteger(allocation.overtimeTotal)){allocation.before={overtimeTotal:startOvertime};allocation.overtimeReducedBy=startOvertime-allocation.overtimeTotal;}s.meta.allocation=allocation;}state.receivedJob=state.backgroundJob;if(run.error)state.error='追加計算を完了できなかったため、確認済みの表を表示しています。';}
+const baseline=initial&&(run.initialRank||(metadata()?.allocation?CreationWorkflow.rank(metadata()):null));
+if(run.best&&baseline){
+ const difference=CreationWorkflow.compareRanks(CreationWorkflow.rank(r),baseline);
+ const same=CreationWorkflow.sameAssignments(r.assignments,initial);
+ if(difference>0||(difference===0&&(!same||(metadata()?.allocation&&CreationWorkflow.compare(r,metadata())>=0)))){
+  state.receivedJob=state.backgroundJob;
+  state.error=run.error?'追加計算を完了できなかったため、元の表を保持しました。':null;
+  if(!run.error)toast('評価が上がらなかったため、元の表を保持しました。');
+  return;
+ }
+}
+if(run.best){RosterStorage.clearResult(s);s.assignments=fromRemote(r.assignments,payload.map);const {assignments,carryForward,...meta}=r;s.workSignature=payload.signature;s.meta={...meta,seconds:run.seconds,timing:{...r.timing,mode:'complete',maxSeconds:CreationWorkflow.MAX_SECONDS*(run.automaticImprovement?2:1)},workflow:{rounds:run.rounds,automaticExtended:run.rounds.length>1,done:run.done},signature:payload.signature,tableSignature:JSON.stringify(s.assignments)};{const allocation={...(s.meta.allocation||{})};delete allocation.before;delete allocation.overtimeReducedBy;if(startOvertime!==null&&Number.isInteger(allocation.overtimeTotal)){allocation.before={overtimeTotal:startOvertime};allocation.overtimeReducedBy=startOvertime-allocation.overtimeTotal;}s.meta.allocation=allocation;}state.receivedJob=state.backgroundJob;if(run.error)state.error='追加計算を完了できなかったため、確認済みの表を表示しています。';}
 else if(previous&&(run.error||r?.status==='UNKNOWN')){state.error='計算を完了できなかったため、元の表を保持しました。';}
 else if(run.error)state.error=typeof run.error==='string'?run.error:run.error.message;
 else if(r?.status==='INFEASIBLE'){const why=diagnosisIssues(r.diagnosis,payload.map)||solverIssues(r.conflictGroups||[],payload.map);state.failure={title:'この条件では表を作れません',notes:['希望・固定・職員の設定が同時には成り立ちません。',why.lead],items:why.items,signature:payload.signature};}
@@ -535,7 +546,7 @@ function editHistory(id){
 }
 
 function historyImportDialog(){const d=modal('前期の表を選ぶ'),date=new Date(Date.UTC(state.year,state.month-2,1)),previous=key(date.getUTCFullYear(),date.getUTCMonth()+1),records=data.savedTables.filter(r=>r.period===previous);d.append(el('p','手入力済みの職員は変更しません。未入力の職員だけ、前期の勤務を取り込みます。入力画面には直前5日分を表示します。','muted'));if(!records.length){d.append(el('p','直前の期間の保存表がありません。'),button('入力一覧に戻る',()=>editHistory(),'wide'));return;}const choice=select(records.map(r=>[r.id,r.name]),records[records.length-1].id),error=el('p','','danger');d.append(field('保存した表',choice),error,button('未入力の人だけ取り込む',()=>{const record=records.find(r=>r.id===choice.value),s=schedule(),result=RosterStorage.takeHistory(record,key(),activeStaff(),s.history,SHIFT);if(!result.added){error.textContent='取り込める未入力の職員はいません。';return;}const old=s.history;s.history=result.history;if(!save(true)){if(old===undefined)delete s.history;else s.history=old;error.textContent=state.storageError;return;}$('dialog').close();render();toast(result.added+'人の前期勤務を取り込みました');},'primary wide'));}
-function settings(){const d=modal('設定・データ');const spread=select([['1','最大1日まで'],['0','全員同じにする']],String(data.preferences.maxExtraOffSpread));const saved=el('p','','muted');saved.setAttribute('role','status');spread.onchange=()=>{data.preferences.maxExtraOffSpread=Number(spread.value);saved.textContent=save()?'この端末に保存しました':state.storageError;render();};d.append(button('必要人数を確認・変更',editStaffing,'wide'),field('余った休みの配り方',spread),saved,el('p','余った休みは、比較対象の職員間で差が1日以内になるよう配分します。「全員同じ」では差を0日にします。公休日数を固定した人は、追加公休の比較には含めません。長期休暇などで今期だけ比較から外す人は、「希望・前期」の希望入力で設定できます。','muted'),el('p','例：最低9日の人が11日、最低8日の人が10日なら、どちらも追加2日で同じです。','muted'),el('p',daysSinceExport()===null?'まだ書き出していません。':`最後の書き出し：${new Date(data.lastExport).toLocaleDateString('ja-JP')}`,'muted'),...(canShareBackup()?[button('LINEやドライブに保管する',shareBackup,'wide')]:[]),button('データを書き出す',exportData,'wide'),button('データを読み込む',()=>$('import').click(),'wide'));const help=el('details');help.append(el('summary','計算結果の意味'),el('p','「条件が両立しない」＝登録した条件と前期の仮定では数学的に不可能。「時間内に見つからない」＝不可能かどうかは未確定。','small'),el('p','条件を満たす表でも、じっくり計算すると公平さや勤務バランスが改善する場合があります。最適と確認できた表は、時間を増やしても評価は良くなりません。','small'),el('p','職員名を除いた勤務条件と作成結果を、作成中と結果の受け取りのためサーバーに暗号化して一時記録します。受け取り期限とサーバーでの保管期間はプランによって異なります。Vercelの管理権限を持つ人は内容を確認できます。保存した表と職員名はこのブラウザに保存されます。別の端末へは書き出しファイルで移せます。','small'),el('p','人数は朝7:00・昼10:00・夕17:45を検査します。休憩・資格別配置など、未登録の現場ルールは別途確認してください。','small'));d.append(help,el('p','公休表 3.92','muted'));}
+function settings(){const d=modal('設定・データ');const spread=select([['1','最大1日まで'],['0','全員同じにする']],String(data.preferences.maxExtraOffSpread));const saved=el('p','','muted');saved.setAttribute('role','status');spread.onchange=()=>{data.preferences.maxExtraOffSpread=Number(spread.value);saved.textContent=save()?'この端末に保存しました':state.storageError;render();};d.append(button('必要人数を確認・変更',editStaffing,'wide'),field('余った休みの配り方',spread),saved,el('p','余った休みは、比較対象の職員間で差が1日以内になるよう配分します。「全員同じ」では差を0日にします。公休日数を固定した人は、追加公休の比較には含めません。長期休暇などで今期だけ比較から外す人は、「希望・前期」の希望入力で設定できます。','muted'),el('p','例：最低9日の人が11日、最低8日の人が10日なら、どちらも追加2日で同じです。','muted'),el('p',daysSinceExport()===null?'まだ書き出していません。':`最後の書き出し：${new Date(data.lastExport).toLocaleDateString('ja-JP')}`,'muted'),...(canShareBackup()?[button('LINEやドライブに保管する',shareBackup,'wide')]:[]),button('データを書き出す',exportData,'wide'),button('データを読み込む',()=>$('import').click(),'wide'));const help=el('details');help.append(el('summary','計算結果の意味'),el('p','「条件が両立しない」＝登録した条件と前期の仮定では数学的に不可能。「時間内に見つからない」＝不可能かどうかは未確定。','small'),el('p','条件を満たす表でも、じっくり計算すると公平さや勤務バランスが改善する場合があります。最適と確認できた表は、時間を増やしても評価は良くなりません。','small'),el('p','職員名を除いた勤務条件と作成結果を、作成中と結果の受け取りのためサーバーに暗号化して一時記録します。受け取り期限とサーバーでの保管期間はプランによって異なります。Vercelの管理権限を持つ人は内容を確認できます。保存した表と職員名はこのブラウザに保存されます。別の端末へは書き出しファイルで移せます。','small'),el('p','人数は朝7:00・昼10:00・夕17:45を検査します。休憩・資格別配置など、未登録の現場ルールは別途確認してください。','small'));d.append(help,el('p','公休表 3.93','muted'));}
 function exportData(){const file=backupFile(),url=URL.createObjectURL(file);const a=el('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);markExported();}
 $('import').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>20_000_000)throw Error('ファイルが大きすぎます。');const v=checkBackup(JSON.parse(await file.text()));if((data.staff.length||data.savedTables.length)&&!confirm('バックアップの職員・入力・保存一覧に切り替えますか？今のデータは先に書き出して保管してください。'))return;const oldData=data,oldLoadError=state.loadError;data=v;state.loadError=false;if(!save(true)){data=oldData;state.loadError=oldLoadError;render();return;}state.error=null;state.failure=null;clearTimeout(tableCheckTimer);tableCheck=null;$('dialog').close();render();toast('バックアップを読み込みました');}catch(e){notify(e?.name==='SyntaxError'?'ファイルを読み取れませんでした。公休表のバックアップ（.json）を選んでください。':e.message);}finally{e.target.value='';}};
 function changePeriod(delta){const d=new Date(Date.UTC(state.year,state.month-1+delta,1));state.year=d.getUTCFullYear();state.month=d.getUTCMonth()+1;state.day=1;state.error=null;notify('');render();}
@@ -547,6 +558,6 @@ function restoreBackgroundJob(){const job=BackgroundJob.load();if(!job||state.lo
 if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(job.period)||job.mode!=='normal')return;
 [state.year,state.month]=job.period.split('-').map(Number);state.mode='normal';state.tab='schedule';
 if(inputData().signature!==job.signature||JSON.stringify(schedule().assignments)!==job.tableSignature){state.error='作成開始後に条件または表が変わったため、結果を自動で上書きしません。';render();return;}
-render();generate('new',true,job);
+render();generate(job.startOvertime!=null?'improve':'new',true,job);
 }
 restoreBackgroundJob();

@@ -4,7 +4,7 @@ from copy import deepcopy
 import subprocess
 import unittest
 from pathlib import Path
-from solver.background_normal import normal
+from solver.background_normal import create_normal, normal
 
 HERE=Path(__file__).parent
 
@@ -31,6 +31,40 @@ class BackgroundParityTests(unittest.IsolatedAsyncioTestCase):
                     result = await normal({}, None, solve)
                     self.assertEqual(result['best'], expected)
                     self.assertEqual(result['best'][field], 0)
+
+    async def test_automatic_improvement_preserves_tied_rows_and_time_budget(self):
+        first = {'status': 'FEASIBLE', 'assignments': {'s0': {'1': 'early'}},
+                 'allocation': {'minor': 3}, 'seconds': 60, 'search': {'done': True}}
+        for score, expected in ((2, 'late'), (3, 'early'), (4, 'early')):
+            with self.subTest(score=score):
+                extra = dict(first, assignments={'s0': {'1': 'late'}}, allocation={'minor': score},
+                             preferencePriorityProven=True)
+                calls, stages = [], []
+                async def solve(req):
+                    calls.append(req)
+                    return [first, extra][len(calls)-1]
+                async def progress(stage): stages.append(stage)
+                result = await create_normal({}, None, solve, progress)
+                self.assertEqual(result['best']['assignments']['s0']['1'], expected)
+                self.assertEqual(result['seconds'], 120)
+                self.assertEqual(stages, ['conditions', 'improvement'])
+                self.assertNotIn('improvementPass', calls[0])
+                self.assertTrue(calls[1]['improvementPass'])
+                self.assertEqual(calls[1]['initialAssignments'], first['assignments'])
+                self.assertNotIn('resume', calls[1])
+
+    async def test_second_pass_failure_and_proven_optimum(self):
+        first = {'status': 'FEASIBLE', 'assignments': {'s0': {'1': 'early'}},
+                 'seconds': 1, 'search': {'done': True}}
+        replies = iter([first, {'status': 'WORKER_ERROR', 'seconds': 0}])
+        async def solve(_): return next(replies)
+        result = await create_normal({}, None, solve)
+        self.assertEqual(result['best'], first)
+        self.assertTrue(result['error'])
+        for status in ({'status': 'OPTIMAL'}, {'status': 'DRAFT', 'solverStatus': 'OPTIMAL'}):
+            replies = iter([dict(first, **status)])
+            result = await create_normal({}, None, solve)
+            self.assertEqual(len(result['rounds']), 1)
 
     async def test_single_work_priority_remains_above_rest_streak(self):
         replies = [{'status': 'FEASIBLE', 'seconds': 1, 'assignments': {'s0': {'1': 'early'}},

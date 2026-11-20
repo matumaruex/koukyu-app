@@ -1,5 +1,5 @@
 'use strict';
-// 実画面で、続きの自動計算（段階が終わるまで・上限8分）、送信する条件、失敗・悪化・古い応答の保護を確認する。
+// 実画面で、続きの自動計算（段階が終わるまで・各回の上限8分）、送信する条件、失敗・悪化・古い応答の保護を確認する。
 const assert=require('node:assert/strict'),{harness}=require('./mobile_harness.cjs');
 const raw={staff:[{id:'local',name:'職員',type:'full',nightShiftType:'all'}],schedules:{}};
 function result(ot,{done=false,stage='overtime',short}={}){return {status:short===undefined?'FEASIBLE':'DRAFT',assignments:{s0:{'1':'off'}},seconds:60,
@@ -10,32 +10,58 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  // 段階が終わるまで続きを呼び、前回の表と再開位置を渡す。新規と改善、既存の表あり・なし。
  for(const existing of [false,true]){
   for(const mode of ['new','improve']){
-   let n=0,progress=null;const h=harness(raw,{response:async()=>{n++;if(n===3)progress=h.get('state.progressStage');return result(5-n,{done:n===3,stage:n===1?'conditions':'overtime'});}});
+   const manual=existing&&mode==='improve';
+   let n=0,progress=null;
+   const h=harness(raw,{response:async req=>{
+    if(req.improvementPass&&!manual)return result(2,{done:true});
+    n++;
+    if(n===3)progress=h.get('state.progressStage');
+    return result(5-n,{done:n===3,stage:n===1?'conditions':'overtime'});
+   }});
    if(existing)h.eval("schedule().assignments={local:{'1':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE'};");
    const archives=h.get('data.savedTables');await h.ctx.generate(mode);
-   assert.equal(h.calls.length,3);assert.equal(h.calls[0].adaptive,false);assert.equal(h.calls[0].qualityFirst,true);
+   const count=manual?3:4;assert.equal(h.calls.length,count);assert.equal(h.calls[0].adaptive,false);assert.equal(h.calls[0].qualityFirst,true);
    assert.equal(h.calls[0].allowStaffingShortfall,true);assert.equal(h.calls[0].allowNightShortfall,false);assert.equal(h.calls[0].allowRuleExceptions,true);
    assert.equal(!!h.calls[0].initialAssignments,existing&&mode==='improve');assert.equal(h.calls[0].resume,undefined);
    assert.deepEqual(h.calls[1].initialAssignments,{s0:{'1':'off'}});
    assert.deepEqual(h.calls[1].resume,{stage:'conditions',idle:3,proven:{}});assert.deepEqual(h.calls[2].resume,{stage:'overtime',idle:3,proven:{}});
    assert(progress.includes('画面を離れても作成を続けます'));
-   assert.equal(h.calls.reduce((t,c)=>t+c.seconds,0),180);
-   assert.equal(h.get('schedule().meta.allocation.overtimeTotal'),2);assert.equal(h.get('schedule().meta.seconds'),180);
+   assert.equal(h.calls.reduce((t,c)=>t+c.seconds,0),60*count);
+   assert.equal(h.get('schedule().meta.allocation.overtimeTotal'),2);assert.equal(h.get('schedule().meta.seconds'),60*count);
    assert.equal(h.get('schedule().meta.workflow.done'),true);assert(buttons(h).includes('さらに改善する'));
    assert.deepEqual(h.get('data.savedTables'),archives);assert.equal(h.confirmations.length,0);
   }
  }
- // 良くなり続ける場合も合計8分で止め、「さらに改善する」を残す。
+ // 良くなり続ける場合も各8分で止め、「さらに改善する」を残す。
  const capped=harness(raw,{response:async()=>result(3)});await capped.ctx.generate();
- assert.equal(capped.calls.length,8);assert.equal(capped.calls.reduce((t,c)=>t+c.seconds,0),480);
+ assert.equal(capped.calls.length,16);assert.equal(capped.calls.reduce((t,c)=>t+c.seconds,0),960);
  assert.equal(capped.get('schedule().meta.workflow.done'),false);assert(buttons(capped).includes('さらに改善する'));
+ // 同じ評価の別配置や証明だけ良い別配置では勤務を動かさない。手動改善も1回だけ。
+ for(const local of [false,true]){
+  let attempt=0;
+  const h=harness(raw,{response:async req=>{
+   attempt++;
+   const r=result(3,{done:true});
+   if(req.improvementPass){r.assignments.s0[1]='early';r.preferencePriorityProven=true;}
+   if(req.compareInitial)r.initialRank=h.ctx.CreationWorkflow.rank(result(3));
+   return r;
+  }});
+  if(local)h.eval("window.location={hostname:'127.0.0.1'}");
+  await h.ctx.generate();
+  assert.equal(attempt,2);assert.equal(h.get('schedule().assignments.local[1]'),'off');
+  assert.equal(h.get('schedule().meta.seconds'),120);
+  await h.ctx.generate('improve');
+  assert.equal(attempt,3);assert.equal(h.get('schedule().assignments.local[1]'),'off');
+  assert.equal(h.get('schedule().meta.seconds'),120);
+  assert(h.nodes.toast.text.includes('元の表を保持'));
+ }
  // 人数不足の理論上の下限は回をまたいで高い方を使う。
- let k=0;const bound=harness(raw,{response:async()=>({...result(3,{done:++k===2,short:5}),shortfallLowerBound:k===1?2:undefined})});await bound.ctx.generate();
+ let k=0;const bound=harness(raw,{response:async()=>({...result(3,{done:++k%2===0,short:5}),shortfallLowerBound:k===1?2:undefined})});await bound.ctx.generate();
  assert.equal(bound.get('schedule().meta.shortfallLowerBound'),2);assert(bound.nodes.view.text.includes('あと最大3か所減る可能性'));
- const stable=harness(raw,{response:async()=>result(3,{done:true})});await stable.ctx.generate();assert.equal(stable.calls.length,1);
+ const stable=harness(raw,{response:async()=>result(3,{done:true})});await stable.ctx.generate();assert.equal(stable.calls.length,2);
  // 全段階を終えた応答でも、未確認の残業差が残れば手動の改善を隠さない。
  const unconfirmed=harness(raw,{response:async()=>({...result(3,{done:true}),overtimeFairness:{minimumSpreadProven:false}})});
- await unconfirmed.ctx.generate();assert.equal(unconfirmed.calls.length,1);assert(buttons(unconfirmed).includes('さらに改善する'));
+ await unconfirmed.ctx.generate();assert.equal(unconfirmed.calls.length,2);assert(buttons(unconfirmed).includes('さらに改善する'));
  // 停滞終了や公平性の証明だけを理由に、ほかの最少が未確認の表の改善を隠さない。
  for(const missing of ['overtime','placement','metadata']){
   const h=harness(raw,{response:async()=>({...result(3,{done:true}),preferencePriorityProven:true,
@@ -44,7 +70,7 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
   await h.ctx.generate();assert.equal(h.get('schedule().meta.workflow.done'),true);assert(buttons(h).includes('さらに改善する'));
   assert(h.nodes.view.text.includes('最少の確認が未完了です。'));
   const oldRows=h.get('schedule().assignments');await h.click('さらに改善する','view');await new Promise(setImmediate);
-  assert.deepEqual(h.calls[1].initialAssignments,{s0:oldRows.local});assert.equal(h.calls[1].resume,undefined);
+  assert.deepEqual(h.calls[2].initialAssignments,{s0:oldRows.local});assert.equal(h.calls[2].resume,undefined);assert.equal(h.calls.length,3);
   // 条件を編集した古い表、条件違反の表は改善しない。
   h.eval("schedule().requests.local=[2];render()");assert(!buttons(h).includes('さらに改善する'));
  }
@@ -71,5 +97,5 @@ const buttons=h=>h.nodes.view.all('button').map(b=>b.textContent);
  n=0;const proof=harness(raw,{response:async()=>({...result(3,{done:n>0}),preferencePriorityProven:n++===0})});await proof.ctx.generate();assert.equal(proof.get('schedule().meta.preferencePriorityProven'),true);
  const previous=harness(raw,{response:async()=>{throw Error('offline');}});previous.eval("schedule().assignments={local:{'1':'off'}};schedule().workSignature=inputData().signature;schedule().meta={status:'FEASIBLE',allocation:{overtimeTotal:2}};");await previous.ctx.generate('improve');assert.equal(previous.get('hasTable()'),true);assert.equal(previous.get('schedule().meta.allocation.overtimeTotal'),2);
  let finish;const stale=harness(raw,{response:()=>new Promise(r=>{finish=r;})});const pending=stale.ctx.generate();await new Promise(setImmediate);stale.eval("schedule().requests.local=[2]");finish(result(3));await pending;assert.equal(stale.get('hasTable()'),false);assert.equal(stale.calls.length,1);
- console.log('PASS: 段階が終わるまで続きを自動計算（再開位置・最良の表を渡す）、上限8分、途中経過、下限の表示、作れない理由、失敗/悪化/古い応答の保護');
+ console.log('PASS: 段階が終わるまで続きを自動計算（再開位置・最良の表を渡す）、各回の上限8分、途中経過、下限の表示、作れない理由、失敗/悪化/古い応答の保護');
 })().catch(e=>{console.error(e);process.exitCode=1;});

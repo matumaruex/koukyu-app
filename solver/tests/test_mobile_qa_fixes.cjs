@@ -14,7 +14,7 @@ const said=h=>h.nodes.view.text.match(/作り直す前[^。]*。/)?.[0];
  // 新しく作る：作り直す前の表はないので比較を出さない（自動の続き計算でも）。
  n=0;const fresh=harness(raw,{response:async()=>(++n===1?reply(2,2,false):reply(1,2,true))});
  await fresh.ctx.generate();
- assert.equal(fresh.calls.length,2);assert.equal(said(fresh),undefined);
+ assert.equal(fresh.calls.length,3);assert.equal(said(fresh),undefined);
  // 読み込めないファイルは日本語で案内する。
  const bad=harness(raw);
  await bad.ctx.document.getElementById('import').onchange({target:{files:[{size:8,text:async()=>'not json'}],value:'x'}});

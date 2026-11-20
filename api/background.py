@@ -42,7 +42,7 @@ async def handle(payload):
     status = await run.status()
     if status == 'completed':
         return 200, {'status': status, 'result': await run.return_value()}
-    stage = saved_stage if (saved_stage := attributes.get('stage')) in ('conditions', 'overtime', 'overtime_fairness', 'placement') else None
+    stage = saved_stage if (saved_stage := attributes.get('stage')) in ('conditions', 'overtime', 'overtime_fairness', 'placement', 'improvement') else None
     return 200, {'status': status, 'stage': stage}
 
 async def app(scope, receive, send):

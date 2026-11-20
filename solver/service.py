@@ -68,11 +68,16 @@ def dispatch(payload, *, _deadline=None):
     rule = {'min_seconds': min(ADAPTIVE_MIN_SECONDS, seconds), 'after_first': ADAPTIVE_AFTER_FIRST} if adaptive and not quality_first else {}
     if quality_first:
         rule['quality_first'] = True
+    if quality_first and payload.get('improvementPass') is True:
+        rule['improvement_pass'] = True
     if resume is not None:
         rule['resume'] = resume
     if _deadline is not None:
         rule['_deadline'] = _deadline
     result = solve(raw, seconds=seconds, seed=seed, initial_assignments=payload.get('initialAssignments'), allow_staffing_shortfall=allow_shortfall, allow_night_shortfall=allow_night_shortfall, allow_rule_exceptions=allow_exceptions, **rule)
+    if rule.get('improvement_pass') and payload.get('compareInitial') is True and payload.get('initialAssignments') and result.get('status') != 'INVALID_INPUT':
+        rows = payload['initialAssignments']
+        result['initialRank'] = initial_rank(raw, p, rows)
     if result.get('status') == 'INFEASIBLE' and allow_shortfall:
         # 作れないときだけ、どの希望・固定を外せば作れるか、夜勤を埋められない日はどこかを調べる。
         import time
@@ -81,6 +86,29 @@ def dispatch(payload, *, _deadline=None):
             result['diagnosis'] = solve(raw, seconds=diagnostic_seconds, seed=seed, allow_staffing_shortfall=True,
                                         allow_rule_exceptions=allow_exceptions, relax_wishes=True, _deadline=_deadline)
     return result
+
+
+def initial_rank(raw, p, rows):
+    # 手編集した表・旧保存表にも、現在の条件で採点した比較元を用意する。
+    from .allocation import metrics
+    from .background_normal import rank
+    from .validator import exception_count, rest_exception_count
+    from .overtime_cycles import report as cycle_report
+    errors = validate(raw, rows)
+    by_code = {e['code']: e for e in errors}
+    return rank({
+        'restExceptionCount': rest_exception_count(errors),
+        'exceptionCount': exception_count(p, errors),
+        'nightRemainderExceptions': by_code.get('night_remainder', {}).get('exceptions', 0),
+        'restBalanceExceptions': by_code.get('rest_balance', {}).get('count', 0),
+        'isolatedWorkExceptions': isolated_count(p, rows),
+        'restStreakExceptions': streak_count(p, rows),
+        'staffingShortfallTotal': sum(e['required'] - e['actual'] for e in errors if e['code'] in ('coverage', 'night_coverage')),
+        'nightShortfallTotal': sum(e['required'] - e['actual'] for e in errors if e['code'] == 'night_coverage'),
+        'overtimeCycleExcess': (cycle_report(p, rows) or {}).get('excess', 0),
+        'nightRestPreferences': report(p, rows),
+        'allocation': metrics(p, rows),
+    })
 
 
 def check_resume(value, quality_first):

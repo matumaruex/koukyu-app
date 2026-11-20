@@ -16,7 +16,7 @@ STAGES = ('conditions', 'overtime', 'overtime_fairness', 'placement')
 # 残業回数差の30秒は配置段階に合わせた初期設定。公平化段階の実測に基づく値ではない。
 # 3.41：条件と残業を90秒に延ばした。並行8でも、CPU1つでは残業が29→28回に下がるまで最大44秒、
 # 人数不足の月の条件段階は改善の間が30秒以上空くことがあり、40秒・60秒では最少に届く前に次へ進む回があったため。
-IDLE_SECONDS = {'conditions': 90, 'overtime': 90, 'overtime_fairness': 30, 'placement': 30}
+IDLE_SECONDS = {'conditions': 90, 'overtime': 90, 'overtime_fairness': 30, 'placement': 60}
 
 
 class Progress(cp_model.CpSolverSolutionCallback):

@@ -1,7 +1,7 @@
 """画面を離れても、氏名を含まない入力で作成を継続する。"""
 import asyncio
 from vercel import workflow
-from solver.background_normal import normal
+from solver.background_normal import create_normal
 
 wf = workflow.Workflows()
 
@@ -20,5 +20,5 @@ async def create_schedule(mode, raw, policy, initial, access_hash):
     await workflow.set_attributes(access_hash=access_hash)
     async def progress(stage):
         # 氏名・勤務内容を属性（暗号化されない）には含めない。
-        await workflow.set_attributes(stage=stage if stage in ('conditions', 'overtime', 'overtime_fairness', 'placement') else 'conditions')
-    return await normal(raw, initial, calculate, progress=progress)
+        await workflow.set_attributes(stage=stage if stage in ('conditions', 'overtime', 'overtime_fairness', 'placement', 'improvement') else 'conditions')
+    return await create_normal(raw, initial, calculate, progress=progress)
