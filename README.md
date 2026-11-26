@@ -12,6 +12,6 @@
 
 | 知りたいこと | 読む文書 |
 | --- | --- |
-| Codex・Claude共通の作業方針、変更時に守ること | [AGENTS.md](AGENTS.md)（[Claudeの入口](CLAUDE.md)） |
+| AI共通の作業方針、変更時に守ること | [AGENTS.md](AGENTS.md) |
 | 現行の入力・勤務条件、計算時間、候補の採用、保存・復元 | [通常作成の仕様と検証](solver/README.md) |
 | 仕様が変わった理由、過去の比較測定、廃止機能の記録 | [履歴資料の目次](docs/history/README.md) |
